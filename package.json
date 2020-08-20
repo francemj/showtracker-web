@@ -1,7 +1,7 @@
 {
-  "name": "backend",
+  "name": "showtracker-web",
   "version": "1.0.0",
-  "description": "This is the backend of ShowTracker web app.",
+  "description": "This is the ShowTracker web app.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
