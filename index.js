@@ -6,12 +6,16 @@ const {
   search,
   seriesImagesQuery,
   series,
+  seriesEpisodes,
   seriesEpisodesSummary,
   fullEpisode,
 } = require("./modules/tvdb");
+const _ = require("lodash");
 
 //express
 const app = express();
+let token;
+let debug = false;
 
 function compareImages(a, b) {
   let comparison = 0;
@@ -25,33 +29,95 @@ function compareImages(a, b) {
 
 function compareEpisodes(a, b) {
   let comparison = 0;
-  if (a.absoluteNumber < b.absoluteNumber) {
+  if (Date.parse(a.firstAired) < Date.parse(b.firstAired)) {
     comparison = -1;
-  } else if (a.absoluteNumber > b.absoluteNumber) {
+  } else if (Date.parse(a.firstAired) > Date.parse(b.firstAired)) {
     comparison = 1;
   }
   return comparison;
 }
 
-(async () => {
-  const token = await login(process.env.APIKEY);
-  // let searchResult = await search({ name: "game of thrones" }, token);
-  // console.log(searchResult);
-  let result = await series({ id: 121361 }, token);
-  console.log(result);
+async function checkTokenAndDebug(req) {
+  if (!token) {
+    token = await login(process.env.APIKEY);
+  }
+  if (req.headers.debug) {
+    debug = true;
+  } else {
+    debug = false;
+  }
+}
 
-  // result = await seriesImagesQuery({ id: 121361, keyType: "poster" }, token);
-  // result.sort(compareImages);
-  // console.log(result);
+async function getEpisodes(req) {
+  let result = await seriesEpisodes({ id: req.params.seriesId }, token, debug);
+  count = 2;
+  let episodeList = [];
+  while (Array.isArray(result)) {
+    let filtered = result.filter((episode) => episode.airedSeason > 0);
+    episodeList = episodeList.concat(filtered);
+    result = await seriesEpisodes(
+      { id: req.params.seriesId, page: count },
+      token,
+      debug
+    );
+    count++;
+  }
+  return episodeList;
+}
 
-  result = await seriesEpisodesSummary(121361, token);
-  console.log(result);
+function filterEpisodesByDate(episodes, before) {
+  const today = Date.now();
+  episodes = episodes.filter((episode) => {
+    if (before) {
+      return Date.parse(episode.firstAired) < today;
+    } else {
+      return Date.parse(episode.firstAired) > today;
+    }
+  });
+  episodes.sort(compareEpisodes);
+  return episodes;
+}
 
-  result = await seriesEpisodesQuery(
-    { id: 121361, airedSeason: 7, airedEpisode: 1 },
-    token
-  );
-  // let episodeList = result.filter((episode) => episode.absoluteNumber == 52);
-  // episodeList.sort(compareEpisodes);
-  console.log(result);
-})();
+app.get("/search/:query", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let result = await search({ name: req.params.query }, token, debug);
+  let reducedArray = result.map((element) => {
+    return {
+      id: element.id,
+      seriesName: element.seriesName,
+      overview: element.overview,
+    };
+  });
+  res.send(reducedArray);
+});
+
+app.get("/series/:seriesId", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let result = await series({ id: req.params.seriesId }, token, debug);
+  res.send(result);
+});
+
+app.get("/series/:seriesId/episodes", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let episodes = await getEpisodes(req);
+  episodes.sort(compareEpisodes);
+  res.send(episodes);
+});
+
+app.get("/series/:seriesId/latest", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let episodes = await getEpisodes(req);
+  episodes = filterEpisodesByDate(episodes, true);
+  res.send(episodes[episodes.length - 1]);
+});
+
+app.get("/series/:seriesId/next", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let episodes = await getEpisodes(req);
+  episodes = filterEpisodesByDate(episodes, false);
+  res.send(episodes[0]);
+});
+
+app.listen(process.env.PORT || 5000, function () {
+  console.log("Server started successfully");
+});

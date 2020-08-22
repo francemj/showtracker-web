@@ -32,7 +32,12 @@ exports.login = async function (apiKey) {
   };
 };
 
-exports.refreshToken = async function (token) {
+exports.refreshToken = async function (token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let url = baseUrl + "/refresh_token";
   let params = {
     headers: token,
@@ -41,7 +46,12 @@ exports.refreshToken = async function (token) {
 };
 
 //Episodes
-exports.fullEpisode = async function (params, token) {
+exports.fullEpisode = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   const id = params.id;
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
@@ -54,7 +64,12 @@ exports.fullEpisode = async function (params, token) {
 };
 
 //Languages
-exports.languages = async function (token) {
+exports.languages = async function (token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
@@ -62,16 +77,26 @@ exports.languages = async function (token) {
   return await get(url, headers);
 };
 
-exports.language = async function (id, token) {
+exports.language = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
-  let url = baseUrl + "/languages/" + id;
+  let url = baseUrl + "/languages/" + params.id;
   return await get(url, headers);
 };
 
 //Movies
-exports.movie = async function (params, token) {
+exports.movie = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   const id = params.id;
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
@@ -84,7 +109,12 @@ exports.movie = async function (params, token) {
 };
 
 //Search
-exports.search = async function (params, token) {
+exports.search = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let query = "";
   if (params.name) {
     query = "name=" + params.name;
@@ -105,7 +135,12 @@ exports.search = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.searchParams = async function (token) {
+exports.searchParams = async function (token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
@@ -114,7 +149,12 @@ exports.searchParams = async function (token) {
 };
 
 //Series
-exports.series = async function (params, token) {
+exports.series = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -125,7 +165,12 @@ exports.series = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesHead = async function (params, token) {
+exports.seriesHead = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -136,15 +181,25 @@ exports.seriesHead = async function (params, token) {
   return await head(url, headers);
 };
 
-exports.seriesActors = async function (id, token) {
+exports.seriesActors = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
-  let url = baseUrl + "/series/" + id + "/actors";
+  let url = baseUrl + "/series/" + params.id + "/actors";
   return await get(url, headers);
 };
 
-exports.seriesEpisodes = async function (params, token) {
+exports.seriesEpisodes = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let query = "";
   if (params.page) {
     query = "?page=" + params.page;
@@ -156,7 +211,12 @@ exports.seriesEpisodes = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesEpisodesQuery = async function (params, token) {
+exports.seriesEpisodesQuery = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let query = "";
   for (const [key, value] of Object.entries(params)) {
     if (key != "id" && key != "lang") {
@@ -177,23 +237,38 @@ exports.seriesEpisodesQuery = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesEpisodesQueryParams = async function (id, token) {
+exports.seriesEpisodesQueryParams = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
-  let url = baseUrl + "/series/" + id + "/episodes/query/params";
+  let url = baseUrl + "/series/" + params.id + "/episodes/query/params";
   return await get(url, headers);
 };
 
-exports.seriesEpisodesSummary = async function (id, token) {
+exports.seriesEpisodesSummary = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
-  let url = baseUrl + "/series/" + id + "/episodes/summary";
+  let url = baseUrl + "/series/" + params.id + "/episodes/summary";
   return await get(url, headers);
 };
 
-exports.seriesFilter = async function (params, token) {
+exports.seriesFilter = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -204,7 +279,12 @@ exports.seriesFilter = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesFilterParams = async function (params, token) {
+exports.seriesFilterParams = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -215,7 +295,12 @@ exports.seriesFilterParams = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesImages = async function (params, token) {
+exports.seriesImages = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -226,7 +311,12 @@ exports.seriesImages = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesImagesQuery = async function (params, token) {
+exports.seriesImagesQuery = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let query = "";
   for (const [key, value] of Object.entries(params)) {
     if (key != "id" && key != "lang") {
@@ -247,7 +337,12 @@ exports.seriesImagesQuery = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.seriesImagesQueryParams = async function (params, token) {
+exports.seriesImagesQueryParams = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   if (params.lang) {
     token = { ...token, "Accept-Language": params.lang };
   }
@@ -259,7 +354,12 @@ exports.seriesImagesQueryParams = async function (params, token) {
 };
 
 //Updates
-exports.updatedQuery = async function (params, token) {
+exports.updatedQuery = async function (params, token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let query = "";
   for (const [key, value] of Object.entries(params)) {
     if (key != "lang") {
@@ -280,7 +380,12 @@ exports.updatedQuery = async function (params, token) {
   return await get(url, headers);
 };
 
-exports.updatedQueryParams = async function (token) {
+exports.updatedQueryParams = async function (token, debug) {
+  if (debug) {
+    token.debug = true;
+  } else {
+    token.debug = false;
+  }
   let headers = {
     headers: token,
   };
