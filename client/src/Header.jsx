@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import Toolbar from "@material-ui/core/Toolbar";
 import TvTwoToneIcon from "@material-ui/icons/TvTwoTone";
 import InputBase from "@material-ui/core/InputBase";
@@ -49,6 +49,29 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function Header() {
+  const [searchArray, setSearchArray] = useState([]);
+  const [searchTerm, setSearchTerm] = React.useState("");
+
+  function search() {
+    fetch("http://localhost:5000/search/" + searchTerm)
+      .then((data) => data.json())
+      .then((res) => {
+        setSearchArray(res);
+        console.log(res);
+      });
+  }
+
+  const handleKeyPress = (event) => {
+    if (event.key === "Enter") {
+      search();
+      setSearchTerm("");
+    }
+  };
+
+  const handleChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
   const classes = useStyles();
   return (
     <header className={classes.root}>
@@ -60,6 +83,9 @@ function Header() {
             <SearchIcon />
           </div>
           <InputBase
+            onChange={handleChange}
+            onKeyPress={handleKeyPress}
+            value={searchTerm}
             placeholder="Search…"
             classes={{
               root: classes.inputRoot,
