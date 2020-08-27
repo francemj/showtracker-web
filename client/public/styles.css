@@ -37,7 +37,7 @@ header .item {
   margin: -1px auto 0px;
   display: flex;
   width: 32em;
-  height: 162px;
+  height: 160px;
   border: 1px solid;
 }
 
@@ -60,16 +60,16 @@ header .item {
 
 .series .text {
   color: #222831;
-  padding: 0.5em;
+  padding: 1em 0.5em;
   width: 70%;
 }
 .series .text h1 {
   vertical-align: bottom;
-  margin: 0.45em 0 0.25em;
+  margin: 0.25em 0;
 }
 .series .text p {
   vertical-align: top;
-  margin: 0.25em 0 0.5em;
+  line-height: 1.4;
 }
 
 .series .checkbox {

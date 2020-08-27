@@ -30,7 +30,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 mongoose.connect(
   "mongodb+srv://" +
     process.env.MONGOLOGIN +
-    "@cluster0.ntq2u.mongodb.net/seriesDB?retryWrites=true&w=majority",
+    "@cluster0.ntq2u.mongodb.net/showDB",
   {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -38,8 +38,8 @@ mongoose.connect(
 );
 
 const showSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  content: String,
+  id: String,
+  latestWatchedEpisode: String,
 });
 
 const Show = mongoose.model("Show", showSchema);
@@ -65,19 +65,14 @@ async function checkTokenAndDebug(req) {
   }
 }
 
-async function getEpisodes(req) {
-  await checkTokenAndDebug(req);
-  let result = await seriesEpisodes({ id: req.params.seriesId }, token, debug);
+async function getEpisodes(seriesId) {
+  let result = await seriesEpisodes({ id: seriesId }, token, debug);
   count = 2;
   let episodeList = [];
   while (Array.isArray(result)) {
     let filtered = result.filter((episode) => episode.airedSeason > 0);
     episodeList = episodeList.concat(filtered);
-    result = await seriesEpisodes(
-      { id: req.params.seriesId, page: count },
-      token,
-      debug
-    );
+    result = await seriesEpisodes({ id: seriesId, page: count }, token, debug);
     count++;
   }
   episodeList.sort(compareEpisodes);
@@ -97,18 +92,32 @@ function filterEpisodesByDate(episodes, before) {
   return episodes;
 }
 
-async function getLatestEpisode(req) {
-  await checkTokenAndDebug(req);
-  let episodes = await getEpisodes(req);
+async function getLatestEpisode(seriesId) {
+  let episodes = await getEpisodes(seriesId);
   episodes = filterEpisodesByDate(episodes, true);
   return episodes[episodes.length - 1];
 }
 
-async function getEpisodeAiringNext(req) {
-  await checkTokenAndDebug(req);
-  let episodes = await getEpisodes(req);
+async function getEpisodeAiringNext(seriesId) {
+  let episodes = await getEpisodes(seriesId);
   episodes = filterEpisodesByDate(episodes, false);
   return episodes[0];
+}
+
+async function getSeriesData(seriesId) {
+  let seriesResult = await series({ id: seriesId }, token, debug);
+  let latestEpisode = await getLatestEpisode(seriesId);
+  let output = {
+    id: seriesResult.id,
+    seriesName: seriesResult.seriesName,
+    poster: seriesResult.poster,
+    overview: seriesResult.overview,
+    episodeName: latestEpisode.episodeName,
+    airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
+    airedSeason: latestEpisode.airedSeason,
+    episodesLeft: 0,
+  };
+  return output;
 }
 
 app.get("/search/:query", async (req, res) => {
@@ -119,6 +128,7 @@ app.get("/search/:query", async (req, res) => {
       id: element.id,
       seriesName: element.seriesName,
       overview: element.overview,
+      poster: element.poster,
     };
   });
   res.send(reducedArray);
@@ -126,22 +136,39 @@ app.get("/search/:query", async (req, res) => {
 
 app.get("/series/:seriesId", async (req, res) => {
   await checkTokenAndDebug(req);
-  let seriesResult = await series({ id: req.params.seriesId }, token, debug);
-  let latestEpisode = await getLatestEpisode(req);
-  let output = {
-    id: seriesResult.id,
-    seriesName: seriesResult.seriesName,
-    poster: seriesResult.poster,
-    overview: seriesResult.overview,
-    episodeName: latestEpisode.episodeName,
-    airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
-    airedSeason: latestEpisode.airedSeason,
-  };
+  let result = await getSeriesData(req);
+  res.send(result);
+});
+
+app.get("/series", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let dbResults = await Show.find({});
+  let output = await Promise.all(
+    dbResults.map(async (element) => {
+      let seriesResult = await series({ id: element.id }, token, debug);
+      let latestEpisode = await getLatestEpisode(element.id);
+      return {
+        id: seriesResult.id,
+        seriesName: seriesResult.seriesName,
+        poster: seriesResult.poster,
+        overview: seriesResult.overview,
+        episodeName: latestEpisode.episodeName,
+        airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
+        airedSeason: latestEpisode.airedSeason,
+        episodesLeft: 0,
+      };
+    })
+  );
   res.send(output);
 });
 
 app.post("/add", (req, res) => {
-  console.log(req.body);
+  const newShow = new Show({
+    id: req.body.id,
+    latestWatchedEpisode: req.body.latestWatchedEpisode,
+  });
+  newShow.save();
+  res.send("Success!");
 });
 
 app.listen(process.env.PORT || 5000, function () {
