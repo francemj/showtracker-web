@@ -12,6 +12,8 @@ const {
 } = require("./modules/tvdb");
 const bodyParser = require("body-parser");
 
+const path = require("path");
+
 //db
 require("./models");
 const Show = require("./models/Shows");
@@ -25,6 +27,7 @@ app.use((req, res, next) => {
 
 //body-parser
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, "client/public")));
 
 //globals
 let token;
