@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-import WatchingShow from "./WatchingShow";
+import Show from "./Show";
 
 let dataFetched = false;
 
@@ -23,6 +23,7 @@ function Watching() {
 
   return (
     <div className="watching">
+      <h1>Watchlist</h1>
       {seriesArray.map((element, index) => {
         let posterLink =
           "https://artworks.thetvdb.com/banners/" +
@@ -42,7 +43,7 @@ function Watching() {
         }
 
         return (
-          <WatchingShow
+          <Show
             className={className}
             show={element.seriesName}
             posterLink={posterLink}

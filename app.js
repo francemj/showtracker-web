@@ -10,14 +10,14 @@ const {
   seriesEpisodesSummary,
   fullEpisode,
 } = require("./modules/tvdb");
-const _ = require("lodash");
-const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
+
+//db
+require("./models");
+const Show = require("./models/Shows");
 
 //express
 const app = express();
-let token;
-let debug = false;
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   next();
@@ -26,23 +26,9 @@ app.use((req, res, next) => {
 //body-parser
 app.use(bodyParser.urlencoded({ extended: true }));
 
-//mongoose
-mongoose.connect(
-  "mongodb+srv://" +
-    process.env.MONGOLOGIN +
-    "@cluster0.ntq2u.mongodb.net/showDB",
-  {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  }
-);
-
-const showSchema = new mongoose.Schema({
-  id: String,
-  lastWatchedEpisode: String,
-});
-
-const Show = mongoose.model("Show", showSchema);
+//globals
+let token;
+let debug = false;
 
 function compareEpisodes(a, b) {
   let comparison = 0;
@@ -184,5 +170,5 @@ app.put("/update", (req, res) => {
 });
 
 app.listen(process.env.PORT || 5000, function () {
-  console.log("Server started successfully");
+  console.log(`Server started successfully on port ${process.env.PORT} `);
 });

@@ -10,7 +10,8 @@ function App() {
   return (
     <div className="App">
       <Header />
-      {!searchResults ? <Watching /> : <Search />}
+      <Watching />
+      {searchResults && <Search />}
     </div>
   );
 }

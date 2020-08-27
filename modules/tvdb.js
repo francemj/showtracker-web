@@ -1,5 +1,5 @@
 const axios = require("axios");
-const { get, head } = require("./helper");
+const { get, head } = require("./requests");
 
 const baseUrl = "https://api.thetvdb.com";
 

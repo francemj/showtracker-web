@@ -1,7 +1,7 @@
 import React from "react";
 import Checkbox from "@material-ui/core/Checkbox";
 
-function WatchingShow(props) {
+function Show(props) {
   function checked() {
     const requestOptions = {
       method: "POST",
@@ -31,4 +31,4 @@ function WatchingShow(props) {
   );
 }
 
-export default WatchingShow;
+export default Show;
