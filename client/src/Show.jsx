@@ -8,7 +8,7 @@ function Show(props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ seriesId: 121361 }),
     };
-    fetch("http://localhost:5000/add", requestOptions)
+    fetch("/add", requestOptions)
       .then((data) => data.json())
       .then((res) => console.log(res.json()));
   }

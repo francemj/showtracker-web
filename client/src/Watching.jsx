@@ -8,7 +8,7 @@ function Watching() {
   const [seriesArray, setSeriesArray] = useState([]);
 
   function getShowData() {
-    fetch("http://localhost:5000/series/")
+    fetch("/series")
       .then((data) => data.json())
       .then((res) => setSeriesArray(res));
   }
