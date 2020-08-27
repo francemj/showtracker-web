@@ -50,6 +50,10 @@ header .item {
   border-radius: 0px 0px 10px 10px;
 }
 
+.series.single {
+  border-radius: 10px;
+}
+
 .series img {
   vertical-align: middle;
   color: #222831;

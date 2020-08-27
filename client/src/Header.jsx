@@ -49,14 +49,14 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 function Header() {
-  const [searchArray, setSearchArray] = useState([]);
-  const [searchTerm, setSearchTerm] = React.useState("");
+  // const [searchArray, setSearchArray] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   function search() {
     fetch("http://localhost:5000/search/" + searchTerm)
       .then((data) => data.json())
       .then((res) => {
-        setSearchArray(res);
+        // setSearchArray(res);
         console.log(res);
       });
   }

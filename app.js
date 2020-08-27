@@ -39,7 +39,7 @@ mongoose.connect(
 
 const showSchema = new mongoose.Schema({
   id: String,
-  latestWatchedEpisode: String,
+  lastWatchedEpisode: String,
 });
 
 const Show = mongoose.model("Show", showSchema);
@@ -104,9 +104,10 @@ async function getEpisodeAiringNext(seriesId) {
   return episodes[0];
 }
 
-async function getSeriesData(seriesId) {
+async function getSeriesData(seriesId, lastWatchedEpisode) {
   let seriesResult = await series({ id: seriesId }, token, debug);
   let latestEpisode = await getLatestEpisode(seriesId);
+  let episodesLeft = latestEpisode.absoluteNumber - element.lastWatchedEpisode;
   let output = {
     id: seriesResult.id,
     seriesName: seriesResult.seriesName,
@@ -147,6 +148,8 @@ app.get("/series", async (req, res) => {
     dbResults.map(async (element) => {
       let seriesResult = await series({ id: element.id }, token, debug);
       let latestEpisode = await getLatestEpisode(element.id);
+      let episodesLeft =
+        latestEpisode.absoluteNumber - element.lastWatchedEpisode;
       return {
         id: seriesResult.id,
         seriesName: seriesResult.seriesName,
@@ -155,20 +158,35 @@ app.get("/series", async (req, res) => {
         episodeName: latestEpisode.episodeName,
         airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
         airedSeason: latestEpisode.airedSeason,
-        episodesLeft: 0,
+        episodesLeft: episodesLeft,
       };
     })
   );
-  res.send(output);
+  let filteredOutput = output.filter((show) => show.episodesLeft > 0);
+  res.send(filteredOutput);
 });
 
 app.post("/add", (req, res) => {
   const newShow = new Show({
     id: req.body.id,
-    latestWatchedEpisode: req.body.latestWatchedEpisode,
+    lastWatchedEpisode: req.body.lastWatchedEpisode,
   });
   newShow.save();
   res.send("Success!");
+});
+
+app.put("/update", (req, res) => {
+  Show.updateOne(
+    { id: req.body.id },
+    { lastWatchedEpisode: req.body.lastWatchedEpisode },
+    (err) => {
+      if (err) {
+        res.send(err);
+      } else {
+        res.send("Success");
+      }
+    }
+  );
 });
 
 app.listen(process.env.PORT || 5000, function () {

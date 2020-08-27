@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 
 import WatchingShow from "./WatchingShow";
-import shows from "./shows.js";
 
 let dataFetched = false;
 
@@ -32,12 +31,14 @@ function Watching() {
         let className = "series";
         let episode =
           "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
-        if (seriesArray.length != 1) {
+        if (seriesArray.length !== 1) {
           if (index === 0) {
             className += " top";
           } else if (index === seriesArray.length - 1) {
             className += " bottom";
           }
+        } else {
+          className += " single";
         }
 
         return (
