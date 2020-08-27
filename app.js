@@ -107,7 +107,7 @@ async function getEpisodeAiringNext(seriesId) {
 async function getSeriesData(seriesId, lastWatchedEpisode) {
   let seriesResult = await series({ id: seriesId }, token, debug);
   let latestEpisode = await getLatestEpisode(seriesId);
-  let episodesLeft = latestEpisode.absoluteNumber - element.lastWatchedEpisode;
+  let episodesLeft = latestEpisode.absoluteNumber - lastWatchedEpisode;
   let output = {
     id: seriesResult.id,
     seriesName: seriesResult.seriesName,
@@ -116,7 +116,7 @@ async function getSeriesData(seriesId, lastWatchedEpisode) {
     episodeName: latestEpisode.episodeName,
     airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
     airedSeason: latestEpisode.airedSeason,
-    episodesLeft: 0,
+    episodesLeft: episodesLeft,
   };
   return output;
 }
@@ -125,41 +125,35 @@ app.get("/search/:query", async (req, res) => {
   await checkTokenAndDebug(req);
   let result = await search({ name: req.params.query }, token, debug);
   let reducedArray = result.map((element) => {
+    let overview = element.overview;
+    if (overview) {
+      if (overview.length > 100) {
+        overview = overview.substring(0, 100) + "...";
+      }
+    }
     return {
       id: element.id,
       seriesName: element.seriesName,
-      overview: element.overview,
+      overview: overview,
       poster: element.poster,
     };
   });
   res.send(reducedArray);
 });
 
-app.get("/series/:seriesId", async (req, res) => {
-  await checkTokenAndDebug(req);
-  let result = await getSeriesData(req);
-  res.send(result);
-});
+// app.get("/series/:seriesId", async (req, res) => {
+//   await checkTokenAndDebug(req);
+//   let result = await getSeriesData(req.params.seriesId);
+//   res.send(result);
+// });
 
 app.get("/series", async (req, res) => {
   await checkTokenAndDebug(req);
   let dbResults = await Show.find({});
   let output = await Promise.all(
     dbResults.map(async (element) => {
-      let seriesResult = await series({ id: element.id }, token, debug);
-      let latestEpisode = await getLatestEpisode(element.id);
-      let episodesLeft =
-        latestEpisode.absoluteNumber - element.lastWatchedEpisode;
-      return {
-        id: seriesResult.id,
-        seriesName: seriesResult.seriesName,
-        poster: seriesResult.poster,
-        overview: seriesResult.overview,
-        episodeName: latestEpisode.episodeName,
-        airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
-        airedSeason: latestEpisode.airedSeason,
-        episodesLeft: episodesLeft,
-      };
+      let output = await getSeriesData(element.id, element.lastWatchedEpisode);
+      return output;
     })
   );
   let filteredOutput = output.filter((show) => show.episodesLeft > 0);
