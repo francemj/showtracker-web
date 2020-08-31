@@ -32,9 +32,24 @@ header .item {
   margin: auto;
   padding: 0 2em 2em;
   display: inline-block;
+  vertical-align: top;
 }
 
 .watching h1 {
+  font-weight: 400;
+  font-size: 2.5em;
+  letter-spacing: 0.125em;
+}
+
+.search {
+  width: auto;
+  margin: auto;
+  padding: 0 2em 2em;
+  display: inline-block;
+  vertical-align: top;
+}
+
+.search h1 {
   font-weight: 400;
   font-size: 2.5em;
   letter-spacing: 0.125em;

@@ -1,17 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import Header from "./Header";
 import Watching from "./Watching";
 import Search from "./Search";
 // import axios from "axios";
 
-let searchResults = false;
-
 function App() {
+  const [searchArray, setSearchArray] = useState([]);
+  const [searched, setSearched] = useState(false);
   return (
     <div className="App">
-      <Header />
+      <Header
+        searchArray={searchArray}
+        setSearchArray={setSearchArray}
+        setSearched={setSearched}
+      />
       <Watching />
-      {searchResults && <Search />}
+      {searched && <Search searchArray={searchArray} />}
     </div>
   );
 }

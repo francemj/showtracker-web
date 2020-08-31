@@ -17,14 +17,18 @@ function Show(props) {
       <img className="photo" src={props.posterLink} alt="poster" />
       <div className="text">
         <h1>{props.show}</h1>
-        <p>
-          {props.episode}
-          <br />
-          {props.episodeName} <br />
-          <strong>
-            {props.episodesLeft} episode{props.episodesLeft > 1 && "s"} left
-          </strong>
-        </p>
+        {props.episode ? (
+          <p>
+            {props.episode}
+            <br />
+            {props.episodeName} <br />
+            <strong>
+              {props.episodesLeft} episode{props.episodesLeft > 1 && "s"} left
+            </strong>
+          </p>
+        ) : (
+          <p>{props.overview}</p>
+        )}
       </div>
       <Checkbox onChecked={checked} className="checkbox" />
     </div>
