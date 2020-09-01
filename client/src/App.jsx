@@ -7,15 +7,20 @@ import Search from "./Search";
 function App() {
   const [searchArray, setSearchArray] = useState([]);
   const [searched, setSearched] = useState(false);
+  const [dataFetched, setDataFetched] = useState(false);
   return (
     <div className="App">
       <Header
         searchArray={searchArray}
         setSearchArray={setSearchArray}
         setSearched={setSearched}
+        setDataFetched={setDataFetched}
       />
-      <Watching />
-      {searched && <Search searchArray={searchArray} />}
+      {searched ? (
+        <Search searchArray={searchArray} />
+      ) : (
+        <Watching dataFetched={dataFetched} setDataFetched={setDataFetched} />
+      )}
     </div>
   );
 }

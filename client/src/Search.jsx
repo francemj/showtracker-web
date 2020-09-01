@@ -1,16 +1,16 @@
 import React from "react";
 import Show from "./Show";
-import ClearIcon from "@material-ui/icons/Clear";
 
 function Search(props) {
-  console.log(props.searchArray);
   return (
     <div className="search">
       <h1>Search</h1>
       {props.searchArray.map((element, index) => {
-        let posterLink = "";
+        let posterLink = "https://artworks.thetvdb.com";
         if (element.poster) {
-          posterLink = "https://artworks.thetvdb.com" + element.poster;
+          posterLink += element.poster;
+        } else {
+          posterLink += "/banners/images/missing/series.jpg";
         }
         let name = element.seriesName;
         if (name.length > 20) {

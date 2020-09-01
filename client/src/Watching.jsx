@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 
 import Show from "./Show";
 
-let dataFetched = false;
-
-function Watching() {
+function Watching(props) {
   const [seriesArray, setSeriesArray] = useState([]);
 
   function getShowData() {
@@ -14,8 +12,8 @@ function Watching() {
   }
 
   useEffect(() => {
-    if (!dataFetched) {
-      dataFetched = true;
+    if (!props.dataFetched) {
+      props.setDataFetched(true);
       getShowData();
     }
     console.log(seriesArray);

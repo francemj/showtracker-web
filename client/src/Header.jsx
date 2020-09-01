@@ -4,49 +4,7 @@ import TvTwoToneIcon from "@material-ui/icons/TvTwoTone";
 import InputBase from "@material-ui/core/InputBase";
 import { fade, makeStyles } from "@material-ui/core/styles";
 import SearchIcon from "@material-ui/icons/Search";
-
-const useStyles = makeStyles((theme) => ({
-  root: {
-    flexGrow: 1,
-  },
-  search: {
-    position: "absolute",
-    borderRadius: theme.shape.borderRadius,
-    backgroundColor: fade(theme.palette.common.white, 0.15),
-    "&:hover": {
-      backgroundColor: fade(theme.palette.common.white, 0.25),
-    },
-    right: 0,
-    marginLeft: "auto",
-    marginRight: 24,
-    width: "auto",
-  },
-  searchIcon: {
-    padding: theme.spacing(0, 2),
-    height: "100%",
-    position: "absolute",
-    pointerEvents: "none",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inputRoot: {
-    color: "inherit",
-  },
-  inputInput: {
-    padding: theme.spacing(1, 1, 1, 0),
-    // vertical padding + font size from searchIcon
-    paddingLeft: `calc(1em + ${theme.spacing(4)}px)`,
-    transition: theme.transitions.create("width"),
-    width: "100%",
-    [theme.breakpoints.up("sm")]: {
-      width: "12ch",
-      "&:focus": {
-        width: "20ch",
-      },
-    },
-  },
-}));
+import { Button } from "@material-ui/core";
 
 function Header(props) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,9 +13,9 @@ function Header(props) {
     fetch("http://localhost:5000/search/" + searchTerm)
       .then((data) => data.json())
       .then((res) => {
-        console.log(res);
         props.setSearchArray(res);
         props.setSearched(true);
+        props.setDataFetched(false);
       });
   }
 
@@ -72,14 +30,20 @@ function Header(props) {
     setSearchTerm(event.target.value);
   };
 
-  const classes = useStyles();
+  const handleClick = () => {
+    props.setSearched(false);
+  };
+
   return (
-    <header className={classes.root}>
+    <header className="root">
       <Toolbar>
         <TvTwoToneIcon className="item" fontSize="large" />
         <h1 className="item">ShowTracker</h1>
-        <div className={classes.search}>
-          <div className={classes.searchIcon}>
+        <Button onClick={handleClick} color="inherit" className="home-button">
+          Home
+        </Button>
+        <div className="search-box">
+          <div className="search-icon">
             <SearchIcon />
           </div>
           <InputBase
@@ -88,8 +52,8 @@ function Header(props) {
             value={searchTerm}
             placeholder="Search…"
             classes={{
-              root: classes.inputRoot,
-              input: classes.inputInput,
+              root: "input-root",
+              input: "input-input",
             }}
             inputProps={{ "aria-label": "search" }}
           />

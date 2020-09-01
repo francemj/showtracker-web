@@ -27,6 +27,57 @@ header .item {
   color: #fbd46d;
 }
 
+header.root {
+  flex-grow: 1;
+}
+
+header .home-button {
+  display: block;
+  position: absolute;
+  right: 0;
+  margin-left: auto;
+  margin-right: 1em;
+}
+
+header .search-box {
+  position: absolute;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.15);
+  right: 0;
+  margin-left: auto;
+  margin-right: 6em;
+  width: auto;
+}
+
+header .search-box:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+header .search-box .search-icon {
+  padding: 0 1em;
+  height: 100%;
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+header .search-box .input-root {
+  color: inherit;
+}
+
+header .search-box .input-input {
+  padding: 0.5em 0.5em 0.5em 0;
+  padding-left: 3em;
+  transition: width 0.5s;
+  width: 10ch;
+}
+
+header .search-box .input-input:focus {
+  width: 20ch;
+}
+
 .watching {
   width: auto;
   margin: auto;
