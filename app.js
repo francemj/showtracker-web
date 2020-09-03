@@ -93,17 +93,29 @@ async function getEpisodeAiringNext(seriesId) {
   return episodes[0];
 }
 
+async function getEpisode(seriesId, episodeNumber) {
+  let result = await seriesEpisodesQuery(
+    { id: seriesId, absoluteNumber: episodeNumber },
+    token,
+    debug
+  );
+  return result[0];
+}
+
 async function getSeriesData(seriesId, lastWatchedEpisode) {
   let seriesResult = await series({ id: seriesId }, token, debug);
   let latestEpisode = await getLatestEpisode(seriesId);
+  let nextEpisode = await getEpisode(
+    seriesId,
+    parseInt(lastWatchedEpisode) + 1
+  );
   let episodesLeft = latestEpisode.absoluteNumber - lastWatchedEpisode;
   let output = {
-    id: seriesResult.id,
+    key: seriesResult.id,
     seriesName: seriesResult.seriesName,
     poster: seriesResult.poster,
-    overview: seriesResult.overview,
-    airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
-    airedSeason: latestEpisode.airedSeason,
+    airedEpisodeNumber: nextEpisode.airedEpisodeNumber,
+    airedSeason: nextEpisode.airedSeason,
     episodesLeft: episodesLeft,
   };
   return output;
@@ -118,7 +130,7 @@ app.get("/search/:query", async (req, res) => {
       overview = overview.substring(0, 100) + "...";
     }
     return {
-      id: element.id,
+      key: element.id,
       seriesName: element.seriesName,
       overview: overview,
       poster: element.poster,
@@ -136,14 +148,40 @@ app.get("/search/:query", async (req, res) => {
 app.get("/series", async (req, res) => {
   await checkTokenAndDebug(req);
   let dbResults = await Show.find({});
-  let output = await Promise.all(
+  let watching = await Promise.all(
     dbResults.map(async (element) => {
       let output = await getSeriesData(element.id, element.lastWatchedEpisode);
       return output;
     })
   );
-  let filteredOutput = output.filter((show) => show.episodesLeft > 0);
+  let filteredOutput = watching.filter((show) => show.episodesLeft > 0);
   res.send(filteredOutput);
+});
+
+app.get("/upcoming", async (req, res) => {
+  await checkTokenAndDebug(req);
+  let dbResults = await Show.find({});
+  let upcoming = await Promise.all(
+    dbResults.map(async (element) => {
+      let output = await getEpisodeAiringNext(element.id);
+      return output;
+    })
+  );
+  let filtered = upcoming.filter((show) => show);
+  let output = await Promise.all(
+    filtered.map(async (element) => {
+      let seriesResult = await series({ id: element.seriesId }, token, debug);
+      return {
+        key: seriesResult.id,
+        seriesName: seriesResult.seriesName,
+        poster: seriesResult.poster,
+        airedEpisodeNumber: element.airedEpisodeNumber,
+        airedSeason: element.airedSeason,
+        airingDate: element.firstAired,
+      };
+    })
+  );
+  res.send(output);
 });
 
 app.post("/add", (req, res) => {

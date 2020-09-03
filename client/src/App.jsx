@@ -9,6 +9,7 @@ function App() {
   const [searched, setSearched] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [watchingArray, setWatchingArray] = useState([]);
+  const [upcomingArray, setUpcomingArray] = useState([]);
 
   const handleResize = () => {
     setWidth(window.innerWidth);
@@ -25,9 +26,10 @@ function App() {
   function getShowData() {
     fetch("/series")
       .then((data) => data.json())
-      .then((res) => {
-        setWatchingArray(res);
-      });
+      .then((res) => setWatchingArray(res));
+    fetch("/upcoming")
+      .then((data) => data.json())
+      .then((res) => setUpcomingArray(res));
   }
 
   return (
@@ -44,6 +46,7 @@ function App() {
       ) : (
         <>
           <List array={watchingArray} width={width} class="Watchlist" />
+          <List array={upcomingArray} width={width} class="Upcoming" />
         </>
       )}
     </div>

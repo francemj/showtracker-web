@@ -9,7 +9,7 @@ function Header(props) {
   const [searchTerm, setSearchTerm] = useState("");
 
   function search() {
-    fetch("http://localhost:5000/search/" + searchTerm)
+    fetch("/search/" + searchTerm)
       .then((data) => data.json())
       .then((res) => {
         props.setSearchArray(res);

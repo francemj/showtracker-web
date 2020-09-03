@@ -34,11 +34,12 @@ function Watching(props) {
           posterLink += "/banners/images/missing/series.jpg";
         }
 
-        if (props.class !== "Search") {
+        if (props.class === "Watchlist") {
           let episode =
             "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
           return (
             <Show
+              listClass={props.class}
               className={className}
               show={name}
               posterLink={posterLink}
@@ -47,13 +48,28 @@ function Watching(props) {
               width={props.width}
             />
           );
-        } else {
+        } else if (props.class === "Search") {
           return (
             <Show
+              listClass={props.class}
               className={className}
               show={name}
               posterLink={posterLink}
               overview={element.overview}
+              width={props.width}
+            />
+          );
+        } else {
+          let episode =
+            "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
+          return (
+            <Show
+              listClass={props.class}
+              className={className}
+              show={name}
+              posterLink={posterLink}
+              episode={episode}
+              date={element.airingDate}
               width={props.width}
             />
           );

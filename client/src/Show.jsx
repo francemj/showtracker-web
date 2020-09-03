@@ -19,19 +19,22 @@ function Show(props) {
 
       <div className="text">
         <h2>{props.show}</h2>
-        {props.episode ? (
+        {props.episodesLeft && (
           <p>
-            {props.episode}
-            <br />
-            <strong>
-              {props.episodesLeft} episode{props.episodesLeft > 1 && "s"} left
-            </strong>
+            <strong>{props.episodesLeft} </strong> episode
+            {props.episodesLeft > 1 && "s"} left
           </p>
+        )}
+        {props.date && <p>{props.date}</p>}
+        {props.episode ? (
+          <p>{props.episode}</p>
         ) : (
           <p className="overview">{props.width > 550 && props.overview}</p>
         )}
       </div>
-      <Checkbox onChecked={checked} className="checkbox" />
+      {props.listClass !== "Upcoming" && (
+        <Checkbox onChecked={checked} className="checkbox" />
+      )}
     </div>
   );
 }
