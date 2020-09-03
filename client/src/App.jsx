@@ -1,13 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "./Header";
-import Watching from "./Watching";
-import Search from "./Search";
+import List from "./List";
 // import axios from "axios";
 
 function App() {
   const [searchArray, setSearchArray] = useState([]);
   const [searched, setSearched] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
+  const [width, setWidth] = useState(window.innerWidth);
+  const [seriesArray, setSeriesArray] = useState([]);
+
+  const handleResize = () => {
+    setWidth(window.innerWidth);
+  };
+
+  useEffect(() => {
+    window.addEventListener("resize", handleResize);
+    if (!dataFetched) {
+      setDataFetched(true);
+      getShowData();
+    }
+  }, [dataFetched]);
+
+  function getShowData() {
+    fetch("/series")
+      .then((data) => data.json())
+      .then((res) => setSeriesArray(res));
+  }
+
   return (
     <div className="App">
       <Header
@@ -15,11 +35,12 @@ function App() {
         setSearchArray={setSearchArray}
         setSearched={setSearched}
         setDataFetched={setDataFetched}
+        width={width}
       />
       {searched ? (
-        <Search searchArray={searchArray} />
+        <List array={searchArray} width={width} class="search" />
       ) : (
-        <Watching dataFetched={dataFetched} setDataFetched={setDataFetched} />
+        <List array={seriesArray} width={width} class="watching" />
       )}
     </div>
   );

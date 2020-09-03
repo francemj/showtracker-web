@@ -102,7 +102,6 @@ async function getSeriesData(seriesId, lastWatchedEpisode) {
     seriesName: seriesResult.seriesName,
     poster: seriesResult.poster,
     overview: seriesResult.overview,
-    episodeName: latestEpisode.episodeName,
     airedEpisodeNumber: latestEpisode.airedEpisodeNumber,
     airedSeason: latestEpisode.airedSeason,
     episodesLeft: episodesLeft,

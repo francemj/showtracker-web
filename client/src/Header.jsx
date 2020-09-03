@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import Toolbar from "@material-ui/core/Toolbar";
 import TvTwoToneIcon from "@material-ui/icons/TvTwoTone";
 import InputBase from "@material-ui/core/InputBase";
-import { fade, makeStyles } from "@material-ui/core/styles";
 import SearchIcon from "@material-ui/icons/Search";
 import { Button } from "@material-ui/core";
 
@@ -38,7 +37,7 @@ function Header(props) {
     <header className="root">
       <Toolbar>
         <TvTwoToneIcon className="item" fontSize="large" />
-        <h1 className="item">ShowTracker</h1>
+        {props.width > 600 && <h1 className="item">ShowTracker</h1>}
         <Button onClick={handleClick} color="inherit" className="home-button">
           Home
         </Button>

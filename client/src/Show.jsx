@@ -12,16 +12,17 @@ function Show(props) {
       .then((data) => data.json())
       .then((res) => console.log(res.json()));
   }
+
   return (
     <div className={props.className}>
       <img className="photo" src={props.posterLink} alt="poster" />
-      <div className="text">
-        <h1>{props.show}</h1>
+
+      <div className={props.width < 600 ? "text large-title" : "text"}>
+        <h2>{props.show}</h2>
         {props.episode ? (
           <p>
             {props.episode}
             <br />
-            {props.episodeName} <br />
             <strong>
               {props.episodesLeft} episode{props.episodesLeft > 1 && "s"} left
             </strong>
