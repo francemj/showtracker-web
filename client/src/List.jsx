@@ -5,7 +5,7 @@ import Show from "./Show";
 function Watching(props) {
   return (
     <div className="list">
-      <h1>Watchlist</h1>
+      <h1>{props.class}</h1>
       {props.array.map((element, index) => {
         let className = "series";
         if (props.array.length !== 1) {
@@ -20,7 +20,7 @@ function Watching(props) {
         let name = element.seriesName;
 
         let posterLink = "https://artworks.thetvdb.com";
-        if (props.class !== "search") {
+        if (props.class !== "Search") {
           posterLink += "/banners/";
         }
         if (element.poster) {
@@ -34,7 +34,7 @@ function Watching(props) {
           posterLink += "/banners/images/missing/series.jpg";
         }
 
-        if (props.class !== "search") {
+        if (props.class !== "Search") {
           let episode =
             "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
           return (

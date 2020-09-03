@@ -114,8 +114,8 @@ app.get("/search/:query", async (req, res) => {
   let result = await search({ name: req.params.query }, token, debug);
   let reducedArray = result.map((element) => {
     let overview = element.overview;
-    if (overview && overview.length > 125) {
-      overview = overview.substring(0, 125) + "...";
+    if (overview && overview.length > 100) {
+      overview = overview.substring(0, 100) + "...";
     }
     return {
       id: element.id,

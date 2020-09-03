@@ -17,7 +17,7 @@ function Show(props) {
     <div className={props.className}>
       <img className="photo" src={props.posterLink} alt="poster" />
 
-      <div className={props.width < 600 ? "text large-title" : "text"}>
+      <div className="text">
         <h2>{props.show}</h2>
         {props.episode ? (
           <p>
@@ -28,7 +28,7 @@ function Show(props) {
             </strong>
           </p>
         ) : (
-          <p>{props.overview}</p>
+          <p className="overview">{props.width > 550 && props.overview}</p>
         )}
       </div>
       <Checkbox onChecked={checked} className="checkbox" />

@@ -37,7 +37,7 @@ function Header(props) {
     <header className="root">
       <Toolbar>
         <TvTwoToneIcon className="item" fontSize="large" />
-        {props.width > 600 && <h1 className="item">ShowTracker</h1>}
+        {props.width > 640 && <h1 className="item">ShowTracker</h1>}
         <Button onClick={handleClick} color="inherit" className="home-button">
           Home
         </Button>

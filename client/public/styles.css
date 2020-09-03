@@ -86,6 +86,7 @@ header .search-box .input-input:focus {
   padding: 0 2em 2em;
   display: inline-block;
   vertical-align: top;
+  margin-bottom: 2em;
 }
 
 .list h1 {
@@ -122,9 +123,6 @@ header .search-box .input-input:focus {
   letter-spacing: 0;
 }
 
-.series h1.large-title {
-}
-
 .series img {
   vertical-align: middle;
   color: #222831;
@@ -156,10 +154,14 @@ header .search-box .input-input:focus {
   padding: 0.5em;
 }
 
-@media (max-width: 799px) {
+@media (max-width: 768px) {
   header .search-box {
     display: block;
     position: relative;
+  }
+
+  header .search-box {
+    margin-right: 5em;
   }
 
   header h1.item {
@@ -168,6 +170,18 @@ header .search-box .input-input:focus {
 
   .list {
     padding: 0;
-    width: auto;
+    width: 100%;
+  }
+
+  .series {
+    border: 0;
+    border-top: 1px solid;
+    border-bottom: 1px solid;
+  }
+}
+
+@media (max-width: 400px) {
+  header .search-box .input-input:focus {
+    width: 10ch;
   }
 }

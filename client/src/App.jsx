@@ -4,11 +4,11 @@ import List from "./List";
 // import axios from "axios";
 
 function App() {
+  const [width, setWidth] = useState(window.innerWidth);
   const [searchArray, setSearchArray] = useState([]);
   const [searched, setSearched] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
-  const [width, setWidth] = useState(window.innerWidth);
-  const [seriesArray, setSeriesArray] = useState([]);
+  const [watchingArray, setWatchingArray] = useState([]);
 
   const handleResize = () => {
     setWidth(window.innerWidth);
@@ -25,7 +25,9 @@ function App() {
   function getShowData() {
     fetch("/series")
       .then((data) => data.json())
-      .then((res) => setSeriesArray(res));
+      .then((res) => {
+        setWatchingArray(res);
+      });
   }
 
   return (
@@ -38,9 +40,11 @@ function App() {
         width={width}
       />
       {searched ? (
-        <List array={searchArray} width={width} class="search" />
+        <List array={searchArray} width={width} class="Search" />
       ) : (
-        <List array={seriesArray} width={width} class="watching" />
+        <>
+          <List array={watchingArray} width={width} class="Watchlist" />
+        </>
       )}
     </div>
   );
