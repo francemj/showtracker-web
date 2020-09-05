@@ -4,8 +4,9 @@ import Show from "./Show";
 import missing from "./missing.jpg";
 
 function Watching(props) {
+  const divClass = "list " + props.class;
   return (
-    <div className="list">
+    <div className={divClass}>
       <h1>{props.class}</h1>
       {props.array.map((element, index) => {
         let className = "series";

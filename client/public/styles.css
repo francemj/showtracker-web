@@ -83,16 +83,19 @@ header .search-box .input-input:focus {
 .list {
   width: 36em;
   margin: auto;
-  padding: 0 2em 2em;
+  padding: 0 2em 1em;
   display: inline-block;
   vertical-align: top;
-  margin-bottom: 2em;
 }
 
 .list h1 {
   font-weight: 400;
   font-size: 2.5em;
   letter-spacing: 0.25vw;
+}
+
+.list.Upcoming {
+  margin-bottom: 4em;
 }
 
 .series {
@@ -155,6 +158,9 @@ header .search-box .input-input:focus {
 }
 
 @media (max-width: 768px) {
+  header {
+    margin-bottom: 3vw;
+  }
   header .search-box {
     display: block;
     position: relative;
@@ -166,6 +172,10 @@ header .search-box .input-input:focus {
 
   header h1.item {
     font-size: 5vw;
+  }
+
+  .list.Watchlist h1 {
+    margin-block-start: 2vw;
   }
 
   .list {
