@@ -82,7 +82,6 @@ async function getSeriesData(
   lastWatchedEpisodeNumber
 ) {
   let seriesResult = await fetchSeries({ id: seriesId }, token, debug);
-  console.log(seriesResult);
   let numberOfEpisodes = 0;
   let seasons = seriesResult.seasons.filter(
     (season) => season.season_number > 0
