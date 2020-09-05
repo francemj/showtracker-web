@@ -26,10 +26,10 @@ function App() {
   function getShowData() {
     fetch("/series")
       .then((data) => data.json())
-      .then((res) => setWatchingArray(res));
-    fetch("/upcoming")
-      .then((data) => data.json())
-      .then((res) => setUpcomingArray(res));
+      .then((res) => {
+        setWatchingArray(res.filter((show) => show.episodesLeft > 0));
+        setUpcomingArray(res.filter((show) => show.nextToAir));
+      });
   }
 
   return (

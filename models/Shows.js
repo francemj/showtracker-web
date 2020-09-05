@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const showSchema = new mongoose.Schema({
   id: String,
-  lastWatchedEpisode: String,
+  lastWatchedEpisodeNumber: String,
+  lastWatchedSeasonNumber: String,
 });
 
 const Show = mongoose.model("Show", showSchema);

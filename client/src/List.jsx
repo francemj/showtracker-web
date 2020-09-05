@@ -1,6 +1,7 @@
 import React from "react";
 
 import Show from "./Show";
+import missing from "./missing.jpg";
 
 function Watching(props) {
   return (
@@ -19,24 +20,19 @@ function Watching(props) {
         }
         let name = element.seriesName;
 
-        let posterLink = "https://artworks.thetvdb.com";
-        if (props.class !== "Search") {
-          posterLink += "/banners/";
-        }
+        let posterLink = "https://image.tmdb.org/t/p/w185";
         if (element.poster) {
-          if (element.poster === "/banners/images/missing/series.jpg") {
-            posterLink += "/banners/images/missing/series.jpg";
-          } else {
-            posterLink +=
-              element.poster.substring(0, element.poster.length - 4) + "_t.jpg";
-          }
+          posterLink += element.poster;
         } else {
-          posterLink += "/banners/images/missing/series.jpg";
+          posterLink = missing;
         }
 
         if (props.class === "Watchlist") {
           let episode =
-            "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
+            "S" +
+            element.nextSeasonNumberToWatch +
+            "E" +
+            element.nextEpisodeNumberToWatch;
           return (
             <Show
               listClass={props.class}
@@ -61,7 +57,10 @@ function Watching(props) {
           );
         } else {
           let episode =
-            "S" + element.airedSeason + "E" + element.airedEpisodeNumber;
+            "S" +
+            element.nextSeasonNumberToWatch +
+            "E" +
+            element.nextEpisodeNumberToWatch;
           return (
             <Show
               listClass={props.class}
@@ -69,7 +68,7 @@ function Watching(props) {
               show={name}
               posterLink={posterLink}
               episode={episode}
-              date={element.airingDate}
+              date={element.nextToAir.air_date}
               width={props.width}
             />
           );

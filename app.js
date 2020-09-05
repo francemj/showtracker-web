@@ -1,15 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const {
-  seriesEpisodesQuery,
-  login,
-  search,
-  seriesImagesQuery,
-  series,
-  seriesEpisodes,
-  seriesEpisodesSummary,
-  fullEpisode,
-} = require("./modules/tvdb");
+
 const bodyParser = require("body-parser");
 
 const path = require("path");
@@ -17,6 +8,7 @@ const path = require("path");
 //db
 require("./models");
 const Show = require("./models/Shows");
+const { search, fetchSeries, fetchEpisode } = require("./modules/tmdb");
 
 //express
 const app = express();
@@ -30,23 +22,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "client/build")));
 
 //globals
-let token;
+let token = { Authorization: "Bearer " + process.env.TOKEN };
 let debug = false;
 
-function compareEpisodes(a, b) {
-  let comparison = 0;
-  if (Date.parse(a.firstAired) < Date.parse(b.firstAired)) {
-    comparison = -1;
-  } else if (Date.parse(a.firstAired) > Date.parse(b.firstAired)) {
-    comparison = 1;
-  }
-  return comparison;
-}
-
-async function checkTokenAndDebug(req) {
-  if (!token) {
-    token = await login(process.env.APIKEY);
-  }
+async function checkDebug(req) {
   if (req.headers.debug) {
     debug = true;
   } else {
@@ -54,149 +33,159 @@ async function checkTokenAndDebug(req) {
   }
 }
 
-async function getEpisodes(seriesId) {
-  let result = await seriesEpisodes({ id: seriesId }, token, debug);
-  count = 2;
-  let episodeList = [];
-  while (Array.isArray(result)) {
-    let filtered = result.filter((episode) => episode.airedSeason > 0);
-    episodeList = episodeList.concat(filtered);
-    result = await seriesEpisodes({ id: seriesId, page: count }, token, debug);
-    count++;
+async function nextEpisode(seasons, episode) {
+  let next = {
+    show_id: episode.show_id,
+    episode_number: parseInt(episode.episode_number) + 1,
+    season_number: parseInt(episode.season_number),
+  };
+  if (seasons[next.season_number - 1].episode_count < next.episode_number) {
+    next["episode_number"] = 1;
+    next["season_number"] += 1;
   }
-  episodeList.sort(compareEpisodes);
-  return episodeList;
+  let result = await getEpisode(next);
+  return result;
 }
 
-function filterEpisodesByDate(episodes, before) {
-  const today = Date.now();
-  episodes = episodes.filter((episode) => {
-    if (before) {
-      return Date.parse(episode.firstAired) < today;
-    } else {
-      return Date.parse(episode.firstAired) > today;
-    }
-  });
-  episodes.sort(compareEpisodes);
-  return episodes;
-}
-
-async function getLatestEpisode(seriesId) {
-  let episodes = await getEpisodes(seriesId);
-  episodes = filterEpisodesByDate(episodes, true);
-  return episodes[episodes.length - 1];
-}
-
-async function getEpisodeAiringNext(seriesId) {
-  let episodes = await getEpisodes(seriesId);
-  episodes = filterEpisodesByDate(episodes, false);
-  return episodes[0];
-}
-
-async function getEpisode(seriesId, episodeNumber) {
-  let result = await seriesEpisodesQuery(
-    { id: seriesId, absoluteNumber: episodeNumber },
+async function getEpisode(episode) {
+  let result = await fetchEpisode(
+    {
+      show_id: episode.show_id,
+      episode_number: episode.episode_number,
+      season_number: episode.season_number,
+    },
     token,
     debug
   );
-  return result[0];
+  return result;
 }
 
-async function getSeriesData(seriesId, lastWatchedEpisode) {
-  let seriesResult = await series({ id: seriesId }, token, debug);
-  let latestEpisode = await getLatestEpisode(seriesId);
-  let nextEpisode = await getEpisode(
-    seriesId,
-    parseInt(lastWatchedEpisode) + 1
+function getAbsoluteNumber(seasons, episode) {
+  if (episode.season_number > 1) {
+    return (
+      seasons[parseInt(episode.season_number) - 2] + episode.episode_number
+    );
+  } else {
+    return episode.episode_number;
+  }
+}
+
+function getAbsoluteDifference(seasons, episode1, episode2) {
+  return Math.abs(
+    getAbsoluteNumber(seasons, episode1) - getAbsoluteNumber(seasons, episode2)
   );
-  let episodesLeft = latestEpisode.absoluteNumber - lastWatchedEpisode;
-  let output = {
-    key: seriesResult.id,
-    seriesName: seriesResult.seriesName,
-    poster: seriesResult.poster,
-    airedEpisodeNumber: nextEpisode.airedEpisodeNumber,
-    airedSeason: nextEpisode.airedSeason,
-    episodesLeft: episodesLeft,
-  };
+}
+
+async function getSeriesData(
+  seriesId,
+  lastWatchedSeasonNumber,
+  lastWatchedEpisodeNumber
+) {
+  let seriesResult = await fetchSeries({ id: seriesId }, token, debug);
+  let numberOfEpisodes = 0;
+  let seasons = seriesResult.seasons.filter(
+    (season) => season.season_number > 0
+  );
+  let totalEpisodesBySeason = seasons.map((season) => {
+    numberOfEpisodes += season.episode_count;
+    return numberOfEpisodes;
+  });
+  let latestEpisode = seriesResult.last_episode_to_air;
+  let episodesLeft = getAbsoluteDifference(
+    totalEpisodesBySeason,
+    latestEpisode,
+    {
+      episode_number: lastWatchedEpisodeNumber,
+      season_number: lastWatchedSeasonNumber,
+    }
+  );
+  let output;
+  if (episodesLeft > 0) {
+    let next = await nextEpisode(seasons, {
+      show_id: seriesId,
+      episode_number: lastWatchedEpisodeNumber,
+      season_number: lastWatchedSeasonNumber,
+    });
+    output = {
+      key: seriesResult.id,
+      seriesName: seriesResult.name,
+      poster: seriesResult.poster_path,
+      nextEpisodeNumberToWatch: next.episode_number,
+      nextSeasonNumberToWatch: next.season_number,
+      episodesLeft: episodesLeft,
+      nextToAir: seriesResult.next_episode_to_air,
+    };
+  } else {
+    output = {
+      key: seriesResult.id,
+      seriesName: seriesResult.name,
+      poster: seriesResult.poster_path,
+      episodesLeft: 0,
+      nextToAir: seriesResult.next_episode_to_air,
+    };
+  }
   return output;
 }
 
 app.get("/search/:query", async (req, res) => {
-  await checkTokenAndDebug(req);
-  let result = await search({ name: req.params.query }, token, debug);
-  let reducedArray = result.map((element) => {
+  let result = await search(
+    { query: req.params.query },
+    token,
+    req.headers.debug
+  );
+  let reducedArray = result.results.map((element) => {
     let overview = element.overview;
     if (overview && overview.length > 100) {
       overview = overview.substring(0, 100) + "...";
     }
     return {
       key: element.id,
-      seriesName: element.seriesName,
+      seriesName: element.name,
       overview: overview,
-      poster: element.poster,
+      poster: element.poster_path,
     };
   });
   res.send(reducedArray);
 });
 
-// app.get("/series/:seriesId", async (req, res) => {
-//   await checkTokenAndDebug(req);
-//   let result = await getSeriesData(req.params.seriesId);
-//   res.send(result);
-// });
-
-app.get("/series", async (req, res) => {
-  await checkTokenAndDebug(req);
-  let dbResults = await Show.find({});
-  let watching = await Promise.all(
-    dbResults.map(async (element) => {
-      let output = await getSeriesData(element.id, element.lastWatchedEpisode);
-      return output;
-    })
-  );
-  let filteredOutput = watching.filter((show) => show.episodesLeft > 0);
-  res.send(filteredOutput);
+app.get("/series/:seriesId", async (req, res) => {
+  await checkDebug(req);
+  let result = await getSeriesData(req.params.seriesId, 1, 0);
+  res.send(result);
 });
 
-app.get("/upcoming", async (req, res) => {
-  await checkTokenAndDebug(req);
+app.get("/series", async (req, res) => {
   let dbResults = await Show.find({});
-  let upcoming = await Promise.all(
+  let result = await Promise.all(
     dbResults.map(async (element) => {
-      let output = await getEpisodeAiringNext(element.id);
+      let output = await getSeriesData(
+        element.id,
+        parseInt(element.lastWatchedSeasonNumber),
+        parseInt(element.lastWatchedEpisodeNumber)
+      );
       return output;
     })
   );
-  let filtered = upcoming.filter((show) => show);
-  let output = await Promise.all(
-    filtered.map(async (element) => {
-      let seriesResult = await series({ id: element.seriesId }, token, debug);
-      return {
-        key: seriesResult.id,
-        seriesName: seriesResult.seriesName,
-        poster: seriesResult.poster,
-        airedEpisodeNumber: element.airedEpisodeNumber,
-        airedSeason: element.airedSeason,
-        airingDate: element.firstAired,
-      };
-    })
-  );
-  res.send(output);
+  res.send(result);
 });
 
 app.post("/add", (req, res) => {
   const newShow = new Show({
     id: req.body.id,
-    lastWatchedEpisode: req.body.lastWatchedEpisode,
+    lastWatchedEpisodeNumber: req.body.lastWatchedEpisodeNumber,
+    lastWatchedSeasonNumber: req.body.lastWatchedSeasonNumber,
   });
   newShow.save();
-  res.send("Success!");
+  res.send("Success");
 });
 
 app.put("/update", (req, res) => {
   Show.updateOne(
     { id: req.body.id },
-    { lastWatchedEpisode: req.body.lastWatchedEpisode },
+    {
+      lastWatchedEpisodeNumber: req.body.lastWatchedEpisodeNumber,
+      lastWatchedSeasonNumber: req.body.lastWatchedSeasonNumber,
+    },
     (err) => {
       if (err) {
         res.send(err);

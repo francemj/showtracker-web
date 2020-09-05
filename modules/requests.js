@@ -6,7 +6,7 @@ exports.get = (url, params) => {
     axios
       .get(url, params)
       .then((res) => {
-        resolve(res.data.data);
+        resolve(res.data);
       })
       .catch(function (error) {
         if (params.headers.debug == true) {
