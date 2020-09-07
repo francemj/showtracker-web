@@ -229,11 +229,14 @@ app.put("/update", (req, res) => {
           token,
           debug
         );
-        const next = await nextEpisode(seriesResult.seasons, {
-          show_id: req.body.id,
-          episode_number: req.body.lastWatchedEpisodeNumber,
-          season_number: req.body.lastWatchedSeasonNumber,
-        });
+        const next = await nextEpisode(
+          seriesResult.seasons.filter((season) => season.season_number > 0),
+          {
+            show_id: req.body.id,
+            episode_number: req.body.lastWatchedEpisodeNumber,
+            season_number: req.body.lastWatchedSeasonNumber,
+          }
+        );
         const show = {
           episodesLeft: req.body.episodesLeft - 1,
           season_number: next.season_number,
