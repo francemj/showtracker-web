@@ -19,6 +19,7 @@ app.use((req, res, next) => {
 
 //body-parser
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "client/build")));
 
 //globals
@@ -83,38 +84,49 @@ async function getSeriesData(
 ) {
   let seriesResult = await fetchSeries({ id: seriesId }, token, debug);
   let numberOfEpisodes = 0;
-  let seasons = seriesResult.seasons.filter(
-    (season) => season.season_number > 0
-  );
-  let totalEpisodesBySeason = seasons.map((season) => {
-    numberOfEpisodes += season.episode_count;
-    return numberOfEpisodes;
-  });
-  let latestEpisode = seriesResult.last_episode_to_air;
-  let episodesLeft = getAbsoluteDifference(
-    totalEpisodesBySeason,
-    latestEpisode,
-    {
-      episode_number: lastWatchedEpisodeNumber,
-      season_number: lastWatchedSeasonNumber,
-    }
-  );
-  let output;
-  if (episodesLeft > 0) {
-    let next = await nextEpisode(seasons, {
-      show_id: seriesId,
-      episode_number: lastWatchedEpisodeNumber,
-      season_number: lastWatchedSeasonNumber,
+  if (seriesResult.seasons) {
+    let seasons = seriesResult.seasons.filter(
+      (season) => season.season_number > 0
+    );
+    let totalEpisodesBySeason = seasons.map((season) => {
+      numberOfEpisodes += season.episode_count;
+      return numberOfEpisodes;
     });
-    output = {
-      key: seriesResult.id,
-      seriesName: seriesResult.name,
-      poster: seriesResult.poster_path,
-      nextEpisodeNumberToWatch: next.episode_number,
-      nextSeasonNumberToWatch: next.season_number,
-      episodesLeft: episodesLeft,
-      nextToAir: seriesResult.next_episode_to_air,
-    };
+    let latestEpisode = seriesResult.last_episode_to_air;
+    let episodesLeft = getAbsoluteDifference(
+      totalEpisodesBySeason,
+      latestEpisode,
+      {
+        episode_number: lastWatchedEpisodeNumber,
+        season_number: lastWatchedSeasonNumber,
+      }
+    );
+    let output;
+    if (episodesLeft > 0) {
+      let next = await nextEpisode(seasons, {
+        show_id: seriesId,
+        episode_number: lastWatchedEpisodeNumber,
+        season_number: lastWatchedSeasonNumber,
+      });
+      output = {
+        key: seriesResult.id,
+        seriesName: seriesResult.name,
+        poster: seriesResult.poster_path,
+        nextEpisodeNumberToWatch: next.episode_number,
+        nextSeasonNumberToWatch: next.season_number,
+        episodesLeft: episodesLeft,
+        nextToAir: seriesResult.next_episode_to_air,
+      };
+    } else {
+      output = {
+        key: seriesResult.id,
+        seriesName: seriesResult.name,
+        poster: seriesResult.poster_path,
+        episodesLeft: 0,
+        nextToAir: seriesResult.next_episode_to_air,
+      };
+    }
+    return output;
   } else {
     output = {
       key: seriesResult.id,
@@ -123,8 +135,8 @@ async function getSeriesData(
       episodesLeft: 0,
       nextToAir: seriesResult.next_episode_to_air,
     };
+    return output;
   }
-  return output;
 }
 
 app.get("/search/:query", async (req, res) => {
@@ -170,13 +182,35 @@ app.get("/series", async (req, res) => {
 });
 
 app.post("/add", (req, res) => {
-  const newShow = new Show({
-    id: req.body.id,
-    lastWatchedEpisodeNumber: req.body.lastWatchedEpisodeNumber,
-    lastWatchedSeasonNumber: req.body.lastWatchedSeasonNumber,
+  Show.findOne({ id: req.body.id.toString() }, (err, foundShow) => {
+    if (err) {
+      res.send(err);
+    } else {
+      const newShow = new Show({
+        id: req.body.id,
+        lastWatchedEpisodeNumber: req.body.lastWatchedEpisodeNumber,
+        lastWatchedSeasonNumber: req.body.lastWatchedSeasonNumber,
+      });
+      newShow.save();
+      res.send("Add successful");
+    }
   });
-  newShow.save();
-  res.send("Success");
+});
+
+app.post("/remove", (req, res) => {
+  Show.findOne({ id: req.body.id.toString() }, (err, foundShow) => {
+    if (foundShow) {
+      Show.deleteOne({ id: foundShow.id }, (err) => {
+        if (err) {
+          res.send(err);
+        } else {
+          res.send("Delete successful");
+        }
+      });
+    } else {
+      res.send("No show found");
+    }
+  });
 });
 
 app.put("/update", (req, res) => {
@@ -186,11 +220,26 @@ app.put("/update", (req, res) => {
       lastWatchedEpisodeNumber: req.body.lastWatchedEpisodeNumber,
       lastWatchedSeasonNumber: req.body.lastWatchedSeasonNumber,
     },
-    (err) => {
+    async (err) => {
       if (err) {
         res.send(err);
       } else {
-        res.send("Success");
+        const seriesResult = await fetchSeries(
+          { id: req.body.id },
+          token,
+          debug
+        );
+        const next = await nextEpisode(seriesResult.seasons, {
+          show_id: req.body.id,
+          episode_number: req.body.lastWatchedEpisodeNumber,
+          season_number: req.body.lastWatchedSeasonNumber,
+        });
+        const show = {
+          episodesLeft: req.body.episodesLeft - 1,
+          season_number: next.season_number,
+          episode_number: next.episode_number,
+        };
+        res.send(show);
       }
     }
   );

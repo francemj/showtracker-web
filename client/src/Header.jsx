@@ -3,7 +3,7 @@ import Toolbar from "@material-ui/core/Toolbar";
 import TvTwoToneIcon from "@material-ui/icons/TvTwoTone";
 import InputBase from "@material-ui/core/InputBase";
 import SearchIcon from "@material-ui/icons/Search";
-import { Button } from "@material-ui/core";
+import Button from "@material-ui/core/Button";
 
 function Header(props) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -31,6 +31,7 @@ function Header(props) {
 
   const handleClick = () => {
     props.setSearched(false);
+    props.setDataFetched(false);
   };
 
   return (

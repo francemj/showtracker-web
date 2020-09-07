@@ -3,7 +3,7 @@ import React from "react";
 import Show from "./Show";
 import missing from "./missing.jpg";
 
-function Watching(props) {
+function List(props) {
   const divClass = "list " + props.class;
   return (
     <div className={divClass}>
@@ -29,48 +29,60 @@ function Watching(props) {
         }
 
         if (props.class === "Watchlist") {
-          let episode =
-            "S" +
-            element.nextSeasonNumberToWatch +
-            "E" +
-            element.nextEpisodeNumberToWatch;
           return (
             <Show
+              key={element.key}
+              showId={element.key}
               listClass={props.class}
               className={className}
               show={name}
               posterLink={posterLink}
-              episode={episode}
+              nextEpisodeNumber={element.nextEpisodeNumberToWatch}
+              nextSeasonNumber={element.nextSeasonNumberToWatch}
               episodesLeft={element.episodesLeft}
+              setSearched={props.setSearched}
+              setDataFetched={props.setDataFetched}
               width={props.width}
+              checked={false}
             />
           );
         } else if (props.class === "Search") {
+          let checked = props.seriesArray.find(
+            (show) => show.key === element.key
+          );
+          if (checked) {
+            checked = true;
+          } else {
+            checked = false;
+          }
           return (
             <Show
+              key={element.key}
+              showId={element.key}
               listClass={props.class}
               className={className}
               show={name}
               posterLink={posterLink}
               overview={element.overview}
               width={props.width}
+              seriesArray={props.seriesArray}
+              checked={checked}
             />
           );
         } else {
-          let episode =
-            "S" +
-            element.nextSeasonNumberToWatch +
-            "E" +
-            element.nextEpisodeNumberToWatch;
           return (
             <Show
               listClass={props.class}
               className={className}
+              key={element.key}
+              showId={element.key}
               show={name}
               posterLink={posterLink}
-              episode={episode}
+              nextEpisodeNumber={element.nextToAir.episode_number}
+              nextSeasonNumber={element.nextToAir.season_number}
               date={element.nextToAir.air_date}
               width={props.width}
+              checked={false}
             />
           );
         }
@@ -79,4 +91,4 @@ function Watching(props) {
   );
 }
 
-export default Watching;
+export default List;

@@ -8,8 +8,7 @@ function App() {
   const [searchArray, setSearchArray] = useState([]);
   const [searched, setSearched] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
-  const [watchingArray, setWatchingArray] = useState([]);
-  const [upcomingArray, setUpcomingArray] = useState([]);
+  const [seriesArray, setSeriesArray] = useState([]);
 
   const handleResize = () => {
     setWidth(window.innerWidth);
@@ -27,9 +26,19 @@ function App() {
     fetch("/series")
       .then((data) => data.json())
       .then((res) => {
-        setWatchingArray(res.filter((show) => show.episodesLeft > 0));
-        setUpcomingArray(res.filter((show) => show.nextToAir));
+        setSeriesArray(res);
       });
+  }
+  function compareDates(a, b) {
+    let comparison = 0;
+    if (Date.parse(a.nextToAir.air_date) < Date.parse(b.nextToAir.air_date)) {
+      comparison = -1;
+    } else if (
+      Date.parse(a.nextToAir.air_date) > Date.parse(b.nextToAir.air_date)
+    ) {
+      comparison = 1;
+    }
+    return comparison;
   }
 
   return (
@@ -42,11 +51,29 @@ function App() {
         width={width}
       />
       {searched ? (
-        <List array={searchArray} width={width} class="Search" />
+        <List
+          array={searchArray}
+          seriesArray={seriesArray}
+          width={width}
+          class="Search"
+        />
       ) : (
         <>
-          <List array={watchingArray} width={width} class="Watchlist" />
-          <List array={upcomingArray} width={width} class="Upcoming" />
+          <List
+            array={seriesArray.filter((show) => show.episodesLeft > 0)}
+            seriesArray={seriesArray}
+            width={width}
+            class="Watchlist"
+            setSearched={setSearched}
+            setDataFetched={setDataFetched}
+          />
+          <List
+            array={seriesArray
+              .filter((show) => show.nextToAir)
+              .sort(compareDates)}
+            width={width}
+            class="Upcoming"
+          />
         </>
       )}
     </div>
