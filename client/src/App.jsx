@@ -5,10 +5,10 @@ import List from "./List";
 
 function App() {
   const [width, setWidth] = useState(window.innerWidth);
-  const [searchArray, setSearchArray] = useState([]);
-  const [searched, setSearched] = useState(false);
+  const [page, setPage] = useState("home");
   const [dataFetched, setDataFetched] = useState(false);
   const [seriesArray, setSeriesArray] = useState([]);
+  const [searchArray, setSearchArray] = useState([]);
 
   const handleResize = () => {
     setWidth(window.innerWidth);
@@ -46,25 +46,26 @@ function App() {
       <Header
         searchArray={searchArray}
         setSearchArray={setSearchArray}
-        setSearched={setSearched}
+        setPage={setPage}
         setDataFetched={setDataFetched}
         width={width}
       />
-      {searched ? (
+      {page === "search" && (
         <List
           array={searchArray}
           seriesArray={seriesArray}
           width={width}
           class="Search"
         />
-      ) : (
+      )}
+      {page === "home" && (
         <>
           <List
             array={seriesArray.filter((show) => show.episodesLeft > 0)}
             seriesArray={seriesArray}
             width={width}
             class="Watchlist"
-            setSearched={setSearched}
+            setPage={setPage}
             setDataFetched={setDataFetched}
           />
           <List

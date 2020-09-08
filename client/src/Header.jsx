@@ -13,7 +13,7 @@ function Header(props) {
       .then((data) => data.json())
       .then((res) => {
         props.setSearchArray(res);
-        props.setSearched(true);
+        props.setPage("search");
         props.setDataFetched(false);
       });
   }
@@ -30,7 +30,7 @@ function Header(props) {
   };
 
   const handleClick = () => {
-    props.setSearched(false);
+    props.setPage("home");
     props.setDataFetched(false);
   };
 
@@ -58,6 +58,9 @@ function Header(props) {
             inputProps={{ "aria-label": "search" }}
           />
         </div>
+        <Button onClick={handleClick} color="inherit" className="home-button">
+          Home
+        </Button>
       </Toolbar>
     </header>
   );

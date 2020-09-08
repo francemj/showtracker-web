@@ -40,7 +40,6 @@ function List(props) {
               nextEpisodeNumber={element.nextEpisodeNumberToWatch}
               nextSeasonNumber={element.nextSeasonNumberToWatch}
               episodesLeft={element.episodesLeft}
-              setSearched={props.setSearched}
               setDataFetched={props.setDataFetched}
               width={props.width}
               checked={false}
