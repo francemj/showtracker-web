@@ -58,9 +58,6 @@ function Header(props) {
             inputProps={{ "aria-label": "search" }}
           />
         </div>
-        <Button onClick={handleClick} color="inherit" className="home-button">
-          Home
-        </Button>
       </Toolbar>
     </header>
   );
