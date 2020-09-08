@@ -41,7 +41,6 @@ function List(props) {
               nextSeasonNumber={element.nextSeasonNumberToWatch}
               episodesLeft={element.episodesLeft}
               setDataFetched={props.setDataFetched}
-              width={props.width}
               checked={false}
             />
           );
@@ -64,11 +63,10 @@ function List(props) {
               posterLink={posterLink}
               overview={element.overview}
               width={props.width}
-              seriesArray={props.seriesArray}
               checked={checked}
             />
           );
-        } else {
+        } else if (props.class === "Upcoming") {
           return (
             <Show
               listClass={props.class}
@@ -80,8 +78,23 @@ function List(props) {
               nextEpisodeNumber={element.nextToAir.episode_number}
               nextSeasonNumber={element.nextToAir.season_number}
               date={element.nextToAir.air_date}
-              width={props.width}
               checked={false}
+            />
+          );
+        } else {
+          return (
+            <Show
+              listClass={props.class}
+              className={className}
+              key={element.key}
+              showId={element.key}
+              show={name}
+              posterLink={posterLink}
+              nextEpisodeNumber={element.nextEpisodeNumberToWatch}
+              nextSeasonNumber={element.nextSeasonNumberToWatch}
+              checked={true}
+              width={props.width}
+              overview={element.overview}
             />
           );
         }

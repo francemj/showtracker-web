@@ -27,6 +27,7 @@ function App() {
       .then((data) => data.json())
       .then((res) => {
         setSeriesArray(res);
+        console.log(res);
       });
   }
   function compareDates(a, b) {
@@ -63,19 +64,19 @@ function App() {
           <List
             array={seriesArray.filter((show) => show.episodesLeft > 0)}
             seriesArray={seriesArray}
-            width={width}
             class="Watchlist"
-            setPage={setPage}
             setDataFetched={setDataFetched}
           />
           <List
             array={seriesArray
               .filter((show) => show.nextToAir)
               .sort(compareDates)}
-            width={width}
             class="Upcoming"
           />
         </>
+      )}
+      {page === "allShows" && (
+        <List array={seriesArray} class="All Shows" width={width} />
       )}
     </div>
   );

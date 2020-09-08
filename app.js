@@ -101,6 +101,10 @@ async function getSeriesData(
         season_number: lastWatchedSeasonNumber,
       }
     );
+    let overview = seriesResult.overview;
+    if (overview && overview.length > 100) {
+      overview = overview.substring(0, 100) + "...";
+    }
     let output;
     if (episodesLeft > 0) {
       let next = await nextEpisode(seasons, {
@@ -115,6 +119,7 @@ async function getSeriesData(
         nextEpisodeNumberToWatch: next.episode_number,
         nextSeasonNumberToWatch: next.season_number,
         episodesLeft: episodesLeft,
+        overview: overview,
         nextToAir: seriesResult.next_episode_to_air,
       };
     } else {
@@ -123,6 +128,7 @@ async function getSeriesData(
         seriesName: seriesResult.name,
         poster: seriesResult.poster_path,
         episodesLeft: 0,
+        overview: overview,
         nextToAir: seriesResult.next_episode_to_air,
       };
     }
@@ -134,6 +140,7 @@ async function getSeriesData(
       poster: seriesResult.poster_path,
       episodesLeft: 0,
       nextToAir: seriesResult.next_episode_to_air,
+      overview: overview,
     };
     return output;
   }

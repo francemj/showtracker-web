@@ -29,20 +29,18 @@ function Header(props) {
     setSearchTerm(event.target.value);
   };
 
-  const handleClick = () => {
-    props.setPage("home");
+  const handleClick = (event) => {
+    props.setPage(event.currentTarget.value);
     props.setDataFetched(false);
   };
 
   return (
     <header className="root">
       <Toolbar>
-        <TvTwoToneIcon className="item" fontSize="large" />
+        <TvTwoToneIcon className="item icon" fontSize="large" />
         {props.width > 640 && <h1 className="item">ShowTracker</h1>}
-        <Button onClick={handleClick} color="inherit" className="home-button">
-          Home
-        </Button>
-        <div className="search-box">
+
+        <div className="search-box item">
           <div className="search-icon">
             <SearchIcon />
           </div>
@@ -58,6 +56,22 @@ function Header(props) {
             inputProps={{ "aria-label": "search" }}
           />
         </div>
+        <Button
+          onClick={handleClick}
+          color="inherit"
+          className="item home-button"
+          value="home"
+        >
+          Home
+        </Button>
+        <Button
+          onClick={handleClick}
+          color="inherit"
+          className="item button"
+          value="allShows"
+        >
+          Shows
+        </Button>
       </Toolbar>
     </header>
   );

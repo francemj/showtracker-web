@@ -68,13 +68,13 @@ function Show(props) {
           </p>
         )}
         {props.date && <p>{props.date}</p>}
-        {props.listClass !== "Search" ? (
+        {["Search", "All Shows"].indexOf(props.listClass) < 0 ? (
           <p>{episode}</p>
         ) : (
           <p className="overview">{props.width > 550 && props.overview}</p>
         )}
       </div>
-      {props.listClass === "Search" && (
+      {["Search", "All Shows"].indexOf(props.listClass) >= 0 && (
         <Checkbox
           onChange={checkedAdd}
           className="checkbox"

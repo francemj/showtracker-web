@@ -20,11 +20,14 @@ header h1 {
   font-weight: 700;
   font-size: 2.5em;
   padding-left: 0.5em;
+  color: #fbd46d;
 }
 
 header .item {
-  display: inline-block;
+  display: flex;
   vertical-align: middle;
+}
+header .icon {
   color: #fbd46d;
 }
 
@@ -33,22 +36,25 @@ header.root {
 }
 
 header .home-button {
-  display: block;
-  position: absolute;
   right: 0;
-  margin-left: auto;
-  margin-right: 1em;
+  margin-left: 1em;
+  font-size: 1em;
+}
+
+header .button {
+  right: 0;
+  margin-left: 0.5em;
   font-size: 1em;
 }
 
 header .search-box {
-  position: absolute;
+  position: relative;
   border-radius: 4px;
   background-color: rgba(255, 255, 255, 0.15);
   right: 0;
   margin-left: auto;
-  margin-right: 6em;
   width: auto;
+  display: flex;
 }
 
 header .search-box:hover {
