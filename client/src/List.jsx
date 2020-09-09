@@ -64,6 +64,7 @@ function List(props) {
               overview={element.overview}
               width={props.width}
               checked={checked}
+              seriesArray={props.seriesArray}
             />
           );
         } else if (props.class === "Upcoming") {
