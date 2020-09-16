@@ -61,20 +61,45 @@ async function getEpisode(episode) {
   return result;
 }
 
-function getAbsoluteNumber(seasons, episode) {
+function getAbsoluteNumber(cumulativeTotalEpisodesBySeason, episode) {
   if (episode.season_number > 1) {
     return (
-      seasons[parseInt(episode.season_number) - 2] + episode.episode_number
+      cumulativeTotalEpisodesBySeason[parseInt(episode.season_number) - 2] +
+      episode.episode_number
     );
   } else {
     return episode.episode_number;
   }
 }
 
-function getAbsoluteDifference(seasons, episode1, episode2) {
+function getAbsoluteDifference(
+  cumulativeTotalEpisodesBySeason,
+  episode1,
+  episode2
+) {
   return Math.abs(
-    getAbsoluteNumber(seasons, episode1) - getAbsoluteNumber(seasons, episode2)
+    getAbsoluteNumber(cumulativeTotalEpisodesBySeason, episode1) -
+      getAbsoluteNumber(cumulativeTotalEpisodesBySeason, episode2)
   );
+}
+
+function getAiredEpisodesBySeason(latestEpisode, seasons) {
+  let episodeListBySeason = seasons.map((season) => {
+    let episodes = [];
+    for (let i = 1; i <= season.episode_count; i++) {
+      if (
+        season.season_number < latestEpisode.season_number ||
+        (season.season_number === latestEpisode.season_number &&
+          i <= latestEpisode.episode_number)
+      ) {
+        episodes.push(i);
+      }
+    }
+    if (episodes.length > 0) {
+      return { season_number: season.season_number, episodes: episodes };
+    }
+  });
+  return episodeListBySeason.filter((element) => element);
 }
 
 async function getSeriesData(
@@ -83,29 +108,30 @@ async function getSeriesData(
   lastWatchedEpisodeNumber
 ) {
   let seriesResult = await fetchSeries({ id: seriesId }, token, debug);
-  let numberOfEpisodes = 0;
+  let overview = seriesResult.overview;
+  if (overview && overview.length > 100) {
+    overview = overview.substring(0, 100) + "...";
+  }
+  let latestEpisode = seriesResult.last_episode_to_air;
+  let output;
   if (seriesResult.seasons) {
     let seasons = seriesResult.seasons.filter(
       (season) => season.season_number > 0
     );
-    let totalEpisodesBySeason = seasons.map((season) => {
+    let numberOfEpisodes = 0;
+    let cumulativeTotalEpisodesBySeason = seasons.map((season) => {
       numberOfEpisodes += season.episode_count;
       return numberOfEpisodes;
     });
-    let latestEpisode = seriesResult.last_episode_to_air;
+    let episodeListBySeason = getAiredEpisodesBySeason(latestEpisode, seasons);
     let episodesLeft = getAbsoluteDifference(
-      totalEpisodesBySeason,
+      cumulativeTotalEpisodesBySeason,
       latestEpisode,
       {
         episode_number: lastWatchedEpisodeNumber,
         season_number: lastWatchedSeasonNumber,
       }
     );
-    let overview = seriesResult.overview;
-    if (overview && overview.length > 100) {
-      overview = overview.substring(0, 100) + "...";
-    }
-    let output;
     if (episodesLeft > 0) {
       let next = await nextEpisode(seasons, {
         show_id: seriesId,
@@ -121,6 +147,7 @@ async function getSeriesData(
         episodesLeft: episodesLeft,
         overview: overview,
         nextToAir: seriesResult.next_episode_to_air,
+        seasons: episodeListBySeason,
       };
     } else {
       output = {
@@ -130,6 +157,7 @@ async function getSeriesData(
         episodesLeft: 0,
         overview: overview,
         nextToAir: seriesResult.next_episode_to_air,
+        seasons: episodeListBySeason,
       };
     }
     return output;
@@ -152,18 +180,31 @@ app.get("/search/:query", async (req, res) => {
     token,
     req.headers.debug
   );
-  let reducedArray = result.results.map((element) => {
-    let overview = element.overview;
-    if (overview && overview.length > 100) {
-      overview = overview.substring(0, 100) + "...";
-    }
-    return {
-      key: element.id,
-      seriesName: element.name,
-      overview: overview,
-      poster: element.poster_path,
-    };
-  });
+  let reducedArray = await Promise.all(
+    result.results.map(async (element) => {
+      let seriesResult = await fetchSeries({ id: element.id }, token, debug);
+      let latestEpisode = seriesResult.last_episode_to_air;
+
+      let seasons = seriesResult.seasons.filter(
+        (season) => season.season_number > 0
+      );
+      let episodeListBySeason = getAiredEpisodesBySeason(
+        latestEpisode,
+        seasons
+      );
+      let overview = element.overview;
+      if (overview && overview.length > 100) {
+        overview = overview.substring(0, 100) + "...";
+      }
+      return {
+        key: element.id,
+        seriesName: element.name,
+        overview: overview,
+        poster: element.poster_path,
+        seasons: episodeListBySeason,
+      };
+    })
+  );
   res.send(reducedArray);
 });
 

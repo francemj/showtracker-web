@@ -64,7 +64,8 @@ function List(props) {
               overview={element.overview}
               width={props.width}
               checked={checked}
-              seriesArray={props.seriesArray}
+              seasons={element.seasons}
+              setDataFetched={props.setDataFetched}
             />
           );
         } else if (props.class === "Upcoming") {
@@ -96,6 +97,8 @@ function List(props) {
               checked={true}
               width={props.width}
               overview={element.overview}
+              seasons={element.seasons}
+              setDataFetched={props.setDataFetched}
             />
           );
         }

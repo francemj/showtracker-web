@@ -27,7 +27,6 @@ function App() {
       .then((data) => data.json())
       .then((res) => {
         setSeriesArray(res);
-        console.log(res);
       });
   }
   function compareDates(a, b) {
@@ -76,7 +75,12 @@ function App() {
         </>
       )}
       {page === "allShows" && (
-        <List array={seriesArray} class="All Shows" width={width} />
+        <List
+          array={seriesArray}
+          class="All Shows"
+          width={width}
+          setDataFetched={setDataFetched}
+        />
       )}
     </div>
   );

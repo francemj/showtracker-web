@@ -46,8 +46,8 @@ function Header(props) {
   };
 
   const handleClick = (event) => {
-    props.setPage(event.currentTarget.value);
     props.setDataFetched(false);
+    props.setPage(event.currentTarget.value);
   };
 
   return (

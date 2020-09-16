@@ -2,16 +2,10 @@ import React, { useState } from "react";
 import axios from "axios";
 import Checkbox from "@material-ui/core/Checkbox";
 import Button from "@material-ui/core/Button";
-import TextField from "@material-ui/core/TextField";
-import Dialog from "@material-ui/core/Dialog";
-import DialogActions from "@material-ui/core/DialogActions";
-import DialogContent from "@material-ui/core/DialogContent";
-import DialogContentText from "@material-ui/core/DialogContentText";
-import DialogTitle from "@material-ui/core/DialogTitle";
+import AddDialog from "./AddDialog";
 
 function Show(props) {
   const [checked, setChecked] = useState(props.checked);
-
   const [open, setOpen] = useState(false);
 
   const [nextEpisodeNumber, setNextEpisodeNumber] = useState(
@@ -20,6 +14,8 @@ function Show(props) {
   const [nextSeasonNumber, setNextSeasonNumber] = useState(
     props.nextSeasonNumber
   );
+  const [lastWatchedEpisodeNumber, setLastWatchedEpisodeNumber] = useState(0);
+  const [lastWatchedSeasonNumber, setLastWatchedSeasonNumber] = useState(1);
   const [episode, setEpisode] = useState(
     "S" + nextSeasonNumber + "E" + nextEpisodeNumber
   );
@@ -29,22 +25,34 @@ function Show(props) {
     setChecked(event.target.checked);
     if (event.target.checked) {
       setOpen(true);
-      const show = {
-        id: props.showId,
-        lastWatchedEpisodeNumber: 0,
-        lastWatchedSeasonNumber: 1,
-      };
-      axios.post("/add", show).then((response) => console.log(response));
     } else {
       const show = {
         id: props.showId,
       };
       axios.post("/remove", show).then((response) => console.log(response));
+      props.setDataFetched(false);
     }
   }
 
-  const handleClose = () => {
+  const handleCancel = () => {
+    setChecked(false);
     setOpen(false);
+  };
+  const handleClose = () => {
+    const show = {
+      id: props.showId,
+      lastWatchedEpisodeNumber: lastWatchedEpisodeNumber,
+      lastWatchedSeasonNumber: lastWatchedSeasonNumber,
+    };
+    axios.post("/add", show).then((response) => console.log(response));
+    setOpen(false);
+  };
+
+  const handleChangeSeason = (event) => {
+    setLastWatchedSeasonNumber(event.target.value);
+  };
+  const handleChangeEpisode = (event) => {
+    setLastWatchedEpisodeNumber(event.target.value);
   };
 
   function handleNext(event) {
@@ -56,6 +64,8 @@ function Show(props) {
     };
     axios.put("/update", show).then((response) => {
       if (response.data.episodesLeft > 0) {
+        setLastWatchedEpisodeNumber(nextEpisodeNumber);
+        setLastWatchedSeasonNumber(nextSeasonNumber);
         setNextEpisodeNumber(response.data.episode_number);
         setNextSeasonNumber(response.data.season_number);
         setEpisode(
@@ -88,41 +98,22 @@ function Show(props) {
         )}
       </div>
       {["Search", "All Shows"].indexOf(props.listClass) >= 0 && (
-        <div className="checkbox">
+        <div className="action checkbox">
           <Checkbox onChange={checkedAdd} checked={checked} />
-          <Dialog
+          <AddDialog
             open={open}
-            onClose={handleClose}
-            aria-labelledby="form-dialog-title"
-          >
-            <DialogTitle id="form-dialog-title">Subscribe</DialogTitle>
-            <DialogContent>
-              <DialogContentText>
-                To subscribe to this website, please enter your email address
-                here. We will send updates occasionally.
-              </DialogContentText>
-              <TextField
-                autoFocus
-                margin="dense"
-                id="name"
-                label="Email Address"
-                type="email"
-                fullWidth
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleClose} color="primary">
-                Cancel
-              </Button>
-              <Button onClick={handleClose} color="primary">
-                Subscribe
-              </Button>
-            </DialogActions>
-          </Dialog>
+            handleCancel={handleCancel}
+            handleClose={handleClose}
+            handleChangeSeason={handleChangeSeason}
+            handleChangeEpisode={handleChangeEpisode}
+            lastWatchedSeasonNumber={lastWatchedSeasonNumber}
+            lastWatchedEpisodeNumber={lastWatchedEpisodeNumber}
+            seasons={props.seasons}
+          />
         </div>
       )}
       {props.listClass === "Watchlist" && (
-        <Button onClick={handleNext} color="inherit" className="checkbox">
+        <Button onClick={handleNext} color="inherit" className="action next">
           Next
         </Button>
       )}

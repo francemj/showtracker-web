@@ -166,11 +166,16 @@ header .search-box .input-input:focus {
   margin: 0.25em 0 0;
 }
 
-.series .checkbox {
+.series .action {
   width: 10%;
-  padding: 0.5em;
   margin: auto 0;
   vertical-align: middle;
+}
+.series .action.checkbox {
+  height: auto;
+}
+.series .action.next {
+  height: 100%;
 }
 
 @media (max-width: 768px) {
