@@ -86,17 +86,19 @@ function getAbsoluteDifference(
 function getAiredEpisodesBySeason(latestEpisode, seasons) {
   let episodeListBySeason = seasons.map((season) => {
     let episodes = [];
-    for (let i = 1; i <= season.episode_count; i++) {
-      if (
-        season.season_number < latestEpisode.season_number ||
-        (season.season_number === latestEpisode.season_number &&
-          i <= latestEpisode.episode_number)
-      ) {
-        episodes.push(i);
+    if (season !== null || season) {
+      for (let i = 1; i <= season.episode_count; i++) {
+        if (
+          season.season_number < latestEpisode.season_number ||
+          (season.season_number === latestEpisode.season_number &&
+            i <= latestEpisode.episode_number)
+        ) {
+          episodes.push(i);
+        }
       }
-    }
-    if (episodes.length > 0) {
-      return { season_number: season.season_number, episodes: episodes };
+      if (episodes.length > 0) {
+        return { season_number: season.season_number, episodes: episodes };
+      }
     }
   });
   return episodeListBySeason.filter((element) => element);
@@ -113,6 +115,9 @@ async function getSeriesData(
     overview = overview.substring(0, 100) + "...";
   }
   let latestEpisode = seriesResult.last_episode_to_air;
+  if (latestEpisode === null) {
+    latestEpisode = { season_number: 1, episode_number: 0 };
+  }
   let output;
   if (seriesResult.seasons) {
     let seasons = seriesResult.seasons.filter(
@@ -184,7 +189,9 @@ app.get("/search/:query", async (req, res) => {
     result.results.map(async (element) => {
       let seriesResult = await fetchSeries({ id: element.id }, token, debug);
       let latestEpisode = seriesResult.last_episode_to_air;
-
+      if (latestEpisode === null) {
+        latestEpisode = { season_number: 1, episode_number: 0 };
+      }
       let seasons = seriesResult.seasons.filter(
         (season) => season.season_number > 0
       );

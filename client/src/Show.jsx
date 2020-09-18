@@ -24,7 +24,11 @@ function Show(props) {
   function checkedAdd(event) {
     setChecked(event.target.checked);
     if (event.target.checked) {
-      setOpen(true);
+      if (props.seasons.length === 0) {
+        handleClose();
+      } else {
+        setOpen(true);
+      }
     } else {
       const show = {
         id: props.showId,
