@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Header from "./Header";
 import List from "./List";
-// import axios from "axios";
+import About from "./About";
 
 function App() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -82,6 +82,7 @@ function App() {
           setDataFetched={setDataFetched}
         />
       )}
+      {page === "about" && <About />}
     </div>
   );
 }
