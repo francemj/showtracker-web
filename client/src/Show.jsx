@@ -7,6 +7,7 @@ import AddDialog from "./AddDialog";
 function Show(props) {
   const [checked, setChecked] = useState(props.checked);
   const [open, setOpen] = useState(false);
+  const [started, setStarted] = useState(false);
 
   const [nextEpisodeNumber, setNextEpisodeNumber] = useState(
     props.nextEpisodeNumber
@@ -41,6 +42,7 @@ function Show(props) {
   const handleCancel = () => {
     setChecked(false);
     setOpen(false);
+    setStarted(false);
   };
   const handleClose = () => {
     const show = {
@@ -106,12 +108,15 @@ function Show(props) {
           <Checkbox onChange={checkedAdd} checked={checked} />
           <AddDialog
             open={open}
+            started={started}
+            setStarted={setStarted}
             handleCancel={handleCancel}
             handleClose={handleClose}
             handleChangeSeason={handleChangeSeason}
             handleChangeEpisode={handleChangeEpisode}
             lastWatchedSeasonNumber={lastWatchedSeasonNumber}
             lastWatchedEpisodeNumber={lastWatchedEpisodeNumber}
+            setLastWatchedEpisodeNumber={setLastWatchedEpisodeNumber}
             seasons={props.seasons}
           />
         </div>
