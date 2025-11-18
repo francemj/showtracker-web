@@ -63,8 +63,8 @@ export function ShowCard({ show, href }: ShowCardProps) {
   };
 
   const content = (
-    <Card className="overflow-hidden hover-elevate transition-all duration-200 group cursor-pointer" data-testid={`card-show-${show.id}`}>
-      <div className="relative aspect-[2/3] overflow-hidden bg-muted">
+    <Card className="overflow-hidden hover-elevate transition-all duration-200 group cursor-pointer md:flex-col flex" data-testid={`card-show-${show.id}`}>
+      <div className="relative w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3] overflow-hidden bg-muted">
         <img
           src={posterUrl}
           alt={show.name}
@@ -86,7 +86,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
         )}
       </div>
       
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 flex-1">
         <div>
           <h3 className="font-heading font-semibold text-base line-clamp-1" data-testid={`text-show-title-${show.id}`}>
             {show.name}

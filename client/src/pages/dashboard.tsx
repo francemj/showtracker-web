@@ -15,8 +15,8 @@ export default function Dashboard() {
     queryKey: ['/api/stats'],
   });
 
-  const { data: recentShows, isLoading: showsLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/recent'],
+  const { data: wantToWatchShows, isLoading: showsLoading } = useQuery<ShowWithProgress[]>({
+    queryKey: ['/api/shows/want-to-watch'],
   });
 
   const { data: continueWatching, isLoading: continueLoading } = useQuery<ShowWithProgress[]>({
@@ -35,8 +35,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Shows</CardTitle>
-            <TrendingUp className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium min-h-8 flex items-center">Total Shows</CardTitle>
+            <TrendingUp className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -52,8 +52,8 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Currently Watching</CardTitle>
-            <Eye className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium min-h-8 flex items-center">Currently Watching</CardTitle>
+            <Eye className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -69,8 +69,8 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle2 className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium min-h-8 flex items-center">Completed</CardTitle>
+            <CheckCircle2 className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -86,8 +86,8 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Episodes Watched</CardTitle>
-            <Clock className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium min-h-8 flex items-center">Episodes Watched</CardTitle>
+            <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -134,28 +134,19 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-      ) : recentShows && recentShows.length > 0 ? (
+      ) : wantToWatchShows && wantToWatchShows.length > 0 ? (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">Recently Added</h2>
-            <p className="text-sm text-muted-foreground">Your latest additions</p>
+            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">Start Watching</h2>
+            <p className="text-sm text-muted-foreground">Shows you want to watch</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {recentShows.slice(0, 8).map((show) => (
+            {wantToWatchShows.slice(0, 8).map((show) => (
               <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
             ))}
           </div>
         </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading">Get Started</CardTitle>
-            <CardDescription>
-              You haven't added any shows yet. Search for shows to start tracking!
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
+      ) : null}
     </div>
   );
 }

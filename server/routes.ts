@@ -331,6 +331,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/shows/want-to-watch", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "want_to_watch");
+      res.json(shows);
+    } catch (error) {
+      console.error("Get want to watch shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
   app.get("/api/shows/recent", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { data: userShows } = await supabase

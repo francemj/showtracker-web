@@ -35,7 +35,7 @@ export default function Search() {
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       toast({
         title: 'Show Added',
@@ -207,7 +207,7 @@ function AddShowButton({
   onAdd: (showId: number, status: string) => void;
   isPending: boolean;
 }) {
-  const [status, setStatus] = useState('watching');
+  const [status, setStatus] = useState('want_to_watch');
 
   return (
     <div className="flex flex-col gap-2">

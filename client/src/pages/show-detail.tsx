@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Star, Calendar, Clock, Tv, CheckCircle2 } from 'lucide-react';
 import { ShowWithProgress, TMDBSeason, TMDBEpisode } from '@shared/schema';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -17,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const [pendingEpisode, setPendingEpisode] = useState<{ seasonNumber: number; episodeNumber: number } | null>(null);
 
   const { data: show, isLoading: showLoading } = useQuery<ShowWithProgress>({
     queryKey: ['/api/shows', id],
@@ -42,7 +45,7 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
       toast({ title: 'Status Updated', description: 'Show status has been updated.' });
@@ -59,7 +62,7 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
     },
   });
@@ -74,7 +77,7 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       toast({ title: 'Season Updated', description: 'All episodes in season have been updated.' });
     },
@@ -95,6 +98,85 @@ export default function ShowDetail() {
     const percentage = total > 0 ? (watched / total) * 100 : 0;
     
     return { watched, total, percentage };
+  };
+
+  const markPreviousEpisodes = async (targetSeason: number, targetEpisode: number) => {
+    if (!seasons) return;
+    
+    const episodesToMark: Array<{ seasonNumber: number; episodeNumber: number }> = [];
+    
+    for (const season of seasons) {
+      if (season.season_number > targetSeason) continue;
+      
+      if (season.episodes) {
+        for (const episode of season.episodes) {
+          if (season.season_number < targetSeason) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number)) {
+              episodesToMark.push({
+                seasonNumber: season.season_number,
+                episodeNumber: episode.episode_number,
+              });
+            }
+          } else if (season.season_number === targetSeason && episode.episode_number <= targetEpisode) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number)) {
+              episodesToMark.push({
+                seasonNumber: season.season_number,
+                episodeNumber: episode.episode_number,
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    for (const ep of episodesToMark) {
+      await apiRequest('POST', `/api/shows/${id}/progress`, {
+        seasonNumber: ep.seasonNumber,
+        episodeNumber: ep.episodeNumber,
+        watched: true,
+      });
+    }
+    
+    queryClient.invalidateQueries({ queryKey: ['/api/shows', id, 'progress'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
+    queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
+    
+    toast({
+      title: 'Episodes Marked',
+      description: `Marked ${episodesToMark.length} episode${episodesToMark.length !== 1 ? 's' : ''} as watched`,
+    });
+  };
+
+  const handleEpisodeToggle = (seasonNumber: number, episodeNumber: number, checked: boolean) => {
+    const isAlreadyWatched = isEpisodeWatched(seasonNumber, episodeNumber);
+    
+    if (checked && !isAlreadyWatched) {
+      setPendingEpisode({ seasonNumber, episodeNumber });
+    } else {
+      toggleEpisodeMutation.mutate({ seasonNumber, episodeNumber, watched: checked });
+    }
+  };
+
+  const handleConfirmMarkAll = async () => {
+    if (!pendingEpisode) return;
+    
+    await markPreviousEpisodes(pendingEpisode.seasonNumber, pendingEpisode.episodeNumber);
+    setPendingEpisode(null);
+  };
+
+  const handleMarkJustOne = () => {
+    if (!pendingEpisode) return;
+    
+    toggleEpisodeMutation.mutate({
+      seasonNumber: pendingEpisode.seasonNumber,
+      episodeNumber: pendingEpisode.episodeNumber,
+      watched: true,
+    });
+    setPendingEpisode(null);
   };
 
   if (showLoading) {
@@ -321,11 +403,7 @@ export default function ShowDetail() {
                                     <Checkbox
                                       checked={watched}
                                       onCheckedChange={(checked) =>
-                                        toggleEpisodeMutation.mutate({
-                                          seasonNumber: season.season_number,
-                                          episodeNumber: episode.episode_number,
-                                          watched: !!checked,
-                                        })
+                                        handleEpisodeToggle(season.season_number, episode.episode_number, !!checked)
                                       }
                                       data-testid={`checkbox-episode-${season.season_number}-${episode.episode_number}`}
                                     />
@@ -381,6 +459,25 @@ export default function ShowDetail() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={pendingEpisode !== null} onOpenChange={(open) => !open && setPendingEpisode(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark Previous Episodes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Would you like to mark all previous episodes as watched as well? This will mark all episodes before S{pendingEpisode?.seasonNumber}E{pendingEpisode?.episodeNumber} as watched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleMarkJustOne} data-testid="button-mark-just-one">
+              Just This Episode
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmMarkAll} data-testid="button-mark-all-previous">
+              Mark All Previous
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
