@@ -92,27 +92,27 @@ export default function Search() {
       )}
 
       {!isLoading && searchResults && searchResults.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {searchResults.map((show) => {
             const posterUrl = show.poster_path
-              ? `https://image.tmdb.org/t/p/w200${show.poster_path}`
+              ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
               : '/placeholder-poster.png';
             const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : null;
             const added = isShowAdded(show.id);
 
             return (
-              <Card key={show.id} className="hover-elevate transition-all" data-testid={`card-search-result-${show.id}`}>
-                <div className="flex gap-4 p-4">
-                  <div className="relative w-24 h-36 flex-shrink-0 rounded-md overflow-hidden bg-muted">
-                    <img
-                      src={posterUrl}
-                      alt={show.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    <h3 className="font-heading font-semibold text-base line-clamp-2 mb-1" data-testid={`text-result-title-${show.id}`}>
+              <Card key={show.id} className="hover-elevate transition-all overflow-hidden" data-testid={`card-search-result-${show.id}`}>
+                <div className="relative aspect-[2/3] bg-muted">
+                  <img
+                    src={posterUrl}
+                    alt={show.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <h3 className="font-heading font-semibold text-base line-clamp-1 mb-2" data-testid={`text-result-title-${show.id}`}>
                       {show.name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -129,23 +129,23 @@ export default function Search() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-3 mb-auto">
+                    <p className="text-xs text-muted-foreground line-clamp-2">
                       {show.overview}
                     </p>
-                    <div className="mt-3 flex gap-2">
-                      {added ? (
-                        <Button size="sm" variant="outline" disabled className="flex-1">
-                          <Check className="w-4 h-4 mr-1" />
-                          Added
-                        </Button>
-                      ) : (
-                        <AddShowButton
-                          showId={show.id}
-                          onAdd={handleAddShow}
-                          isPending={addShowMutation.isPending}
-                        />
-                      )}
-                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {added ? (
+                      <Button size="sm" variant="outline" disabled className="w-full">
+                        <Check className="w-4 h-4 mr-1" />
+                        Added
+                      </Button>
+                    ) : (
+                      <AddShowButton
+                        showId={show.id}
+                        onAdd={handleAddShow}
+                        isPending={addShowMutation.isPending}
+                      />
+                    )}
                   </div>
                 </div>
               </Card>
@@ -191,9 +191,9 @@ function AddShowButton({
   const [status, setStatus] = useState('watching');
 
   return (
-    <>
+    <div className="flex flex-col gap-2">
       <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="flex-1" data-testid={`select-status-${showId}`}>
+        <SelectTrigger className="w-full" data-testid={`select-status-${showId}`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -206,11 +206,12 @@ function AddShowButton({
         size="sm"
         onClick={() => onAdd(showId, status)}
         disabled={isPending}
+        className="w-full"
         data-testid={`button-add-show-${showId}`}
       >
         <Plus className="w-4 h-4 mr-1" />
         Add
       </Button>
-    </>
+    </div>
   );
 }
