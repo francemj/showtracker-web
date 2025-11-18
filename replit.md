@@ -24,6 +24,8 @@ A comprehensive web-based TV show tracking application built with React, Express
 - Visual progress bars showing completion percentage
 - Episode-level tracking with air dates and runtime
 - Dashboard with statistics (total shows, watching, completed, episodes watched)
+- **Smart Auto-Complete**: When a show is marked as "Completed", all episodes are automatically marked as watched
+- **Reciprocal Auto-Update**: When all episodes are manually marked watched, the show status automatically updates to "Completed"
 
 ### Data Import
 - TV Time CSV import functionality
@@ -194,6 +196,7 @@ None specified yet.
 - Fixed data consistency: All API endpoints now properly convert snake_case database fields to camelCase (Nov 18, 2025)
 - Fixed show detail page: Thumbnails and status section now display correctly with complete TMDB metadata (Nov 18, 2025)
 - Implemented comprehensive cache invalidation: All mutations now invalidate related queries ensuring real-time UI updates across all views without manual refresh (Nov 18, 2025)
+- Implemented smart auto-complete feature: Setting status to "Completed" automatically marks all episodes as watched, and marking all episodes watched auto-updates status to "Completed" (Nov 18, 2025)
 
 ## Known Issues
 - Database schema must be manually executed in Supabase (see DATABASE_SETUP.md)
@@ -215,6 +218,22 @@ All mutations implement comprehensive cache invalidation:
 - **Updating Status**: Invalidates all of the above plus `/api/shows/:id`
 - **Progress Updates**: Invalidates `/api/shows/:id/progress`, `/api/shows/:id`, and all list queries
 - This ensures the UI stays synchronized across all views without requiring manual page refreshes
+
+### Auto-Complete Feature
+The application implements intelligent episode tracking to reduce manual work:
+
+**Smart Auto-Complete (Status → Episodes)**:
+- When a user marks a show as "Completed", the system automatically marks all episodes as watched
+- Implementation: `markShowEpisodesWatched()` fetches all seasons/episodes from TMDB and bulk upserts watch_progress records
+- Uses chunked batch processing (100 records per batch) to respect Supabase limits
+- Handles shows with hundreds of episodes efficiently (e.g., Breaking Bad with 62 episodes, The Office with 186 episodes)
+
+**Reciprocal Auto-Update (Episodes → Status)**:
+- When all episodes are manually marked watched (via individual toggles or "Mark All" for seasons), the show status automatically updates to "Completed"
+- Implementation: `checkAndUpdateCompletedStatus()` compares watched episode count to total episodes after each progress update
+- Ensures the show appears in the Completed collection and statistics reflect accurate episode counts
+
+This bidirectional sync keeps the UI consistent and reduces the need for users to manually update both status and individual episodes.
 
 ## Future Enhancements
 - Additional import sources (Trakt.tv, MyAnimeList)

@@ -601,7 +601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const unmatchedShows: string[] = [];
 
       // Try to match and add each show
-      for (const [showName, _] of shows) {
+      for (const [showName, _] of Array.from(shows)) {
         try {
           const results = await searchTVShows(showName);
           if (results && results.length > 0) {
