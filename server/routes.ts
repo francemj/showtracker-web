@@ -1,15 +1,642 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import session from "express-session";
+import bcrypt from "bcrypt";
+import Papa from "papaparse";
+import { supabase } from "./lib/supabase";
+import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: string;
+  }
+}
+
+interface AuthRequest extends Request {
+  userId?: string;
+}
+
+const authMiddleware = async (req: AuthRequest, res: Response, next: Function) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  req.userId = req.session.userId;
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  // Session middleware
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || "tv-tracker-secret-key",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production",
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      },
+    })
+  );
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+  // Auth routes
+  app.post("/api/auth/signup", async (req: Request, res: Response) => {
+    try {
+      const { email, password, name } = req.body;
+
+      if (!email || !password || !name) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Check if user exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create user
+      const { data: user, error } = await supabase
+        .from("users")
+        .insert({
+          email,
+          name,
+          auth0_id: `local_${Date.now()}`, // Simplified auth
+          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff`,
+        })
+        .select()
+        .single();
+
+      if (error || !user) {
+        return res.status(500).json({ message: "Failed to create user" });
+      }
+
+      // Store password separately (in production, use proper auth service)
+      await supabase.from("user_credentials").insert({
+        user_id: user.id,
+        password_hash: hashedPassword,
+      });
+
+      req.session.userId = user.id;
+      res.json({ user });
+    } catch (error) {
+      console.error("Signup error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Get user
+      const { data: user } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      if (!user) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Get password hash
+      const { data: credentials } = await supabase
+        .from("user_credentials")
+        .select("password_hash")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!credentials) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      // Verify password
+      const validPassword = await bcrypt.compare(password, credentials.password_hash);
+      if (!validPassword) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+
+      req.session.userId = user.id;
+      res.json({ user });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/auth/me", async (req: Request, res: Response) => {
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const { data: user } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", req.session.userId)
+        .single();
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({ user });
+    } catch (error) {
+      console.error("Auth check error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req: Request, res: Response) => {
+    req.session.destroy(() => {
+      res.json({ message: "Logged out" });
+    });
+  });
+
+  // Search shows
+  app.get("/api/search/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { query } = req.query;
+      if (!query || typeof query !== "string") {
+        return res.status(400).json({ message: "Query parameter required" });
+      }
+
+      const results = await searchTVShows(query);
+      res.json(results);
+    } catch (error) {
+      console.error("Search error:", error);
+      res.status(500).json({ message: "Failed to search shows" });
+    }
+  });
+
+  // Get user stats
+  app.get("/api/stats", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { data: userShows } = await supabase
+        .from("user_shows")
+        .select("status")
+        .eq("user_id", req.userId);
+
+      const { data: watchProgress } = await supabase
+        .from("watch_progress")
+        .select("*")
+        .eq("user_id", req.userId)
+        .eq("watched", true);
+
+      const stats = {
+        totalShows: userShows?.length || 0,
+        watchingShows: userShows?.filter((s) => s.status === "watching").length || 0,
+        completedShows: userShows?.filter((s) => s.status === "completed").length || 0,
+        episodesWatched: watchProgress?.length || 0,
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error("Stats error:", error);
+      res.status(500).json({ message: "Failed to get stats" });
+    }
+  });
+
+  // Get user shows
+  app.get("/api/user/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { data: userShows } = await supabase
+        .from("user_shows")
+        .select("show_id, status")
+        .eq("user_id", req.userId);
+
+      res.json(userShows || []);
+    } catch (error) {
+      console.error("Get user shows error:", error);
+      res.status(500).json({ message: "Failed to get user shows" });
+    }
+  });
+
+  // Add show to user collection
+  app.post("/api/user/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { showId, status } = req.body;
+
+      // Get show details from TMDB
+      const tmdbShow = await getTVShowDetails(showId);
+
+      // Upsert show to database
+      const { error: showError } = await supabase.from("shows").upsert({
+        id: tmdbShow.id,
+        name: tmdbShow.name,
+        overview: tmdbShow.overview,
+        poster_path: tmdbShow.poster_path,
+        backdrop_path: tmdbShow.backdrop_path,
+        first_air_date: tmdbShow.first_air_date,
+        vote_average: tmdbShow.vote_average?.toString(),
+        number_of_seasons: tmdbShow.number_of_seasons,
+        number_of_episodes: tmdbShow.number_of_episodes,
+        status: tmdbShow.status,
+        genres: tmdbShow.genres?.map((g: any) => g.name),
+        tmdb_data: tmdbShow,
+      });
+
+      if (showError) {
+        console.error("Show upsert error:", showError);
+      }
+
+      // Add to user's collection
+      const { data: userShow, error } = await supabase
+        .from("user_shows")
+        .insert({
+          user_id: req.userId,
+          show_id: showId,
+          status,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ message: "Failed to add show" });
+      }
+
+      res.json(userShow);
+    } catch (error) {
+      console.error("Add show error:", error);
+      res.status(500).json({ message: "Failed to add show" });
+    }
+  });
+
+  // Update show status
+  app.patch("/api/user/shows/:showId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { showId } = req.params;
+      const { status } = req.body;
+
+      const { data, error } = await supabase
+        .from("user_shows")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("user_id", req.userId)
+        .eq("show_id", parseInt(showId))
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ message: "Failed to update show" });
+      }
+
+      res.json(data);
+    } catch (error) {
+      console.error("Update show error:", error);
+      res.status(500).json({ message: "Failed to update show" });
+    }
+  });
+
+  // Get shows by status
+  app.get("/api/shows/watching", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "watching");
+      res.json(shows);
+    } catch (error) {
+      console.error("Get watching shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
+  app.get("/api/shows/completed", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "completed");
+      res.json(shows);
+    } catch (error) {
+      console.error("Get completed shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
+  app.get("/api/shows/recent", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { data: userShows } = await supabase
+        .from("user_shows")
+        .select("*, shows(*)")
+        .eq("user_id", req.userId)
+        .order("added_at", { ascending: false })
+        .limit(8);
+
+      const shows = await Promise.all(
+        (userShows || []).map(async (us: any) => {
+          const progress = await calculateShowProgress(req.userId!, us.show_id);
+          return {
+            ...us.shows,
+            userShow: us,
+            ...progress,
+          };
+        })
+      );
+
+      res.json(shows);
+    } catch (error) {
+      console.error("Get recent shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
+  app.get("/api/shows/continue-watching", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "watching");
+      const continueWatching = shows.filter((s: any) => s.progress > 0 && s.progress < 100);
+      res.json(continueWatching.slice(0, 4));
+    } catch (error) {
+      console.error("Get continue watching error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
+  // Get show details
+  app.get("/api/shows/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: show } = await supabase
+        .from("shows")
+        .select("*")
+        .eq("id", parseInt(id))
+        .single();
+
+      if (!show) {
+        return res.status(404).json({ message: "Show not found" });
+      }
+
+      const { data: userShow } = await supabase
+        .from("user_shows")
+        .select("*")
+        .eq("user_id", req.userId)
+        .eq("show_id", parseInt(id))
+        .single();
+
+      const progress = await calculateShowProgress(req.userId!, parseInt(id));
+
+      res.json({
+        ...show,
+        userShow,
+        ...progress,
+      });
+    } catch (error) {
+      console.error("Get show error:", error);
+      res.status(500).json({ message: "Failed to get show" });
+    }
+  });
+
+  // Get show seasons with episodes
+  app.get("/api/shows/:id/seasons", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: show } = await supabase
+        .from("shows")
+        .select("number_of_seasons")
+        .eq("id", parseInt(id))
+        .single();
+
+      if (!show || !show.number_of_seasons) {
+        return res.json([]);
+      }
+
+      const seasons = await Promise.all(
+        Array.from({ length: show.number_of_seasons }, (_, i) => i + 1).map(async (seasonNum) => {
+          return await getTVShowSeason(parseInt(id), seasonNum);
+        })
+      );
+
+      res.json(seasons);
+    } catch (error) {
+      console.error("Get seasons error:", error);
+      res.status(500).json({ message: "Failed to get seasons" });
+    }
+  });
+
+  // Get watch progress
+  app.get("/api/shows/:id/progress", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const { data: progress } = await supabase
+        .from("watch_progress")
+        .select("season_number, episode_number, watched")
+        .eq("user_id", req.userId)
+        .eq("show_id", parseInt(id));
+
+      res.json(progress || []);
+    } catch (error) {
+      console.error("Get progress error:", error);
+      res.status(500).json({ message: "Failed to get progress" });
+    }
+  });
+
+  // Toggle episode watched status
+  app.post("/api/shows/:id/progress", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { seasonNumber, episodeNumber, watched } = req.body;
+
+      const { error } = await supabase.from("watch_progress").upsert({
+        user_id: req.userId,
+        show_id: parseInt(id),
+        season_number: seasonNumber,
+        episode_number: episodeNumber,
+        watched,
+        watched_at: watched ? new Date().toISOString() : null,
+      });
+
+      if (error) {
+        return res.status(500).json({ message: "Failed to update progress" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Update progress error:", error);
+      res.status(500).json({ message: "Failed to update progress" });
+    }
+  });
+
+  // Mark all episodes in season as watched/unwatched
+  app.post("/api/shows/:id/season/:seasonNumber/mark-all", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id, seasonNumber } = req.params;
+      const { watched } = req.body;
+
+      // Get season details to know episode count
+      const season = await getTVShowSeason(parseInt(id), parseInt(seasonNumber));
+
+      if (!season.episodes) {
+        return res.status(404).json({ message: "Season not found" });
+      }
+
+      // Upsert all episodes
+      const progressRecords = season.episodes.map((ep: any) => ({
+        user_id: req.userId,
+        show_id: parseInt(id),
+        season_number: parseInt(seasonNumber),
+        episode_number: ep.episode_number,
+        watched,
+        watched_at: watched ? new Date().toISOString() : null,
+      }));
+
+      const { error } = await supabase.from("watch_progress").upsert(progressRecords);
+
+      if (error) {
+        return res.status(500).json({ message: "Failed to update season" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Mark season error:", error);
+      res.status(500).json({ message: "Failed to mark season" });
+    }
+  });
+
+  // Import from TV Time
+  app.post("/api/import/tv-time", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.files || !req.files.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const file = req.files.file as any;
+      const csvContent = file.data.toString("utf-8");
+
+      const parsed = Papa.parse(csvContent, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      const shows = new Map<string, any>();
+
+      // Extract unique shows from CSV
+      for (const row of parsed.data as any[]) {
+        const showName = row["TV Show Name"] || row["tv_show_name"] || row["show_name"];
+        if (showName && !shows.has(showName)) {
+          shows.set(showName, row);
+        }
+      }
+
+      let matched = 0;
+      let unmatched = 0;
+      const unmatchedShows: string[] = [];
+
+      // Try to match and add each show
+      for (const [showName, _] of shows) {
+        try {
+          const results = await searchTVShows(showName);
+          if (results && results.length > 0) {
+            const bestMatch = results[0];
+            
+            // Add show to database
+            await supabase.from("shows").upsert({
+              id: bestMatch.id,
+              name: bestMatch.name,
+              overview: bestMatch.overview,
+              poster_path: bestMatch.poster_path,
+              backdrop_path: bestMatch.backdrop_path,
+              first_air_date: bestMatch.first_air_date,
+              vote_average: bestMatch.vote_average?.toString(),
+              genres: [],
+            });
+
+            // Add to user's collection
+            await supabase.from("user_shows").upsert({
+              user_id: req.userId,
+              show_id: bestMatch.id,
+              status: "watching",
+            });
+
+            matched++;
+          } else {
+            unmatched++;
+            unmatchedShows.push(showName);
+          }
+        } catch (error) {
+          unmatched++;
+          unmatchedShows.push(showName);
+        }
+      }
+
+      // Save import history
+      await supabase.from("import_history").insert({
+        user_id: req.userId,
+        source: "tv_time",
+        file_name: file.name,
+        total_shows: shows.size,
+        matched_shows: matched,
+        unmatched_shows: unmatched,
+        status: "completed",
+      });
+
+      res.json({
+        total: shows.size,
+        matched,
+        unmatched,
+        unmatchedShows: unmatchedShows.slice(0, 20),
+      });
+    } catch (error) {
+      console.error("Import error:", error);
+      res.status(500).json({ message: "Failed to import data" });
+    }
+  });
 
   const httpServer = createServer(app);
-
   return httpServer;
+}
+
+async function getShowsWithProgress(userId: string, status: string) {
+  const { data: userShows } = await supabase
+    .from("user_shows")
+    .select("*, shows(*)")
+    .eq("user_id", userId)
+    .eq("status", status)
+    .order("updated_at", { ascending: false });
+
+  const shows = await Promise.all(
+    (userShows || []).map(async (us: any) => {
+      const progress = await calculateShowProgress(userId, us.show_id);
+      return {
+        ...us.shows,
+        userShow: us,
+        ...progress,
+      };
+    })
+  );
+
+  return shows;
+}
+
+async function calculateShowProgress(userId: string, showId: number) {
+  const { data: show } = await supabase
+    .from("shows")
+    .select("number_of_episodes")
+    .eq("id", showId)
+    .single();
+
+  const { data: progress } = await supabase
+    .from("watch_progress")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("show_id", showId)
+    .eq("watched", true);
+
+  const watchedEpisodes = progress?.length || 0;
+  const totalEpisodes = show?.number_of_episodes || 1;
+  const progressPercent = (watchedEpisodes / totalEpisodes) * 100;
+
+  return {
+    watchedEpisodes,
+    totalEpisodes,
+    progress: progressPercent,
+  };
 }
