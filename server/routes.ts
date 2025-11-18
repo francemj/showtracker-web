@@ -233,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add show to user collection
   app.post("/api/user/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { showId, status } = req.body;
+      const { showId } = req.body;
 
       // Get show details from TMDB
       const tmdbShow = await getTVShowDetails(showId);
@@ -258,13 +258,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Show upsert error:", showError);
       }
 
-      // Add to user's collection
+      // Add to user's collection with watching status by default
+      // Status will be inferred based on watch progress
       const { data: userShow, error } = await supabase
         .from("user_shows")
         .insert({
           user_id: req.userId,
           show_id: showId,
-          status,
+          status: 'watching',  // Default status, will be overridden by inference
         })
         .select()
         .single();

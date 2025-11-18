@@ -27,8 +27,8 @@ export default function Search() {
   });
 
   const addShowMutation = useMutation({
-    mutationFn: async ({ showId, status }: { showId: number; status: string }) => {
-      return apiRequest('POST', '/api/user/shows', { showId, status });
+    mutationFn: async (showId: number) => {
+      return apiRequest('POST', '/api/user/shows', { showId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
@@ -51,13 +51,12 @@ export default function Search() {
     },
   });
 
-  const getShowStatus = (showId: number): string | null => {
-    const userShow = userShows?.find(us => us.showId === showId);
-    return userShow?.status || null;
+  const isShowInCollection = (showId: number): boolean => {
+    return userShows?.some(us => us.showId === showId) || false;
   };
 
-  const handleAddShow = (showId: number, status: string) => {
-    addShowMutation.mutate({ showId, status });
+  const handleAddShow = (showId: number) => {
+    addShowMutation.mutate(showId);
   };
 
   return (
@@ -103,13 +102,7 @@ export default function Search() {
               ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
               : '/placeholder-poster.png';
             const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : null;
-            const status = getShowStatus(show.id);
-
-            const statusLabels: Record<string, string> = {
-              'want_to_watch': 'Want to Watch',
-              'watching': 'Watching',
-              'completed': 'Completed',
-            };
+            const inCollection = isShowInCollection(show.id);
 
             return (
               <Card key={show.id} className="hover-elevate transition-all overflow-hidden" data-testid={`card-search-result-${show.id}`}>
@@ -144,28 +137,29 @@ export default function Search() {
                       {show.overview}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    {status ? (
-                      <Badge 
-                        variant={
-                          status === 'watching' ? 'default' :
-                          status === 'completed' ? 'secondary' :
-                          'outline'
-                        }
-                        className="w-full justify-center py-2 text-xs"
-                        data-testid={`badge-show-status-${show.id}`}
-                      >
-                        <Check className="w-3 h-3 mr-1" />
-                        {statusLabels[status] || status}
-                      </Badge>
-                    ) : (
-                      <AddShowButton
-                        showId={show.id}
-                        onAdd={handleAddShow}
-                        isPending={addShowMutation.isPending}
-                      />
-                    )}
-                  </div>
+                  {inCollection ? (
+                    <Button 
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      disabled
+                      data-testid={`button-in-collection-${show.id}`}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      In Collection
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddShow(show.id)}
+                      disabled={addShowMutation.isPending}
+                      className="w-full"
+                      data-testid={`button-add-show-${show.id}`}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add to Collection
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
@@ -198,39 +192,3 @@ export default function Search() {
   );
 }
 
-function AddShowButton({
-  showId,
-  onAdd,
-  isPending,
-}: {
-  showId: number;
-  onAdd: (showId: number, status: string) => void;
-  isPending: boolean;
-}) {
-  const [status, setStatus] = useState('want_to_watch');
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="w-full" data-testid={`select-status-${showId}`}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="want_to_watch">Want to Watch</SelectItem>
-          <SelectItem value="watching">Watching</SelectItem>
-          <SelectItem value="completed">Completed</SelectItem>
-        </SelectContent>
-      </Select>
-      <Button
-        size="sm"
-        onClick={() => onAdd(showId, status)}
-        disabled={isPending}
-        className="w-full"
-        data-testid={`button-add-show-${showId}`}
-      >
-        <Plus className="w-4 h-4 mr-1" />
-        Add
-      </Button>
-    </div>
-  );
-}
