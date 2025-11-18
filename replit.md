@@ -197,6 +197,11 @@ None specified yet.
 - Fixed show detail page: Thumbnails and status section now display correctly with complete TMDB metadata (Nov 18, 2025)
 - Implemented comprehensive cache invalidation: All mutations now invalidate related queries ensuring real-time UI updates across all views without manual refresh (Nov 18, 2025)
 - Implemented smart auto-complete feature: Setting status to "Completed" automatically marks all episodes as watched, and marking all episodes watched auto-updates status to "Completed" (Nov 18, 2025)
+- Enhanced responsive design: ShowCard component now uses horizontal layout on mobile devices (w-32 poster on left, content on right) and vertical layout on larger screens (Nov 18, 2025)
+- Redesigned dashboard: Replaced "Recently Added" section with "Start Watching" section showing Want to Watch shows; fixed stats card alignment with min-h-8 ensuring figures stay aligned when titles wrap (Nov 18, 2025)
+- Updated default show status: New shows from search now default to "Want to Watch" instead of "Watching" for better user workflow (Nov 18, 2025)
+- Added episode marking confirmation: When marking an episode watched, users are now prompted with option to mark all previous episodes as watched, improving batch tracking efficiency (Nov 18, 2025)
+- Updated cache invalidation strategy: All mutations now invalidate /api/shows/want-to-watch instead of deprecated /api/shows/recent endpoint (Nov 18, 2025)
 
 ## Known Issues
 - Database schema must be manually executed in Supabase (see DATABASE_SETUP.md)
@@ -214,7 +219,7 @@ The application uses a consistent pattern for API responses:
 
 ### Cache Management
 All mutations implement comprehensive cache invalidation:
-- **Adding Shows**: Invalidates `/api/user/shows`, `/api/stats`, `/api/shows/watching`, `/api/shows/completed`, `/api/shows/recent`, `/api/shows/continue-watching`
+- **Adding Shows**: Invalidates `/api/user/shows`, `/api/stats`, `/api/shows/watching`, `/api/shows/completed`, `/api/shows/want-to-watch`, `/api/shows/continue-watching`
 - **Updating Status**: Invalidates all of the above plus `/api/shows/:id`
 - **Progress Updates**: Invalidates `/api/shows/:id/progress`, `/api/shows/:id`, and all list queries
 - This ensures the UI stays synchronized across all views without requiring manual page refreshes
