@@ -33,6 +33,10 @@ export default function Search() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       toast({
         title: 'Show Added',
         description: 'The show has been added to your collection.',

@@ -40,6 +40,11 @@ export default function ShowDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
       toast({ title: 'Status Updated', description: 'Show status has been updated.' });
     },
   });
@@ -52,6 +57,10 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/shows', id, 'progress'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
     },
   });
 
@@ -63,6 +72,10 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/shows', id, 'progress'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/recent'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       toast({ title: 'Season Updated', description: 'All episodes in season have been updated.' });
     },
   });

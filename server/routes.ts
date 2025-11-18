@@ -412,9 +412,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const progress = await calculateShowProgress(req.userId!, parseInt(id));
 
+      // Map snake_case database fields to camelCase for frontend
       res.json({
-        ...show,
-        userShow,
+        id: show.id,
+        name: show.name,
+        overview: show.overview,
+        posterPath: show.poster_path,
+        backdropPath: show.backdrop_path,
+        firstAirDate: show.first_air_date,
+        voteAverage: show.vote_average,
+        numberOfSeasons: show.number_of_seasons,
+        numberOfEpisodes: show.number_of_episodes,
+        status: show.status,
+        genres: show.genres,
+        tmdbData: show.tmdb_data,
+        lastUpdated: show.last_updated,
+        userShow: userShow ? {
+          id: userShow.id,
+          userId: userShow.user_id,
+          showId: userShow.show_id,
+          status: userShow.status,
+          rating: userShow.rating,
+          notes: userShow.notes,
+          addedAt: userShow.added_at,
+          updatedAt: userShow.updated_at,
+        } : null,
         ...progress,
       });
     } catch (error) {
@@ -462,7 +484,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq("user_id", req.userId)
         .eq("show_id", parseInt(id));
 
-      res.json(progress || []);
+      // Map snake_case to camelCase for frontend
+      const mappedProgress = (progress || []).map((p: any) => ({
+        seasonNumber: p.season_number,
+        episodeNumber: p.episode_number,
+        watched: p.watched,
+      }));
+
+      res.json(mappedProgress);
     } catch (error) {
       console.error("Get progress error:", error);
       res.status(500).json({ message: "Failed to get progress" });
