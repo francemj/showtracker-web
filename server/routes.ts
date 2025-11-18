@@ -301,7 +301,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If status is set to "Completed", mark all episodes as watched
       if (status === "completed") {
-        await markShowEpisodesWatched(req.userId!, parseInt(showId), true);
+        markShowEpisodesWatched(req.userId!, parseInt(showId), true)
+          .then(() => updateInferredStatus(req.userId!, parseInt(showId)))
+          .catch(err => console.error("Background episode marking failed:", err));
       }
 
       res.json(data);
@@ -533,8 +535,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update progress" });
       }
 
-      // Check if all episodes are now watched and auto-update status to completed
-      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
+      // Update inferred status in background (don't wait)
+      updateInferredStatus(req.userId!, parseInt(id)).catch(err => 
+        console.error("Background status update failed:", err)
+      );
 
       res.json({ success: true });
     } catch (error) {
@@ -556,8 +560,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Season not found" });
       }
 
-      // Upsert all episodes
-      const progressRecords = season.episodes.map((ep: any) => ({
+      // Only mark aired episodes
+      const now = new Date();
+      const airedEpisodes = season.episodes.filter((ep: any) => 
+        ep.air_date && new Date(ep.air_date) <= now
+      );
+
+      // Upsert aired episodes only
+      const progressRecords = airedEpisodes.map((ep: any) => ({
         user_id: req.userId,
         show_id: parseInt(id),
         season_number: parseInt(seasonNumber),
@@ -572,8 +582,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update season" });
       }
 
-      // Check if all episodes are now watched and auto-update status to completed
-      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
+      // Update inferred status in background (don't wait)
+      updateInferredStatus(req.userId!, parseInt(id)).catch(err => 
+        console.error("Background status update failed:", err)
+      );
 
       res.json({ success: true });
     } catch (error) {
@@ -610,8 +622,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update progress" });
       }
 
-      // Check if all episodes are now watched and auto-update status to completed
-      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
+      // Update inferred status in background (don't wait)
+      updateInferredStatus(req.userId!, parseInt(id)).catch(err => 
+        console.error("Background status update failed:", err)
+      );
 
       res.json({ success: true, count: episodes.length });
     } catch (error) {
@@ -914,42 +928,21 @@ async function markShowEpisodesWatched(userId: string, showId: number, watched: 
   }
 }
 
-async function checkAndUpdateCompletedStatus(userId: string, showId: number) {
+// Update show status based on watch progress and show details
+// This is called whenever progress changes to keep the stored status in sync
+// Uses stored tmdb_data to count aired episodes without making API calls
+async function updateInferredStatus(userId: string, showId: number) {
   try {
-    // Get show details including status
+    // Get show details including cached TMDB data
     const { data: show } = await supabase
       .from("shows")
-      .select("number_of_episodes, status, tmdb_data")
+      .select("status, tmdb_data")
       .eq("id", showId)
       .single();
 
-    if (!show || !show.number_of_episodes) {
+    if (!show || !show.tmdb_data) {
+      console.log(`Skipping status update for show ${showId}: missing tmdb_data`);
       return;
-    }
-
-    // Only auto-complete if show status is "Ended"
-    if (show.status !== "Ended") {
-      return;
-    }
-
-    // Get all seasons and episodes to count only aired episodes
-    const tmdbShow = await getTVShowDetails(showId);
-    let totalAiredEpisodes = 0;
-    const now = new Date();
-
-    for (const season of tmdbShow.seasons || []) {
-      // Skip special seasons (season 0)
-      if (season.season_number === 0) continue;
-      
-      try {
-        const seasonDetails = await getTVShowSeason(showId, season.season_number);
-        const airedInSeason = seasonDetails.episodes?.filter((ep: any) => 
-          ep.air_date && new Date(ep.air_date) <= now
-        ).length || 0;
-        totalAiredEpisodes += airedInSeason;
-      } catch (error) {
-        console.error(`Error fetching season ${season.season_number}:`, error);
-      }
     }
 
     // Count watched episodes
@@ -962,17 +955,52 @@ async function checkAndUpdateCompletedStatus(userId: string, showId: number) {
 
     const watchedCount = watchedProgress?.length || 0;
 
-    // If all aired episodes are watched and show has ended, update status to completed
-    if (watchedCount >= totalAiredEpisodes && totalAiredEpisodes > 0) {
-      await supabase
-        .from("user_shows")
-        .update({ status: "completed", updated_at: new Date().toISOString() })
-        .eq("user_id", userId)
-        .eq("show_id", showId);
-
-      console.log(`Auto-updated show ${showId} to completed status (${watchedCount}/${totalAiredEpisodes} aired episodes watched)`);
+    // Count aired episodes from cached tmdb_data
+    const now = new Date();
+    let totalAiredEpisodes = 0;
+    
+    const tmdbData = show.tmdb_data as any;
+    if (tmdbData.seasons && Array.isArray(tmdbData.seasons)) {
+      for (const season of tmdbData.seasons) {
+        // Skip special seasons (season 0)
+        if (season.season_number === 0) continue;
+        
+        // Count episodes that have aired based on air_date
+        if (season.air_date && new Date(season.air_date) <= now) {
+          totalAiredEpisodes += season.episode_count || 0;
+        }
+      }
     }
+
+    // Fallback if we can't determine aired episodes from cached data
+    if (totalAiredEpisodes === 0 && tmdbData.number_of_episodes) {
+      totalAiredEpisodes = tmdbData.number_of_episodes;
+    }
+
+    // Determine new status based on aired episodes
+    let newStatus: string;
+
+    if (watchedCount === 0) {
+      // No episodes watched → Want to Watch
+      newStatus = "want_to_watch";
+    } else if (show.status === "Ended" && totalAiredEpisodes > 0 && watchedCount >= totalAiredEpisodes) {
+      // Show ended and all aired episodes watched → Completed
+      newStatus = "completed";
+    } else {
+      // Otherwise → Watching
+      newStatus = "watching";
+    }
+
+    // Update the status in the database
+    await supabase
+      .from("user_shows")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("show_id", showId);
+
+    console.log(`Auto-updated show ${showId} status to "${newStatus}" (${watchedCount}/${totalAiredEpisodes} aired episodes watched, show status: ${show.status})`);
   } catch (error) {
-    console.error(`Error checking completed status:`, error);
+    console.error(`Error updating inferred status:`, error);
+    // Don't throw - we don't want status updates to fail progress tracking
   }
 }
