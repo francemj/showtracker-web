@@ -581,6 +581,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk update episode progress
+  app.post("/api/shows/:id/progress/bulk", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { episodes } = req.body;
+
+      if (!Array.isArray(episodes) || episodes.length === 0) {
+        return res.status(400).json({ message: "Episodes array is required" });
+      }
+
+      // Create progress records for all episodes
+      const progressRecords = episodes.map((ep: any) => ({
+        user_id: req.userId,
+        show_id: parseInt(id),
+        season_number: ep.seasonNumber,
+        episode_number: ep.episodeNumber,
+        watched: ep.watched,
+        watched_at: ep.watched ? new Date().toISOString() : null,
+      }));
+
+      // Batch upsert all episodes
+      const { error } = await supabase.from("watch_progress").upsert(progressRecords);
+
+      if (error) {
+        console.error("Bulk progress update error:", error);
+        return res.status(500).json({ message: "Failed to update progress" });
+      }
+
+      // Check if all episodes are now watched and auto-update status to completed
+      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
+
+      res.json({ success: true, count: episodes.length });
+    } catch (error) {
+      console.error("Bulk update progress error:", error);
+      res.status(500).json({ message: "Failed to update progress" });
+    }
+  });
+
   // Import from TV Time
   app.post("/api/import/tv-time", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
