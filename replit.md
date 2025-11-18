@@ -202,6 +202,12 @@ None specified yet.
 - Updated default show status: New shows from search now default to "Want to Watch" instead of "Watching" for better user workflow (Nov 18, 2025)
 - Added episode marking confirmation: When marking an episode watched, users are now prompted with option to mark all previous episodes as watched, improving batch tracking efficiency (Nov 18, 2025)
 - Updated cache invalidation strategy: All mutations now invalidate /api/shows/want-to-watch instead of deprecated /api/shows/recent endpoint (Nov 18, 2025)
+- **Implemented complete episode caching and status inference system** (Nov 18, 2025):
+  - Episodes are automatically cached in database with air dates when shows are added
+  - Status is automatically inferred based on watch progress and aired episodes (not total episodes)
+  - Status inference: No watched episodes → "Want to Watch", some watched → "Watching", all aired watched + ended show → "Completed"
+  - System accurately handles ongoing shows, ended shows, and limited series
+  - Runs efficiently without blocking API responses using background tasks
 
 ## Known Issues
 - Database schema must be manually executed in Supabase (see DATABASE_SETUP.md)
