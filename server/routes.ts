@@ -166,10 +166,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Search shows
-  app.get("/api/search/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
+  app.get("/api/search/shows/:query", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { query } = req.query;
-      if (!query || typeof query !== "string") {
+      const { query } = req.params;
+      if (!query) {
         return res.status(400).json({ message: "Query parameter required" });
       }
 
