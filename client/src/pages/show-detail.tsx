@@ -20,6 +20,7 @@ export default function ShowDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [pendingEpisode, setPendingEpisode] = useState<{ seasonNumber: number; episodeNumber: number } | null>(null);
+  const [pendingUnwatchEpisode, setPendingUnwatchEpisode] = useState<{ seasonNumber: number; episodeNumber: number } | null>(null);
 
   const { data: show, isLoading: showLoading } = useQuery<ShowWithProgress>({
     queryKey: ['/api/shows', id],
@@ -162,11 +163,70 @@ export default function ShowDetail() {
     });
   };
 
+  const markSucceedingEpisodesUnwatched = async (targetSeason: number, targetEpisode: number) => {
+    if (!seasons) return;
+    
+    const episodesToUnmark: Array<{ seasonNumber: number; episodeNumber: number; watched: boolean }> = [];
+    
+    for (const season of seasons) {
+      if (season.season_number < targetSeason) continue;
+      
+      if (season.episodes) {
+        for (const episode of season.episodes) {
+          // Only unmark aired episodes that are currently watched
+          if (!hasEpisodeAired(episode.air_date)) continue;
+          
+          if (season.season_number > targetSeason) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number)) {
+              episodesToUnmark.push({
+                seasonNumber: season.season_number,
+                episodeNumber: episode.episode_number,
+                watched: false,
+              });
+            }
+          } else if (season.season_number === targetSeason && episode.episode_number >= targetEpisode) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number)) {
+              episodesToUnmark.push({
+                seasonNumber: season.season_number,
+                episodeNumber: episode.episode_number,
+                watched: false,
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    if (episodesToUnmark.length === 0) return;
+    
+    // Use bulk endpoint to unmark all episodes at once
+    await apiRequest('POST', `/api/shows/${id}/progress/bulk`, {
+      episodes: episodesToUnmark,
+    });
+    
+    queryClient.invalidateQueries({ queryKey: ['/api/shows', id, 'progress'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
+    queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
+    
+    toast({
+      title: 'Episodes Unmarked',
+      description: `Unmarked ${episodesToUnmark.length} episode${episodesToUnmark.length !== 1 ? 's' : ''} as unwatched`,
+    });
+  };
+
   const handleEpisodeToggle = (seasonNumber: number, episodeNumber: number, checked: boolean) => {
     const isAlreadyWatched = isEpisodeWatched(seasonNumber, episodeNumber);
     
     if (checked && !isAlreadyWatched) {
+      // Marking as watched - show dialog to ask about previous episodes
       setPendingEpisode({ seasonNumber, episodeNumber });
+    } else if (!checked && isAlreadyWatched) {
+      // Unmarking as watched - show dialog to ask about succeeding episodes
+      setPendingUnwatchEpisode({ seasonNumber, episodeNumber });
     } else {
       toggleEpisodeMutation.mutate({ seasonNumber, episodeNumber, watched: checked });
     }
@@ -188,6 +248,24 @@ export default function ShowDetail() {
       watched: true,
     });
     setPendingEpisode(null);
+  };
+
+  const handleConfirmUnmarkAll = async () => {
+    if (!pendingUnwatchEpisode) return;
+    
+    await markSucceedingEpisodesUnwatched(pendingUnwatchEpisode.seasonNumber, pendingUnwatchEpisode.episodeNumber);
+    setPendingUnwatchEpisode(null);
+  };
+
+  const handleUnmarkJustOne = () => {
+    if (!pendingUnwatchEpisode) return;
+    
+    toggleEpisodeMutation.mutate({
+      seasonNumber: pendingUnwatchEpisode.seasonNumber,
+      episodeNumber: pendingUnwatchEpisode.episodeNumber,
+      watched: false,
+    });
+    setPendingUnwatchEpisode(null);
   };
 
   if (showLoading) {
@@ -487,6 +565,25 @@ export default function ShowDetail() {
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmMarkAll} data-testid="button-mark-all-previous">
               Mark All Previous
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={pendingUnwatchEpisode !== null} onOpenChange={(open) => !open && setPendingUnwatchEpisode(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unmark Succeeding Episodes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Would you like to unmark all succeeding episodes as unwatched as well? This will unmark all episodes from S{pendingUnwatchEpisode?.seasonNumber}E{pendingUnwatchEpisode?.episodeNumber} onwards as unwatched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleUnmarkJustOne} data-testid="button-unmark-just-one">
+              Just This Episode
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmUnmarkAll} data-testid="button-unmark-all-succeeding">
+              Unmark All Succeeding
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
