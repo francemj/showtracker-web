@@ -218,15 +218,75 @@ export default function ShowDetail() {
     });
   };
 
+  const hasUnwatchedEpisodesBefore = (targetSeason: number, targetEpisode: number): boolean => {
+    if (!seasons) return false;
+    
+    for (const season of seasons) {
+      if (season.season_number > targetSeason) break;
+      
+      if (season.episodes) {
+        for (const episode of season.episodes) {
+          if (!hasEpisodeAired(episode.air_date)) continue;
+          
+          if (season.season_number < targetSeason) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number)) {
+              return true;
+            }
+          } else if (season.season_number === targetSeason && episode.episode_number < targetEpisode) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  const hasWatchedEpisodesAfter = (targetSeason: number, targetEpisode: number): boolean => {
+    if (!seasons) return false;
+    
+    for (const season of seasons) {
+      if (season.season_number < targetSeason) continue;
+      
+      if (season.episodes) {
+        for (const episode of season.episodes) {
+          if (!hasEpisodeAired(episode.air_date)) continue;
+          
+          if (season.season_number > targetSeason) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number)) {
+              return true;
+            }
+          } else if (season.season_number === targetSeason && episode.episode_number > targetEpisode) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number)) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
+  };
+
   const handleEpisodeToggle = (seasonNumber: number, episodeNumber: number, checked: boolean) => {
     const isAlreadyWatched = isEpisodeWatched(seasonNumber, episodeNumber);
     
     if (checked && !isAlreadyWatched) {
-      // Marking as watched - show dialog to ask about previous episodes
-      setPendingEpisode({ seasonNumber, episodeNumber });
+      // Marking as watched - check if there are unwatched episodes before
+      if (hasUnwatchedEpisodesBefore(seasonNumber, episodeNumber)) {
+        setPendingEpisode({ seasonNumber, episodeNumber });
+      } else {
+        toggleEpisodeMutation.mutate({ seasonNumber, episodeNumber, watched: checked });
+      }
     } else if (!checked && isAlreadyWatched) {
-      // Unmarking as watched - show dialog to ask about succeeding episodes
-      setPendingUnwatchEpisode({ seasonNumber, episodeNumber });
+      // Unmarking as watched - check if there are watched episodes after
+      if (hasWatchedEpisodesAfter(seasonNumber, episodeNumber)) {
+        setPendingUnwatchEpisode({ seasonNumber, episodeNumber });
+      } else {
+        toggleEpisodeMutation.mutate({ seasonNumber, episodeNumber, watched: checked });
+      }
     } else {
       toggleEpisodeMutation.mutate({ seasonNumber, episodeNumber, watched: checked });
     }

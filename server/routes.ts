@@ -550,14 +550,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { seasonNumber, episodeNumber, watched } = req.body;
 
-      const { error } = await supabase.from("watch_progress").upsert({
-        user_id: req.userId,
-        show_id: parseInt(id),
-        season_number: seasonNumber,
-        episode_number: episodeNumber,
-        watched,
-        watched_at: watched ? new Date().toISOString() : null,
-      });
+      const { error } = await supabase
+        .from("watch_progress")
+        .upsert({
+          user_id: req.userId,
+          show_id: parseInt(id),
+          season_number: seasonNumber,
+          episode_number: episodeNumber,
+          watched,
+          watched_at: watched ? new Date().toISOString() : null,
+        }, {
+          onConflict: 'user_id,show_id,season_number,episode_number'
+        });
 
       if (error) {
         return res.status(500).json({ message: "Failed to update progress" });
@@ -604,7 +608,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         watched_at: watched ? new Date().toISOString() : null,
       }));
 
-      const { error } = await supabase.from("watch_progress").upsert(progressRecords);
+      const { error } = await supabase
+        .from("watch_progress")
+        .upsert(progressRecords, {
+          onConflict: 'user_id,show_id,season_number,episode_number'
+        });
 
       if (error) {
         return res.status(500).json({ message: "Failed to update season" });
@@ -642,8 +650,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         watched_at: ep.watched ? new Date().toISOString() : null,
       }));
 
-      // Batch upsert all episodes
-      const { error } = await supabase.from("watch_progress").upsert(progressRecords);
+      // Batch upsert all episodes (specify composite key for conflict resolution)
+      const { error } = await supabase
+        .from("watch_progress")
+        .upsert(progressRecords, { 
+          onConflict: 'user_id,show_id,season_number,episode_number'
+        });
 
       if (error) {
         console.error("Bulk progress update error:", error);
