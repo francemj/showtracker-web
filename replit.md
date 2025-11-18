@@ -191,11 +191,30 @@ None specified yet.
 - Implemented episode tracking system
 - Added TV Time CSV import feature
 - Designed and implemented UI with indigo/purple/emerald color scheme
+- Fixed data consistency: All API endpoints now properly convert snake_case database fields to camelCase (Nov 18, 2025)
+- Fixed show detail page: Thumbnails and status section now display correctly with complete TMDB metadata (Nov 18, 2025)
+- Implemented comprehensive cache invalidation: All mutations now invalidate related queries ensuring real-time UI updates across all views without manual refresh (Nov 18, 2025)
 
 ## Known Issues
 - Database schema must be manually executed in Supabase (see DATABASE_SETUP.md)
 - Import feature requires user to have CSV file from TV Time export
 - RLS policies currently set to public access (should be restricted for production)
+
+## Technical Implementation Notes
+
+### Data Field Mapping
+The application uses a consistent pattern for API responses:
+- **Database**: Uses snake_case column names (poster_path, first_air_date, user_id, etc.)
+- **API Responses**: All endpoints map to camelCase (posterPath, firstAirDate, userId, etc.)
+- **Helper Functions**: `getShowsWithProgress()` and `calculateShowProgress()` centralize field mapping logic
+- **Consistent Mapping**: Every API endpoint (show detail, progress, lists) returns uniform camelCase JSON
+
+### Cache Management
+All mutations implement comprehensive cache invalidation:
+- **Adding Shows**: Invalidates `/api/user/shows`, `/api/stats`, `/api/shows/watching`, `/api/shows/completed`, `/api/shows/recent`, `/api/shows/continue-watching`
+- **Updating Status**: Invalidates all of the above plus `/api/shows/:id`
+- **Progress Updates**: Invalidates `/api/shows/:id/progress`, `/api/shows/:id`, and all list queries
+- This ensures the UI stays synchronized across all views without requiring manual page refreshes
 
 ## Future Enhancements
 - Additional import sources (Trakt.tv, MyAnimeList)
