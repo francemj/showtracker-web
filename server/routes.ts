@@ -366,6 +366,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/shows/caught-up", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "caught_up");
+      res.json(shows);
+    } catch (error) {
+      console.error("Get caught up shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
   app.get("/api/shows/recent", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { data: userShows } = await supabase
@@ -1068,14 +1078,20 @@ async function updateInferredStatus(userId: string, showId: number) {
     // Determine new status based on aired episodes
     let newStatus: string;
 
+    const isShowEnded = show.status === "Ended" || show.status === "Canceled";
+    const allAiredWatched = totalAiredEpisodes > 0 && watchedCount >= totalAiredEpisodes;
+
     if (watchedCount === 0) {
       // No episodes watched → Want to Watch
       newStatus = "want_to_watch";
-    } else if (show.status === "Ended" && totalAiredEpisodes > 0 && watchedCount >= totalAiredEpisodes) {
-      // Show ended and all aired episodes watched → Completed
+    } else if (isShowEnded && allAiredWatched) {
+      // Show ended/canceled and all aired episodes watched → Completed
       newStatus = "completed";
+    } else if (!isShowEnded && allAiredWatched) {
+      // Show still airing and all aired episodes watched → Caught Up
+      newStatus = "caught_up";
     } else {
-      // Otherwise → Watching
+      // Some episodes watched but not all → Watching
       newStatus = "watching";
     }
 

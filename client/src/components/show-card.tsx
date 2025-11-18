@@ -24,6 +24,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
   const year = show.firstAirDate ? new Date(show.firstAirDate).getFullYear() : null;
   const isCompleted = show.userShow?.status === 'completed';
   const isWatching = show.userShow?.status === 'watching';
+  const isCaughtUp = show.userShow?.status === 'caught_up';
 
   const markEpisodeMutation = useMutation({
     mutationFn: async () => {
@@ -39,6 +40,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/shows', show.id, 'progress'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows', show.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       
@@ -169,14 +171,16 @@ export function ShowCard({ show, href }: ShowCardProps) {
           <Badge 
             variant={
               show.userShow.status === 'watching' ? 'default' :
+              show.userShow.status === 'caught_up' ? 'default' :
               show.userShow.status === 'completed' ? 'secondary' :
               'outline'
             }
-            className="text-xs"
+            className={`text-xs ${show.userShow.status === 'caught_up' ? 'bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-800' : ''}`}
             data-testid={`badge-status-${show.id}`}
           >
             {show.userShow.status === 'want_to_watch' && 'Want to Watch'}
             {show.userShow.status === 'watching' && 'Watching'}
+            {show.userShow.status === 'caught_up' && 'Caught Up'}
             {show.userShow.status === 'completed' && 'Completed'}
           </Badge>
         )}
