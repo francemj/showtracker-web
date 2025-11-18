@@ -915,15 +915,40 @@ async function markShowEpisodesWatched(userId: string, showId: number, watched: 
 
 async function checkAndUpdateCompletedStatus(userId: string, showId: number) {
   try {
-    // Get show's total episode count
+    // Get show details including status
     const { data: show } = await supabase
       .from("shows")
-      .select("number_of_episodes")
+      .select("number_of_episodes, status, tmdb_data")
       .eq("id", showId)
       .single();
 
     if (!show || !show.number_of_episodes) {
       return;
+    }
+
+    // Only auto-complete if show status is "Ended"
+    if (show.status !== "Ended") {
+      return;
+    }
+
+    // Get all seasons and episodes to count only aired episodes
+    const tmdbShow = await getTVShowDetails(showId);
+    let totalAiredEpisodes = 0;
+    const now = new Date();
+
+    for (const season of tmdbShow.seasons || []) {
+      // Skip special seasons (season 0)
+      if (season.season_number === 0) continue;
+      
+      try {
+        const seasonDetails = await getTVShowSeason(showId, season.season_number);
+        const airedInSeason = seasonDetails.episodes?.filter((ep: any) => 
+          ep.air_date && new Date(ep.air_date) <= now
+        ).length || 0;
+        totalAiredEpisodes += airedInSeason;
+      } catch (error) {
+        console.error(`Error fetching season ${season.season_number}:`, error);
+      }
     }
 
     // Count watched episodes
@@ -936,15 +961,15 @@ async function checkAndUpdateCompletedStatus(userId: string, showId: number) {
 
     const watchedCount = watchedProgress?.length || 0;
 
-    // If all episodes are watched, update status to completed
-    if (watchedCount >= show.number_of_episodes) {
+    // If all aired episodes are watched and show has ended, update status to completed
+    if (watchedCount >= totalAiredEpisodes && totalAiredEpisodes > 0) {
       await supabase
         .from("user_shows")
         .update({ status: "completed", updated_at: new Date().toISOString() })
         .eq("user_id", userId)
         .eq("show_id", showId);
 
-      console.log(`Auto-updated show ${showId} to completed status (${watchedCount}/${show.number_of_episodes} episodes watched)`);
+      console.log(`Auto-updated show ${showId} to completed status (${watchedCount}/${totalAiredEpisodes} aired episodes watched)`);
     }
   } catch (error) {
     console.error(`Error checking completed status:`, error);

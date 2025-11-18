@@ -89,12 +89,19 @@ export default function ShowDetail() {
     );
   };
 
+  const hasEpisodeAired = (airDate: string | null) => {
+    if (!airDate) return false;
+    return new Date(airDate) <= new Date();
+  };
+
   const getSeasonProgress = (seasonNumber: number) => {
     const season = seasons?.find(s => s.season_number === seasonNumber);
     if (!season || !season.episodes) return { watched: 0, total: 0, percentage: 0 };
     
-    const watched = season.episodes.filter(ep => isEpisodeWatched(seasonNumber, ep.episode_number)).length;
-    const total = season.episodes.length;
+    // Only count aired episodes
+    const airedEpisodes = season.episodes.filter(ep => hasEpisodeAired(ep.air_date));
+    const watched = airedEpisodes.filter(ep => isEpisodeWatched(seasonNumber, ep.episode_number)).length;
+    const total = airedEpisodes.length;
     const percentage = total > 0 ? (watched / total) * 100 : 0;
     
     return { watched, total, percentage };
@@ -110,6 +117,9 @@ export default function ShowDetail() {
       
       if (season.episodes) {
         for (const episode of season.episodes) {
+          // Only mark aired episodes
+          if (!hasEpisodeAired(episode.air_date)) continue;
+          
           if (season.season_number < targetSeason) {
             if (!isEpisodeWatched(season.season_number, episode.episode_number)) {
               episodesToMark.push({
@@ -391,6 +401,7 @@ export default function ShowDetail() {
                             <div className="space-y-2">
                               {season.episodes?.map((episode) => {
                                 const watched = isEpisodeWatched(season.season_number, episode.episode_number);
+                                const hasAired = hasEpisodeAired(episode.air_date);
                                 const stillUrl = episode.still_path
                                   ? `https://image.tmdb.org/t/p/w300${episode.still_path}`
                                   : null;
@@ -398,11 +409,12 @@ export default function ShowDetail() {
                                 return (
                                   <div
                                     key={episode.id}
-                                    className="flex items-start gap-3 p-3 rounded-lg hover-elevate transition-all"
+                                    className={`flex items-start gap-3 p-3 rounded-lg hover-elevate transition-all ${!hasAired ? 'opacity-50' : ''}`}
                                     data-testid={`episode-${season.season_number}-${episode.episode_number}`}
                                   >
                                     <Checkbox
                                       checked={watched}
+                                      disabled={!hasAired}
                                       onCheckedChange={(checked) =>
                                         handleEpisodeToggle(season.season_number, episode.episode_number, !!checked)
                                       }
