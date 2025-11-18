@@ -208,11 +208,13 @@ None specified yet.
   - Status inference: No watched episodes → "Want to Watch", some watched → "Watching", all aired watched + ended show → "Completed"
   - System accurately handles ongoing shows, ended shows, and limited series
   - Runs efficiently without blocking API responses using background tasks
-- **Added bulk unwatch functionality with confirmation prompts** (Nov 18, 2025):
+- **Added bulk unwatch functionality with smart prompts** (Nov 18, 2025):
   - Users can now unmark episodes as unwatched by unchecking them
-  - When unmarking an episode, users are prompted to optionally unmark all succeeding episodes as unwatched
-  - Mirrors the existing "mark as watched" flow for consistency
+  - When unmarking an episode with watched episodes after it, users are prompted to optionally unmark all succeeding episodes
+  - When marking an episode with unwatched episodes before it, users are prompted to optionally mark all previous episodes
+  - Prompts only appear when there are relevant episodes to avoid unnecessary interruptions
   - Uses bulk endpoint for efficient multi-episode updates
+  - Fixed all upsert operations to use onConflict parameter for composite unique constraint, preventing duplicate key errors
 
 ## Known Issues
 - Database schema must be manually executed in Supabase (see DATABASE_SETUP.md)
