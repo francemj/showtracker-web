@@ -298,6 +298,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update show" });
       }
 
+      // If status is set to "Completed", mark all episodes as watched
+      if (status === "completed") {
+        await markShowEpisodesWatched(req.userId!, parseInt(showId), true);
+      }
+
       res.json(data);
     } catch (error) {
       console.error("Update show error:", error);
@@ -517,6 +522,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to update progress" });
       }
 
+      // Check if all episodes are now watched and auto-update status to completed
+      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
+
       res.json({ success: true });
     } catch (error) {
       console.error("Update progress error:", error);
@@ -552,6 +560,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error) {
         return res.status(500).json({ message: "Failed to update season" });
       }
+
+      // Check if all episodes are now watched and auto-update status to completed
+      await checkAndUpdateCompletedStatus(req.userId!, parseInt(id));
 
       res.json({ success: true });
     } catch (error) {
@@ -722,4 +733,114 @@ async function calculateShowProgress(userId: string, showId: number) {
     totalEpisodes,
     progress: progressPercent,
   };
+}
+
+async function markShowEpisodesWatched(userId: string, showId: number, watched: boolean = true) {
+  try {
+    // Get show details including number of seasons
+    const { data: show } = await supabase
+      .from("shows")
+      .select("number_of_seasons")
+      .eq("id", showId)
+      .single();
+
+    if (!show || !show.number_of_seasons) {
+      console.warn(`Show ${showId} has no season data`);
+      return;
+    }
+
+    // Fetch all episodes for all seasons from TMDB
+    const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> = [];
+    
+    for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
+      try {
+        const seasonData = await getTVShowSeason(showId, seasonNum);
+        if (seasonData.episodes && seasonData.episodes.length > 0) {
+          seasonData.episodes.forEach((episode: any) => {
+            allEpisodes.push({
+              seasonNumber: seasonNum,
+              episodeNumber: episode.episode_number,
+            });
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to fetch season ${seasonNum} for show ${showId}:`, error);
+      }
+    }
+
+    if (allEpisodes.length === 0) {
+      console.warn(`No episodes found for show ${showId}`);
+      return;
+    }
+
+    // Prepare watch_progress records for bulk upsert
+    const watchProgressRecords = allEpisodes.map(ep => ({
+      user_id: userId,
+      show_id: showId,
+      season_number: ep.seasonNumber,
+      episode_number: ep.episodeNumber,
+      watched,
+      watched_at: watched ? new Date().toISOString() : null,
+    }));
+
+    // Batch upsert in chunks of 100 to respect Supabase limits
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < watchProgressRecords.length; i += CHUNK_SIZE) {
+      const chunk = watchProgressRecords.slice(i, i + CHUNK_SIZE);
+      
+      const { error } = await supabase
+        .from("watch_progress")
+        .upsert(chunk, {
+          onConflict: 'user_id,show_id,season_number,episode_number',
+        });
+
+      if (error) {
+        console.error(`Failed to upsert watch progress chunk:`, error);
+        throw error;
+      }
+    }
+
+    console.log(`Successfully marked ${allEpisodes.length} episodes as ${watched ? 'watched' : 'unwatched'} for show ${showId}`);
+  } catch (error) {
+    console.error(`Error in markShowEpisodesWatched:`, error);
+    throw error;
+  }
+}
+
+async function checkAndUpdateCompletedStatus(userId: string, showId: number) {
+  try {
+    // Get show's total episode count
+    const { data: show } = await supabase
+      .from("shows")
+      .select("number_of_episodes")
+      .eq("id", showId)
+      .single();
+
+    if (!show || !show.number_of_episodes) {
+      return;
+    }
+
+    // Count watched episodes
+    const { data: watchedProgress } = await supabase
+      .from("watch_progress")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("show_id", showId)
+      .eq("watched", true);
+
+    const watchedCount = watchedProgress?.length || 0;
+
+    // If all episodes are watched, update status to completed
+    if (watchedCount >= show.number_of_episodes) {
+      await supabase
+        .from("user_shows")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("show_id", showId);
+
+      console.log(`Auto-updated show ${showId} to completed status (${watchedCount}/${show.number_of_episodes} episodes watched)`);
+    }
+  } catch (error) {
+    console.error(`Error checking completed status:`, error);
+  }
 }
