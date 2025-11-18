@@ -258,14 +258,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Show upsert error:", showError);
       }
 
-      // Add to user's collection with watching status by default
-      // Status will be inferred based on watch progress
+      // Add to user's collection with want_to_watch status by default
+      // Status will be automatically inferred based on watch progress
       const { data: userShow, error } = await supabase
         .from("user_shows")
         .insert({
           user_id: req.userId,
           show_id: showId,
-          status: 'watching',  // Default status, will be overridden by inference
+          status: 'want_to_watch',  // Default status for new shows
         })
         .select()
         .single();
@@ -273,6 +273,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error) {
         return res.status(500).json({ message: "Failed to add show" });
       }
+
+      // Cache episodes in background to enable status inference
+      // Then run status inference once episodes are cached
+      (async () => {
+        try {
+          // Fetch and cache all seasons/episodes for this show
+          if (tmdbShow.number_of_seasons) {
+            const seasons = await Promise.all(
+              Array.from({ length: tmdbShow.number_of_seasons }, (_, i) => i + 1).map(async (seasonNum) => {
+                return await getTVShowSeason(showId, seasonNum);
+              })
+            );
+            
+            await cacheEpisodesInDatabase(showId, seasons);
+            
+            // Now run status inference with cached data
+            await updateInferredStatus(req.userId!, showId);
+          }
+        } catch (err) {
+          console.error("Background episode caching/inference failed:", err);
+        }
+      })();
 
       res.json(userShow);
     } catch (error) {
