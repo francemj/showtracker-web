@@ -217,7 +217,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select("show_id, status")
         .eq("user_id", req.userId);
 
-      res.json(userShows || []);
+      // Map snake_case to camelCase for frontend
+      const mappedShows = (userShows || []).map((us: any) => ({
+        showId: us.show_id,
+        status: us.status,
+      }));
+
+      res.json(mappedShows);
     } catch (error) {
       console.error("Get user shows error:", error);
       res.status(500).json({ message: "Failed to get user shows" });
@@ -332,9 +338,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const shows = await Promise.all(
         (userShows || []).map(async (us: any) => {
           const progress = await calculateShowProgress(req.userId!, us.show_id);
+          const show = us.shows;
+          
+          // Map snake_case database fields to camelCase for frontend
           return {
-            ...us.shows,
-            userShow: us,
+            id: show.id,
+            name: show.name,
+            overview: show.overview,
+            posterPath: show.poster_path,
+            backdropPath: show.backdrop_path,
+            firstAirDate: show.first_air_date,
+            voteAverage: show.vote_average,
+            numberOfSeasons: show.number_of_seasons,
+            numberOfEpisodes: show.number_of_episodes,
+            status: show.status,
+            genres: show.genres,
+            tmdbData: show.tmdb_data,
+            lastUpdated: show.last_updated,
+            userShow: {
+              id: us.id,
+              userId: us.user_id,
+              showId: us.show_id,
+              status: us.status,
+              rating: us.rating,
+              notes: us.notes,
+              addedAt: us.added_at,
+              updatedAt: us.updated_at,
+            },
             ...progress,
           };
         })
@@ -605,9 +635,33 @@ async function getShowsWithProgress(userId: string, status: string) {
   const shows = await Promise.all(
     (userShows || []).map(async (us: any) => {
       const progress = await calculateShowProgress(userId, us.show_id);
+      const show = us.shows;
+      
+      // Map snake_case database fields to camelCase for frontend
       return {
-        ...us.shows,
-        userShow: us,
+        id: show.id,
+        name: show.name,
+        overview: show.overview,
+        posterPath: show.poster_path,
+        backdropPath: show.backdrop_path,
+        firstAirDate: show.first_air_date,
+        voteAverage: show.vote_average,
+        numberOfSeasons: show.number_of_seasons,
+        numberOfEpisodes: show.number_of_episodes,
+        status: show.status,
+        genres: show.genres,
+        tmdbData: show.tmdb_data,
+        lastUpdated: show.last_updated,
+        userShow: {
+          id: us.id,
+          userId: us.user_id,
+          showId: us.show_id,
+          status: us.status,
+          rating: us.rating,
+          notes: us.notes,
+          addedAt: us.added_at,
+          updatedAt: us.updated_at,
+        },
         ...progress,
       };
     })

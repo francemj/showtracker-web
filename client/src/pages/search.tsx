@@ -47,8 +47,9 @@ export default function Search() {
     },
   });
 
-  const isShowAdded = (showId: number) => {
-    return userShows?.some(us => us.showId === showId);
+  const getShowStatus = (showId: number): string | null => {
+    const userShow = userShows?.find(us => us.showId === showId);
+    return userShow?.status || null;
   };
 
   const handleAddShow = (showId: number, status: string) => {
@@ -98,7 +99,13 @@ export default function Search() {
               ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
               : '/placeholder-poster.png';
             const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : null;
-            const added = isShowAdded(show.id);
+            const status = getShowStatus(show.id);
+
+            const statusLabels: Record<string, string> = {
+              'want_to_watch': 'Want to Watch',
+              'watching': 'Watching',
+              'completed': 'Completed',
+            };
 
             return (
               <Card key={show.id} className="hover-elevate transition-all overflow-hidden" data-testid={`card-search-result-${show.id}`}>
@@ -134,11 +141,19 @@ export default function Search() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">
-                    {added ? (
-                      <Button size="sm" variant="outline" disabled className="w-full">
-                        <Check className="w-4 h-4 mr-1" />
-                        Added
-                      </Button>
+                    {status ? (
+                      <Badge 
+                        variant={
+                          status === 'watching' ? 'default' :
+                          status === 'completed' ? 'secondary' :
+                          'outline'
+                        }
+                        className="w-full justify-center py-2 text-xs"
+                        data-testid={`badge-show-status-${show.id}`}
+                      >
+                        <Check className="w-3 h-3 mr-1" />
+                        {statusLabels[status] || status}
+                      </Badge>
                     ) : (
                       <AddShowButton
                         showId={show.id}
