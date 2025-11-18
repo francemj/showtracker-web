@@ -957,20 +957,27 @@ async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
     }
 
     if (episodesToCache.length > 0) {
-      // Upsert episodes in batches
+      // Upsert episodes in batches with error handling
       const CHUNK_SIZE = 100;
       for (let i = 0; i < episodesToCache.length; i += CHUNK_SIZE) {
         const chunk = episodesToCache.slice(i, i + CHUNK_SIZE);
-        await supabase
+        
+        const { error } = await supabase
           .from("episodes")
           .upsert(chunk, {
             onConflict: 'show_id,season_number,episode_number',
           });
+
+        if (error) {
+          console.error(`Failed to cache episodes chunk for show ${showId}:`, error);
+          throw error;
+        }
       }
-      console.log(`Cached ${episodesToCache.length} episodes for show ${showId}`);
+      console.log(`✓ Cached ${episodesToCache.length} episodes for show ${showId}`);
     }
   } catch (error) {
     console.error(`Error caching episodes for show ${showId}:`, error);
+    throw error;
   }
 }
 
@@ -987,6 +994,7 @@ async function updateInferredStatus(userId: string, showId: number) {
       .single();
 
     if (!show) {
+      console.log(`⚠ Show ${showId} not found, skipping status update`);
       return;
     }
 
@@ -1002,7 +1010,7 @@ async function updateInferredStatus(userId: string, showId: number) {
 
     // Count aired episodes from cached episodes table
     const now = new Date().toISOString();
-    const { data: airedEpisodes, count: airedCount } = await supabase
+    const { data: airedEpisodes, count: airedCount, error: countError } = await supabase
       .from("episodes")
       .select("*", { count: 'exact' })
       .eq("show_id", showId)
@@ -1010,7 +1018,18 @@ async function updateInferredStatus(userId: string, showId: number) {
       .lte("air_date", now) // Only count aired episodes
       .not("air_date", "is", null);
 
+    if (countError) {
+      console.error(`Error counting aired episodes for show ${showId}:`, countError);
+      return;
+    }
+
     const totalAiredEpisodes = airedCount || 0;
+
+    // If no episodes cached yet, skip status update
+    if (totalAiredEpisodes === 0) {
+      console.log(`⚠ No cached episodes for show ${showId}, skipping status update`);
+      return;
+    }
 
     // Determine new status based on aired episodes
     let newStatus: string;
@@ -1027,13 +1046,18 @@ async function updateInferredStatus(userId: string, showId: number) {
     }
 
     // Update the status in the database
-    await supabase
+    const { error: updateError } = await supabase
       .from("user_shows")
       .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("show_id", showId);
 
-    console.log(`Auto-updated show ${showId} status to "${newStatus}" (${watchedCount}/${totalAiredEpisodes} aired episodes watched, show status: ${show.status})`);
+    if (updateError) {
+      console.error(`Error updating user_shows status for show ${showId}:`, updateError);
+      return;
+    }
+
+    console.log(`✓ Auto-updated show ${showId} status to "${newStatus}" (${watchedCount}/${totalAiredEpisodes} aired episodes watched, show status: ${show.status})`);
   } catch (error) {
     console.error(`Error updating inferred status:`, error);
     // Don't throw - we don't want status updates to fail progress tracking
