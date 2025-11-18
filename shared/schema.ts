@@ -123,11 +123,19 @@ export type ImportHistory = typeof importHistory.$inferSelect;
 export type InsertImportHistory = z.infer<typeof insertImportHistorySchema>;
 
 // Additional types for frontend
+export type NextEpisode = {
+  seasonNumber: number;
+  episodeNumber: number;
+  name: string;
+  airDate?: string;
+};
+
 export type ShowWithProgress = Show & {
   userShow?: UserShow;
   watchedEpisodes?: number;
   totalEpisodes?: number;
   progress?: number;
+  nextEpisode?: NextEpisode;
 };
 
 export type TMDBShow = {

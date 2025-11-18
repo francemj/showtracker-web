@@ -710,6 +710,60 @@ async function getShowsWithProgress(userId: string, status: string) {
   return shows;
 }
 
+async function findNextUnwatchedEpisode(userId: string, showId: number) {
+  try {
+    // Get show details to know how many seasons
+    const { data: show } = await supabase
+      .from("shows")
+      .select("number_of_seasons")
+      .eq("id", showId)
+      .single();
+
+    if (!show || !show.number_of_seasons) {
+      return null;
+    }
+
+    // Get all watched episodes for this show
+    const { data: watchedProgress } = await supabase
+      .from("watch_progress")
+      .select("season_number, episode_number")
+      .eq("user_id", userId)
+      .eq("show_id", showId)
+      .eq("watched", true);
+
+    const watchedSet = new Set(
+      (watchedProgress || []).map((w: any) => `${w.season_number}-${w.episode_number}`)
+    );
+
+    // Iterate through seasons to find first unwatched episode
+    for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
+      try {
+        const seasonData = await getTVShowSeason(showId, seasonNum);
+        if (seasonData.episodes && seasonData.episodes.length > 0) {
+          for (const episode of seasonData.episodes) {
+            const key = `${seasonNum}-${episode.episode_number}`;
+            if (!watchedSet.has(key)) {
+              return {
+                seasonNumber: seasonNum,
+                episodeNumber: episode.episode_number,
+                name: episode.name,
+                airDate: episode.air_date,
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch season ${seasonNum} for next episode search:`, error);
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error finding next unwatched episode:", error);
+    return null;
+  }
+}
+
 async function calculateShowProgress(userId: string, showId: number) {
   const { data: show } = await supabase
     .from("shows")
@@ -728,10 +782,14 @@ async function calculateShowProgress(userId: string, showId: number) {
   const totalEpisodes = show?.number_of_episodes || 1;
   const progressPercent = (watchedEpisodes / totalEpisodes) * 100;
 
+  // Find next unwatched episode
+  const nextEpisode = await findNextUnwatchedEpisode(userId, showId);
+
   return {
     watchedEpisodes,
     totalEpisodes,
     progress: progressPercent,
+    nextEpisode,
   };
 }
 
