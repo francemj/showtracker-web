@@ -103,7 +103,7 @@ export default function ShowDetail() {
   const markPreviousEpisodes = async (targetSeason: number, targetEpisode: number) => {
     if (!seasons) return;
     
-    const episodesToMark: Array<{ seasonNumber: number; episodeNumber: number }> = [];
+    const episodesToMark: Array<{ seasonNumber: number; episodeNumber: number; watched: boolean }> = [];
     
     for (const season of seasons) {
       if (season.season_number > targetSeason) continue;
@@ -115,6 +115,7 @@ export default function ShowDetail() {
               episodesToMark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
+                watched: true,
               });
             }
           } else if (season.season_number === targetSeason && episode.episode_number <= targetEpisode) {
@@ -122,6 +123,7 @@ export default function ShowDetail() {
               episodesToMark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
+                watched: true,
               });
             }
           }
@@ -129,13 +131,12 @@ export default function ShowDetail() {
       }
     }
     
-    for (const ep of episodesToMark) {
-      await apiRequest('POST', `/api/shows/${id}/progress`, {
-        seasonNumber: ep.seasonNumber,
-        episodeNumber: ep.episodeNumber,
-        watched: true,
-      });
-    }
+    if (episodesToMark.length === 0) return;
+    
+    // Use bulk endpoint to mark all episodes at once
+    await apiRequest('POST', `/api/shows/${id}/progress/bulk`, {
+      episodes: episodesToMark,
+    });
     
     queryClient.invalidateQueries({ queryKey: ['/api/shows', id, 'progress'] });
     queryClient.invalidateQueries({ queryKey: ['/api/shows', id] });
