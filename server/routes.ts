@@ -484,6 +484,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
+      // Cache episodes in database for faster status inference
+      // This runs in background and doesn't block the response
+      cacheEpisodesInDatabase(parseInt(id), seasons).catch(err =>
+        console.error("Failed to cache episodes:", err)
+      );
+
       res.json(seasons);
     } catch (error) {
       console.error("Get seasons error:", error);
@@ -928,20 +934,59 @@ async function markShowEpisodesWatched(userId: string, showId: number, watched: 
   }
 }
 
+// Cache episodes in the database for faster lookups
+async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
+  try {
+    const episodesToCache: any[] = [];
+
+    for (const season of seasons) {
+      if (!season.episodes || season.season_number === 0) continue;
+
+      for (const episode of season.episodes) {
+        episodesToCache.push({
+          show_id: showId,
+          season_number: season.season_number,
+          episode_number: episode.episode_number,
+          name: episode.name,
+          air_date: episode.air_date,
+          runtime: episode.runtime,
+          overview: episode.overview,
+          still_path: episode.still_path,
+        });
+      }
+    }
+
+    if (episodesToCache.length > 0) {
+      // Upsert episodes in batches
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < episodesToCache.length; i += CHUNK_SIZE) {
+        const chunk = episodesToCache.slice(i, i + CHUNK_SIZE);
+        await supabase
+          .from("episodes")
+          .upsert(chunk, {
+            onConflict: 'show_id,season_number,episode_number',
+          });
+      }
+      console.log(`Cached ${episodesToCache.length} episodes for show ${showId}`);
+    }
+  } catch (error) {
+    console.error(`Error caching episodes for show ${showId}:`, error);
+  }
+}
+
 // Update show status based on watch progress and show details
 // This is called whenever progress changes to keep the stored status in sync
-// Uses stored tmdb_data to count aired episodes without making API calls
+// Uses cached episodes from the database for accurate aired episode counting
 async function updateInferredStatus(userId: string, showId: number) {
   try {
-    // Get show details including cached TMDB data
+    // Get show status
     const { data: show } = await supabase
       .from("shows")
-      .select("status, tmdb_data")
+      .select("status")
       .eq("id", showId)
       .single();
 
-    if (!show || !show.tmdb_data) {
-      console.log(`Skipping status update for show ${showId}: missing tmdb_data`);
+    if (!show) {
       return;
     }
 
@@ -955,27 +1000,17 @@ async function updateInferredStatus(userId: string, showId: number) {
 
     const watchedCount = watchedProgress?.length || 0;
 
-    // Count aired episodes from cached tmdb_data
-    const now = new Date();
-    let totalAiredEpisodes = 0;
-    
-    const tmdbData = show.tmdb_data as any;
-    if (tmdbData.seasons && Array.isArray(tmdbData.seasons)) {
-      for (const season of tmdbData.seasons) {
-        // Skip special seasons (season 0)
-        if (season.season_number === 0) continue;
-        
-        // Count episodes that have aired based on air_date
-        if (season.air_date && new Date(season.air_date) <= now) {
-          totalAiredEpisodes += season.episode_count || 0;
-        }
-      }
-    }
+    // Count aired episodes from cached episodes table
+    const now = new Date().toISOString();
+    const { data: airedEpisodes, count: airedCount } = await supabase
+      .from("episodes")
+      .select("*", { count: 'exact' })
+      .eq("show_id", showId)
+      .neq("season_number", 0) // Skip special seasons
+      .lte("air_date", now) // Only count aired episodes
+      .not("air_date", "is", null);
 
-    // Fallback if we can't determine aired episodes from cached data
-    if (totalAiredEpisodes === 0 && tmdbData.number_of_episodes) {
-      totalAiredEpisodes = tmdbData.number_of_episodes;
-    }
+    const totalAiredEpisodes = airedCount || 0;
 
     // Determine new status based on aired episodes
     let newStatus: string;
