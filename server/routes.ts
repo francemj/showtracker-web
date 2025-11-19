@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import Papa from "papaparse";
 import { supabase } from "./lib/supabase";
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb";
+import { signupWithAuth0, loginWithAuth0, migrateUserToAuth0 } from "./lib/auth0";
 
 declare module "express-session" {
   interface SessionData {
@@ -48,7 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Check if user exists
+      // Check if user exists in Supabase
       const { data: existingUser } = await supabase
         .from("users")
         .select("*")
@@ -59,16 +60,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "User already exists" });
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Create user in Auth0
+      const auth0Result = await signupWithAuth0(email, password, name);
 
-      // Create user
+      // Create user in Supabase with Auth0 ID
       const { data: user, error } = await supabase
         .from("users")
         .insert({
-          email,
-          name,
-          auth0_id: `local_${Date.now()}`, // Simplified auth
+          email: auth0Result.email,
+          name: auth0Result.name || name,
+          auth0_id: auth0Result.auth0Id,
           picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff`,
         })
         .select()
@@ -78,17 +79,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to create user" });
       }
 
-      // Store password separately (in production, use proper auth service)
-      await supabase.from("user_credentials").insert({
-        user_id: user.id,
-        password_hash: hashedPassword,
-      });
-
       req.session.userId = user.id;
       res.json({ user });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Signup error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ message: error.message || "Internal server error" });
     }
   });
 
@@ -100,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Get user
+      // Check if user exists in Supabase
       const { data: user } = await supabase
         .from("users")
         .select("*")
@@ -111,7 +106,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Get password hash
+      // Check if user has an Auth0 ID (already migrated)
+      if (user.auth0_id && !user.auth0_id.startsWith('local_')) {
+        // User already migrated to Auth0, authenticate with Auth0
+        try {
+          const auth0Result = await loginWithAuth0(email, password);
+          req.session.userId = user.id;
+          return res.json({ user });
+        } catch (auth0Error) {
+          console.error("Auth0 login failed:", auth0Error);
+          return res.status(401).json({ message: "Invalid credentials" });
+        }
+      }
+
+      // User has not been migrated yet, check bcrypt credentials
       const { data: credentials } = await supabase
         .from("user_credentials")
         .select("password_hash")
@@ -122,15 +130,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Verify password
+      // Verify password with bcrypt
       const validPassword = await bcrypt.compare(password, credentials.password_hash);
       if (!validPassword) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
+      // Password is valid, migrate user to Auth0
+      try {
+        const auth0Id = await migrateUserToAuth0(user.id, email, password, user.name || 'User');
+        
+        // Update user's auth0_id in Supabase
+        await supabase
+          .from("users")
+          .update({ auth0_id: auth0Id })
+          .eq("id", user.id);
+
+        // Delete bcrypt credentials since they're now in Auth0
+        await supabase
+          .from("user_credentials")
+          .delete()
+          .eq("user_id", user.id);
+
+        console.log(`Successfully migrated user ${email} to Auth0`);
+      } catch (migrationError) {
+        console.error("Migration to Auth0 failed, but allowing login:", migrationError);
+      }
+
       req.session.userId = user.id;
       res.json({ user });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
       res.status(500).json({ message: "Internal server error" });
     }
