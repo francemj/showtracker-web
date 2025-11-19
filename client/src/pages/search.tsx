@@ -40,7 +40,11 @@ export default function Search() {
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
-      const statusLabel = variables.initialStatus === 'completed' ? 'Completed' : 'Want to Watch';
+      const statusLabel = variables.initialStatus === 'completed' 
+        ? 'Completed' 
+        : variables.initialStatus === 'caught_up' 
+        ? 'Caught Up' 
+        : 'Want to Watch';
       toast({
         title: 'Show Added',
         description: `The show has been added to your collection as "${statusLabel}".`,
@@ -173,12 +177,22 @@ export default function Search() {
                         >
                           Want to Watch
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => handleAddShow(show.id, 'completed')}
-                          data-testid={`menu-item-mark-completed-${show.id}`}
-                        >
-                          Mark as Completed
-                        </DropdownMenuItem>
+                        {(show.status === 'Ended' || show.status === 'Canceled') && (
+                          <DropdownMenuItem 
+                            onClick={() => handleAddShow(show.id, 'completed')}
+                            data-testid={`menu-item-mark-completed-${show.id}`}
+                          >
+                            Mark as Completed
+                          </DropdownMenuItem>
+                        )}
+                        {show.status === 'Returning Series' && (
+                          <DropdownMenuItem 
+                            onClick={() => handleAddShow(show.id, 'caught_up')}
+                            data-testid={`menu-item-mark-caught-up-${show.id}`}
+                          >
+                            Mark as Caught Up
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}

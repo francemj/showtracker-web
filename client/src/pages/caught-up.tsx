@@ -7,7 +7,7 @@ import { Zap } from 'lucide-react';
 
 export default function CaughtUp() {
   const { data: shows, isLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/caught-up'],
+    queryKey: ['/api/shows/caught-up-upcoming'],
   });
 
   return (

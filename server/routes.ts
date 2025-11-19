@@ -289,8 +289,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             await cacheEpisodesInDatabase(showId, seasons);
             
-            // If marking as completed, mark all episodes as watched
-            if (initialStatus === 'completed') {
+            // If marking as completed or caught_up, mark all aired episodes as watched
+            if (initialStatus === 'completed' || initialStatus === 'caught_up') {
               await markShowEpisodesWatched(req.userId!, showId, true);
             }
             
