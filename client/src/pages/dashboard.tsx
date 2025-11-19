@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShowCard } from '@/components/show-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, CheckCircle2, Clock, Eye } from 'lucide-react';
+import { TrendingUp, CheckCircle2, Clock, Eye, Zap } from 'lucide-react';
 import { ShowWithProgress } from '@shared/schema';
 
 export default function Dashboard() {
@@ -21,6 +21,10 @@ export default function Dashboard() {
 
   const { data: continueWatching, isLoading: continueLoading } = useQuery<ShowWithProgress[]>({
     queryKey: ['/api/shows/continue-watching'],
+  });
+
+  const { data: caughtUpShows, isLoading: caughtUpLoading } = useQuery<ShowWithProgress[]>({
+    queryKey: ['/api/shows/caught-up-upcoming'],
   });
 
   return (
@@ -119,6 +123,34 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {continueWatching.map((show) => (
+              <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {caughtUpLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="aspect-[2/3]" />
+            ))}
+          </div>
+        </div>
+      ) : caughtUpShows && caughtUpShows.length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
+              <Zap className="w-5 h-5 text-teal-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-heading font-bold text-foreground">Caught Up - Upcoming Episodes</h2>
+              <p className="text-sm text-muted-foreground">Shows where new episodes are coming soon</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {caughtUpShows.map((show) => (
               <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
             ))}
           </div>

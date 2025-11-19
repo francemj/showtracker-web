@@ -233,7 +233,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add show to user collection
   app.post("/api/user/shows", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { showId } = req.body;
+      const { showId, initialStatus } = req.body;
 
       // Get show details from TMDB
       const tmdbShow = await getTVShowDetails(showId);
@@ -258,14 +258,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Show upsert error:", showError);
       }
 
-      // Add to user's collection with want_to_watch status by default
-      // Status will be automatically inferred based on watch progress
+      // Add to user's collection
+      // Default to want_to_watch if no initialStatus provided
+      // If initialStatus is 'completed', mark all episodes as watched
       const { data: userShow, error } = await supabase
         .from("user_shows")
         .insert({
           user_id: req.userId,
           show_id: showId,
-          status: 'want_to_watch',  // Default status for new shows
+          status: initialStatus || 'want_to_watch',
         })
         .select()
         .single();
@@ -275,7 +276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Cache episodes in background to enable status inference
-      // Then run status inference once episodes are cached
+      // If initialStatus is 'completed', also mark all episodes as watched
       (async () => {
         try {
           // Fetch and cache all seasons/episodes for this show
@@ -288,10 +289,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             await cacheEpisodesInDatabase(showId, seasons);
             
+            // If marking as completed, mark all episodes as watched
+            if (initialStatus === 'completed') {
+              await markShowEpisodesWatched(req.userId!, showId, true);
+            }
+            
             // Now run status inference with cached data
             await updateInferredStatus(req.userId!, showId);
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("Background episode caching/inference failed:", err);
         }
       })();
@@ -338,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get shows by status
   app.get("/api/shows/watching", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const shows = await getShowsWithProgress(req.userId!, "watching");
+      const shows = await getShowsWithProgress(req.userId!, "watching", true);
       res.json(shows);
     } catch (error) {
       console.error("Get watching shows error:", error);
@@ -372,6 +378,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(shows);
     } catch (error) {
       console.error("Get caught up shows error:", error);
+      res.status(500).json({ message: "Failed to get shows" });
+    }
+  });
+
+  app.get("/api/shows/caught-up-upcoming", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const shows = await getShowsWithProgress(req.userId!, "caught_up");
+      
+      // Enhance with next episode info
+      const showsWithNext = await Promise.all(
+        shows.map(async (show) => {
+          const nextEp = await getNextUnairedEpisode(show.id);
+          return {
+            ...show,
+            nextEpisode: nextEp,
+          };
+        })
+      );
+
+      // Filter to only shows that have upcoming episodes
+      const withUpcoming = showsWithNext.filter(s => s.nextEpisode !== null);
+      
+      res.json(withUpcoming);
+    } catch (error) {
+      console.error("Get caught up upcoming shows error:", error);
       res.status(500).json({ message: "Failed to get shows" });
     }
   });
@@ -777,50 +808,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-async function getShowsWithProgress(userId: string, status: string) {
-  const { data: userShows } = await supabase
+// Get next unaired episode for a show (for caught-up shows)
+async function getNextUnairedEpisode(showId: number) {
+  try {
+    const now = new Date().toISOString();
+    const { data: nextEpisode } = await supabase
+      .from("episodes")
+      .select("season_number, episode_number, air_date")
+      .eq("show_id", showId)
+      .neq("season_number", 0) // Skip specials
+      .gt("air_date", now) // Future episodes only
+      .order("air_date", { ascending: true })
+      .limit(1)
+      .single();
+
+    if (!nextEpisode) {
+      return null;
+    }
+
+    // Calculate days until air
+    const airDate = new Date(nextEpisode.air_date);
+    const nowDate = new Date();
+    const diffTime = airDate.getTime() - nowDate.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return {
+      season: nextEpisode.season_number,
+      episode: nextEpisode.episode_number,
+      airDate: nextEpisode.air_date,
+      daysUntil: diffDays,
+    };
+  } catch (error) {
+    // Single query returns error if no rows, so just return null
+    return null;
+  }
+}
+
+async function getShowsWithProgress(userId: string, status: string, sortByRecentWatch: boolean = false) {
+  let query = supabase
     .from("user_shows")
     .select("*, shows(*)")
     .eq("user_id", userId)
-    .eq("status", status)
-    .order("updated_at", { ascending: false });
+    .eq("status", status);
 
-  const shows = await Promise.all(
-    (userShows || []).map(async (us: any) => {
-      const progress = await calculateShowProgress(userId, us.show_id);
-      const show = us.shows;
+  if (sortByRecentWatch) {
+    // For watching shows, we want to sort by most recent watch activity
+    // We'll get the data first, then sort in memory
+    const { data: userShows } = await query;
+    
+    if (!userShows || userShows.length === 0) {
+      return [];
+    }
+
+    // Get most recent watch timestamp for each show
+    const showsWithTimestamps = await Promise.all(
+      userShows.map(async (us: any) => {
+        const { data: recentWatch } = await supabase
+          .from("watch_progress")
+          .select("updated_at")
+          .eq("user_id", userId)
+          .eq("show_id", us.show_id)
+          .eq("watched", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .single();
+        
+        return {
+          ...us,
+          mostRecentWatch: recentWatch?.updated_at || us.updated_at,
+        };
+      })
+    );
+
+    // Sort by most recent watch
+    showsWithTimestamps.sort((a, b) => {
+      const dateA = new Date(a.mostRecentWatch).getTime();
+      const dateB = new Date(b.mostRecentWatch).getTime();
+      return dateB - dateA; // Descending
+    });
+
+    const shows = await Promise.all(
+      showsWithTimestamps.map(async (us: any) => {
+        const progress = await calculateShowProgress(userId, us.show_id);
+        const show = us.shows;
       
-      // Map snake_case database fields to camelCase for frontend
-      return {
-        id: show.id,
-        name: show.name,
-        overview: show.overview,
-        posterPath: show.poster_path,
-        backdropPath: show.backdrop_path,
-        firstAirDate: show.first_air_date,
-        voteAverage: show.vote_average,
-        numberOfSeasons: show.number_of_seasons,
-        numberOfEpisodes: show.number_of_episodes,
-        status: show.status,
-        genres: show.genres,
-        tmdbData: show.tmdb_data,
-        lastUpdated: show.last_updated,
-        userShow: {
-          id: us.id,
-          userId: us.user_id,
-          showId: us.show_id,
-          status: us.status,
-          rating: us.rating,
-          notes: us.notes,
-          addedAt: us.added_at,
-          updatedAt: us.updated_at,
-        },
-        ...progress,
-      };
-    })
-  );
+        // Map snake_case database fields to camelCase for frontend
+        return {
+          id: show.id,
+          name: show.name,
+          overview: show.overview,
+          posterPath: show.poster_path,
+          backdropPath: show.backdrop_path,
+          firstAirDate: show.first_air_date,
+          voteAverage: show.vote_average,
+          numberOfSeasons: show.number_of_seasons,
+          numberOfEpisodes: show.number_of_episodes,
+          status: show.status,
+          genres: show.genres,
+          tmdbData: show.tmdb_data,
+          lastUpdated: show.last_updated,
+          userShow: {
+            id: us.id,
+            userId: us.user_id,
+            showId: us.show_id,
+            status: us.status,
+            rating: us.rating,
+            notes: us.notes,
+            addedAt: us.added_at,
+            updatedAt: us.updated_at,
+          },
+          ...progress,
+        };
+      })
+    );
 
-  return shows;
+    return shows;
+  } else {
+    // Normal sorting by updated_at
+    const { data: userShows } = await query.order("updated_at", { ascending: false });
+
+    const shows = await Promise.all(
+      (userShows || []).map(async (us: any) => {
+        const progress = await calculateShowProgress(userId, us.show_id);
+        const show = us.shows;
+        
+        // Map snake_case database fields to camelCase for frontend
+        return {
+          id: show.id,
+          name: show.name,
+          overview: show.overview,
+          posterPath: show.poster_path,
+          backdropPath: show.backdrop_path,
+          firstAirDate: show.first_air_date,
+          voteAverage: show.vote_average,
+          numberOfSeasons: show.number_of_seasons,
+          numberOfEpisodes: show.number_of_episodes,
+          status: show.status,
+          genres: show.genres,
+          tmdbData: show.tmdb_data,
+          lastUpdated: show.last_updated,
+          userShow: {
+            id: us.id,
+            userId: us.user_id,
+            showId: us.show_id,
+            status: us.status,
+            rating: us.rating,
+            notes: us.notes,
+            addedAt: us.added_at,
+            updatedAt: us.updated_at,
+          },
+          ...progress,
+        };
+      })
+    );
+
+    return shows;
+  }
 }
 
 async function findNextUnwatchedEpisode(userId: string, showId: number) {

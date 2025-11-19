@@ -41,6 +41,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/shows', show.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       
@@ -152,7 +153,15 @@ export function ShowCard({ show, href }: ShowCardProps) {
           </div>
         )}
 
-        {!isCompleted && !isWatching && progress > 0 && (
+        {isCaughtUp && (show as any).nextEpisode && (
+          <div className="space-y-2">
+            <Badge variant="outline" className="text-xs bg-teal-600/10 border-teal-600/20 text-teal-700 dark:text-teal-400">
+              S{(show as any).nextEpisode.season}E{(show as any).nextEpisode.episode} in {(show as any).nextEpisode.daysUntil} {(show as any).nextEpisode.daysUntil === 1 ? 'day' : 'days'}
+            </Badge>
+          </div>
+        )}
+
+        {!isCompleted && !isWatching && !isCaughtUp && progress > 0 && (
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Progress</span>

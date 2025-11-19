@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS user_shows (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('want_to_watch', 'watching', 'completed')),
+  status TEXT NOT NULL CHECK (status IN ('want_to_watch', 'watching', 'completed', 'caught_up')),
   rating INTEGER CHECK (rating >= 1 AND rating <= 10),
   notes TEXT,
   added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,

@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { Search as SearchIcon, Plus, Check, Star, Calendar } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Search as SearchIcon, Plus, Check, Star, Calendar, ChevronDown } from 'lucide-react';
 import { TMDBShow } from '@shared/schema';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -27,20 +28,22 @@ export default function Search() {
   });
 
   const addShowMutation = useMutation({
-    mutationFn: async (showId: number) => {
-      return apiRequest('POST', '/api/user/shows', { showId });
+    mutationFn: async ({ showId, initialStatus }: { showId: number; initialStatus?: string }) => {
+      return apiRequest('POST', '/api/user/shows', { showId, initialStatus });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up-upcoming'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
+      const statusLabel = variables.initialStatus === 'completed' ? 'Completed' : 'Want to Watch';
       toast({
         title: 'Show Added',
-        description: 'The show has been added to your collection.',
+        description: `The show has been added to your collection as "${statusLabel}".`,
       });
     },
     onError: () => {
@@ -56,8 +59,8 @@ export default function Search() {
     return userShows?.some(us => us.showId === showId) || false;
   };
 
-  const handleAddShow = (showId: number) => {
-    addShowMutation.mutate(showId);
+  const handleAddShow = (showId: number, initialStatus?: string) => {
+    addShowMutation.mutate({ showId, initialStatus });
   };
 
   return (
@@ -150,16 +153,34 @@ export default function Search() {
                       In Collection
                     </Button>
                   ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => handleAddShow(show.id)}
-                      disabled={addShowMutation.isPending}
-                      className="w-full"
-                      data-testid={`button-add-show-${show.id}`}
-                    >
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add to Collection
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={addShowMutation.isPending}
+                          className="w-full"
+                          data-testid={`button-add-show-${show.id}`}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add to Collection
+                          <ChevronDown className="w-4 h-4 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem 
+                          onClick={() => handleAddShow(show.id)}
+                          data-testid={`menu-item-want-to-watch-${show.id}`}
+                        >
+                          Want to Watch
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleAddShow(show.id, 'completed')}
+                          data-testid={`menu-item-mark-completed-${show.id}`}
+                        >
+                          Mark as Completed
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </Card>
