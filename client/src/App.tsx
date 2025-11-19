@@ -11,6 +11,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import AuthPage from "@/pages/auth";
 import Dashboard from "@/pages/dashboard";
 import Search from "@/pages/search";
+import WantToWatch from "@/pages/want-to-watch";
 import Watching from "@/pages/watching";
 import CaughtUp from "@/pages/caught-up";
 import Completed from "@/pages/completed";
@@ -23,6 +24,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/search" component={Search} />
+      <Route path="/want-to-watch" component={WantToWatch} />
       <Route path="/watching" component={Watching} />
       <Route path="/caught-up" component={CaughtUp} />
       <Route path="/completed" component={Completed} />

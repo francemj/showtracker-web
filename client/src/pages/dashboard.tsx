@@ -24,7 +24,7 @@ export default function Dashboard() {
   });
 
   const { data: caughtUpShows, isLoading: caughtUpLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/caught-up-upcoming'],
+    queryKey: ['/api/shows/caught-up'],
   });
 
   return (
@@ -145,8 +145,8 @@ export default function Dashboard() {
               <Zap className="w-5 h-5 text-teal-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-heading font-bold text-foreground">Caught Up - Upcoming Episodes</h2>
-              <p className="text-sm text-muted-foreground">Shows where new episodes are coming soon</p>
+              <h2 className="text-2xl font-heading font-bold text-foreground">Caught Up</h2>
+              <p className="text-sm text-muted-foreground">Shows where you've watched all available episodes</p>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -1,4 +1,4 @@
-import { Home, Search, TrendingUp, CheckCircle2, Upload, User, LogOut, Zap } from "lucide-react";
+import { Home, Search, Bookmark, TrendingUp, CheckCircle2, Upload, User, LogOut, Zap } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -26,6 +26,11 @@ const menuItems = [
     title: "Search Shows",
     url: "/search",
     icon: Search,
+  },
+  {
+    title: "Want to Watch",
+    url: "/want-to-watch",
+    icon: Bookmark,
   },
   {
     title: "Currently Watching",

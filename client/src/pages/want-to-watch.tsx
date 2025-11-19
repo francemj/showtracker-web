@@ -3,22 +3,22 @@ import { ShowCard } from '@/components/show-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShowWithProgress } from '@shared/schema';
-import { Zap } from 'lucide-react';
+import { Bookmark } from 'lucide-react';
 
-export default function CaughtUp() {
+export default function WantToWatch() {
   const { data: shows, isLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/caught-up'],
+    queryKey: ['/api/shows/want-to-watch'],
   });
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
-        <div className="flex items-center justify-center w-12 h-12 bg-teal-600/10 rounded-lg">
-          <Zap className="w-6 h-6 text-teal-600" />
+        <div className="flex items-center justify-center w-12 h-12 bg-purple-600/10 rounded-lg">
+          <Bookmark className="w-6 h-6 text-purple-600" />
         </div>
         <div>
-          <h1 className="text-4xl font-heading font-bold text-foreground">Caught Up</h1>
-          <p className="text-muted-foreground">Shows where you've watched all available episodes</p>
+          <h1 className="text-4xl font-heading font-bold text-foreground">Want to Watch</h1>
+          <p className="text-muted-foreground">Shows you've saved to watch later</p>
         </div>
       </div>
 
@@ -39,7 +39,7 @@ export default function CaughtUp() {
           <CardHeader>
             <CardTitle className="font-heading">No Shows</CardTitle>
             <CardDescription>
-              You don't have any shows where you're caught up yet. Keep watching to get up to date with your favorite ongoing shows!
+              You haven't saved any shows to watch yet. Search for shows and add them to your Want to Watch list to get started!
             </CardDescription>
           </CardHeader>
         </Card>

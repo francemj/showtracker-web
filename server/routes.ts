@@ -375,7 +375,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/shows/caught-up", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const shows = await getShowsWithProgress(req.userId!, "caught_up");
-      res.json(shows);
+      
+      // Enhance with next episode info (when available)
+      const showsWithNext = await Promise.all(
+        shows.map(async (show) => {
+          const nextEp = await getNextUnairedEpisode(show.id);
+          return {
+            ...show,
+            nextEpisode: nextEp,
+          };
+        })
+      );
+      
+      res.json(showsWithNext);
     } catch (error) {
       console.error("Get caught up shows error:", error);
       res.status(500).json({ message: "Failed to get shows" });
