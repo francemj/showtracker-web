@@ -20,6 +20,11 @@ export interface Auth0LoginResult {
   name?: string;
 }
 
+export interface Auth0MigrationResult {
+  auth0Id: string;
+  wasCreated: boolean;
+}
+
 export async function signupWithAuth0(
   email: string,
   password: string,
@@ -109,7 +114,7 @@ export async function migrateUserToAuth0(
   email: string,
   password: string,
   name: string
-): Promise<string> {
+): Promise<Auth0MigrationResult> {
   if (!auth0Domain || !auth0ClientId || !auth0ClientSecret) {
     throw new Error("Auth0 not configured");
   }
@@ -129,8 +134,33 @@ export async function migrateUserToAuth0(
       email_verified: true,
     });
 
-    return user.user_id!;
+    return {
+      auth0Id: user.user_id!,
+      wasCreated: true
+    };
   } catch (error: any) {
+    // Check if user already exists (from a previous failed migration attempt)
+    if (error.statusCode === 409 || error.message?.includes("already exists")) {
+      console.log(`Auth0 user already exists for ${email}, fetching existing ID`);
+      
+      try {
+        const existingUsers = await management.users.list({
+          search_engine: 'v3',
+          q: `email:"${email}"`,
+          per_page: 1
+        });
+
+        if (existingUsers.data.length > 0 && existingUsers.data[0].user_id) {
+          return {
+            auth0Id: existingUsers.data[0].user_id,
+            wasCreated: false
+          };
+        }
+      } catch (fetchError) {
+        console.error("Failed to fetch existing Auth0 user:", fetchError);
+      }
+    }
+    
     throw new Error(`Auth0 migration failed: ${error.message}`);
   }
 }

@@ -42,6 +42,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Auth routes
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
+    let auth0UserId: string | null = null;
+    
     try {
       const { email, password, name } = req.body;
 
@@ -62,6 +64,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create user in Auth0
       const auth0Result = await signupWithAuth0(email, password, name);
+      auth0UserId = auth0Result.auth0Id;
 
       // Create user in Supabase with Auth0 ID
       const { data: user, error } = await supabase
@@ -76,13 +79,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single();
 
       if (error || !user) {
-        return res.status(500).json({ message: "Failed to create user" });
+        console.error("Supabase insert failed:", error);
+        
+        // Rollback: Delete Auth0 user if Supabase insert failed
+        if (auth0UserId) {
+          try {
+            const { ManagementClient } = await import("auth0");
+            const management = new ManagementClient({
+              domain: process.env.AUTH0_DOMAIN!,
+              clientId: process.env.AUTH0_CLIENT_ID!,
+              clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+            });
+            await management.users.delete(auth0UserId);
+            console.log(`Rolled back Auth0 user creation for ${email}`);
+          } catch (rollbackError) {
+            console.error("Failed to rollback Auth0 user:", rollbackError);
+          }
+        }
+        
+        return res.status(500).json({ 
+          message: "Failed to create user account. Please try again." 
+        });
       }
 
       req.session.userId = user.id;
       res.json({ user });
     } catch (error: any) {
       console.error("Signup error:", error);
+      
+      // Rollback Auth0 user if any error occurred
+      if (auth0UserId) {
+        try {
+          const { ManagementClient } = await import("auth0");
+          const management = new ManagementClient({
+            domain: process.env.AUTH0_DOMAIN!,
+            clientId: process.env.AUTH0_CLIENT_ID!,
+            clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+          });
+          await management.users.delete(auth0UserId);
+          console.log(`Rolled back Auth0 user due to error`);
+        } catch (rollbackError) {
+          console.error("Failed to rollback Auth0 user:", rollbackError);
+        }
+      }
+      
       res.status(500).json({ message: error.message || "Internal server error" });
     }
   });
@@ -137,24 +177,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Password is valid, migrate user to Auth0
+      let migrationResult: { auth0Id: string; wasCreated: boolean } | null = null;
+      
       try {
-        const auth0Id = await migrateUserToAuth0(user.id, email, password, user.name || 'User');
+        migrationResult = await migrateUserToAuth0(user.id, email, password, user.name || 'User');
         
-        // Update user's auth0_id in Supabase
-        await supabase
+        // Update user's auth0_id in Supabase (idempotent - only if still has original local_ value)
+        const { data: updatedUsers, error: updateError } = await supabase
           .from("users")
-          .update({ auth0_id: auth0Id })
-          .eq("id", user.id);
+          .update({ auth0_id: migrationResult.auth0Id })
+          .eq("id", user.id)
+          .like("auth0_id", "local_%")
+          .select();
 
-        // Delete bcrypt credentials since they're now in Auth0
-        await supabase
-          .from("user_credentials")
-          .delete()
-          .eq("user_id", user.id);
+        // Check if we actually updated a row (this request won the race)
+        const didUpdate = !updateError && updatedUsers && updatedUsers.length > 0;
 
-        console.log(`Successfully migrated user ${email} to Auth0`);
-      } catch (migrationError) {
-        console.error("Migration to Auth0 failed, but allowing login:", migrationError);
+        if (!didUpdate) {
+          // Another request already migrated this user, or update failed
+          // Re-fetch user to verify current state
+          const { data: currentUser } = await supabase
+            .from("users")
+            .select("auth0_id")
+            .eq("id", user.id)
+            .single();
+
+          if (currentUser && !currentUser.auth0_id.startsWith("local_")) {
+            // User was successfully migrated by another request
+            console.log(`Migration skipped for ${email} - already migrated by concurrent request`);
+            
+            // Only delete if we created this Auth0 user (not if we reused existing)
+            if (migrationResult.wasCreated) {
+              try {
+                const { ManagementClient } = await import("auth0");
+                const management = new ManagementClient({
+                  domain: process.env.AUTH0_DOMAIN!,
+                  clientId: process.env.AUTH0_CLIENT_ID!,
+                  clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+                });
+                
+                await management.users.delete(migrationResult.auth0Id);
+                console.log(`Cleaned up duplicate Auth0 user ${migrationResult.auth0Id}`);
+              } catch (cleanupError) {
+                console.error("Failed to cleanup duplicate Auth0 user:", cleanupError);
+              }
+            }
+          } else {
+            // Update failed but user still has local_ prefix
+            // Only delete if we created this Auth0 user
+            console.error(`Migration update failed for ${email}, cleaning up for retry`);
+            
+            if (migrationResult.wasCreated) {
+              try {
+                const { ManagementClient } = await import("auth0");
+                const management = new ManagementClient({
+                  domain: process.env.AUTH0_DOMAIN!,
+                  clientId: process.env.AUTH0_CLIENT_ID!,
+                  clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+                });
+                
+                await management.users.delete(migrationResult.auth0Id);
+                console.log(`Cleaned up Auth0 user ${migrationResult.auth0Id} to allow migration retry`);
+              } catch (cleanupError) {
+                console.error("Failed to cleanup Auth0 user for retry:", cleanupError);
+              }
+            }
+          }
+        } else {
+          // Successfully migrated - delete bcrypt credentials
+          const { error: deleteError } = await supabase
+            .from("user_credentials")
+            .delete()
+            .eq("user_id", user.id);
+
+          if (deleteError) {
+            console.error("Failed to delete bcrypt credentials:", deleteError);
+          } else {
+            console.log(`Successfully migrated user ${email} to Auth0`);
+          }
+        }
+      } catch (migrationError: any) {
+        console.error("Migration to Auth0 failed:", migrationError);
+        
+        // Only clean up if we created the Auth0 user
+        if (migrationResult?.wasCreated) {
+          try {
+            const { ManagementClient } = await import("auth0");
+            const management = new ManagementClient({
+              domain: process.env.AUTH0_DOMAIN!,
+              clientId: process.env.AUTH0_CLIENT_ID!,
+              clientSecret: process.env.AUTH0_CLIENT_SECRET!,
+            });
+            
+            await management.users.delete(migrationResult.auth0Id);
+            console.log(`Cleaned up Auth0 user ${migrationResult.auth0Id} after migration error`);
+          } catch (cleanupError) {
+            console.error("Failed to cleanup Auth0 user:", cleanupError);
+          }
+        }
       }
 
       req.session.userId = user.id;
