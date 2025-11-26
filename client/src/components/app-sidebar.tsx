@@ -1,5 +1,15 @@
-import { Home, Search, Bookmark, TrendingUp, CheckCircle2, Upload, User, LogOut, Zap } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import {
+  Home,
+  Search,
+  Bookmark,
+  TrendingUp,
+  CheckCircle2,
+  Upload,
+  User,
+  LogOut,
+  Zap,
+} from "lucide-react"
+import { Link, useLocation } from "wouter"
 import {
   Sidebar,
   SidebarContent,
@@ -11,10 +21,10 @@ import {
   SidebarMenuItem,
   SidebarFooter,
   SidebarHeader,
-} from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth";
+} from "@/components/ui/sidebar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/lib/auth"
 
 const menuItems = [
   {
@@ -52,11 +62,11 @@ const menuItems = [
     url: "/import",
     icon: Upload,
   },
-];
+]
 
 export function AppSidebar() {
-  const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const [location] = useLocation()
+  const { user, logout } = useAuth()
 
   return (
     <Sidebar>
@@ -66,29 +76,39 @@ export function AppSidebar() {
             <TrendingUp className="w-6 h-6 text-secondary-foreground" />
           </div>
           <div>
-            <h1 className="text-xl font-heading font-bold text-sidebar-foreground">TV Tracker</h1>
-            <p className="text-xs text-sidebar-foreground/80">Track your shows</p>
+            <h1 className="text-xl font-heading font-bold text-sidebar-foreground">
+              TV Tracker
+            </h1>
+            <p className="text-xs text-sidebar-foreground/80">
+              Track your shows
+            </p>
           </div>
         </div>
       </SidebarHeader>
-      
+
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/70">Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/70">
+            Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
-                const isActive = location === item.url;
+                const isActive = location === item.url
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                    >
                       <Link href={item.url}>
                         <item.icon className="w-5 h-5" />
                         <span className="font-medium">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                );
+                )
               })}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -100,17 +120,23 @@ export function AppSidebar() {
           <Avatar className="w-10 h-10">
             <AvatarImage src={user?.picture} alt={user?.name} />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              {user?.name?.charAt(0).toUpperCase() || <User className="w-5 h-5" />}
+              {user?.name?.charAt(0).toUpperCase() || (
+                <User className="w-5 h-5" />
+              )}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.name}</p>
-            <p className="text-xs text-sidebar-foreground/70 truncate">{user?.email}</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">
+              {user?.name}
+            </p>
+            <p className="text-xs text-sidebar-foreground/70 truncate">
+              {user?.email}
+            </p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
+        <Button
+          variant="outline"
+          size="sm"
           onClick={logout}
           className="w-full bg-transparent border-sidebar-foreground/20 text-sidebar-foreground hover:bg-sidebar-foreground/10"
           data-testid="button-logout"
@@ -120,5 +146,5 @@ export function AppSidebar() {
         </Button>
       </SidebarFooter>
     </Sidebar>
-  );
+  )
 }

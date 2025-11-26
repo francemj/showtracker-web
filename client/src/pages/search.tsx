@@ -1,77 +1,110 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search as SearchIcon, Plus, Check, Star, Calendar, ChevronDown } from 'lucide-react';
-import { TMDBShow } from '@shared/schema';
-import { useToast } from '@/hooks/use-toast';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import { useDebounce } from '@/hooks/use-debounce';
+import { useState } from "react"
+import { useQuery, useMutation } from "@tanstack/react-query"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Search as SearchIcon,
+  Plus,
+  Check,
+  Star,
+  Calendar,
+  ChevronDown,
+} from "lucide-react"
+import { TMDBShow } from "@shared/schema"
+import { useToast } from "@/hooks/use-toast"
+import { queryClient, apiRequest } from "@/lib/queryClient"
+import { useDebounce } from "@/hooks/use-debounce"
 
 export default function Search() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const debouncedSearch = useDebounce(searchQuery, 500);
-  const { toast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearch = useDebounce(searchQuery, 500)
+  const { toast } = useToast()
 
   const { data: searchResults, isLoading } = useQuery<TMDBShow[]>({
-    queryKey: ['/api/search/shows', debouncedSearch],
+    queryKey: ["/api/search/shows", debouncedSearch],
     enabled: debouncedSearch.length >= 2,
-  });
+  })
 
-  const { data: userShows } = useQuery<Array<{ showId: number; status: string }>>({
-    queryKey: ['/api/user/shows'],
-  });
+  const { data: userShows } = useQuery<
+    Array<{ showId: number; status: string }>
+  >({
+    queryKey: ["/api/user/shows"],
+  })
 
   const addShowMutation = useMutation({
-    mutationFn: async ({ showId, initialStatus }: { showId: number; initialStatus?: string }) => {
-      return apiRequest('POST', '/api/user/shows', { showId, initialStatus });
+    mutationFn: async ({
+      showId,
+      initialStatus,
+    }: {
+      showId: number
+      initialStatus?: string
+    }) => {
+      return apiRequest("POST", "/api/user/shows", { showId, initialStatus })
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/user/shows'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/watching'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/caught-up-upcoming'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/completed'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/want-to-watch'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/shows/continue-watching'] });
-      const statusLabel = variables.initialStatus === 'completed' 
-        ? 'Completed' 
-        : variables.initialStatus === 'caught_up' 
-        ? 'Caught Up' 
-        : 'Want to Watch';
+      queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+      queryClient.invalidateQueries({
+        queryKey: ["/api/shows/caught-up-upcoming"],
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+      queryClient.invalidateQueries({
+        queryKey: ["/api/shows/continue-watching"],
+      })
+      const statusLabel =
+        variables.initialStatus === "completed"
+          ? "Completed"
+          : variables.initialStatus === "caught_up"
+            ? "Caught Up"
+            : "Want to Watch"
       toast({
-        title: 'Show Added',
+        title: "Show Added",
         description: `The show has been added to your collection as "${statusLabel}".`,
-      });
+      })
     },
     onError: () => {
       toast({
-        title: 'Error',
-        description: 'Failed to add show. Please try again.',
-        variant: 'destructive',
-      });
+        title: "Error",
+        description: "Failed to add show. Please try again.",
+        variant: "destructive",
+      })
     },
-  });
+  })
 
   const isShowInCollection = (showId: number): boolean => {
-    return userShows?.some(us => us.showId === showId) || false;
-  };
+    return userShows?.some((us) => us.showId === showId) || false
+  }
 
   const handleAddShow = (showId: number, initialStatus?: string) => {
-    addShowMutation.mutate({ showId, initialStatus });
-  };
+    addShowMutation.mutate({ showId, initialStatus })
+  }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-4xl font-heading font-bold text-foreground mb-2">Search TV Shows</h1>
-        <p className="text-muted-foreground">Find and add shows to your collection</p>
+        <h1 className="text-4xl font-heading font-bold text-foreground mb-2">
+          Search TV Shows
+        </h1>
+        <p className="text-muted-foreground">
+          Find and add shows to your collection
+        </p>
       </div>
 
       <div className="relative max-w-2xl">
@@ -108,12 +141,18 @@ export default function Search() {
           {searchResults.map((show) => {
             const posterUrl = show.poster_path
               ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
-              : '/placeholder-poster.png';
-            const year = show.first_air_date ? new Date(show.first_air_date).getFullYear() : null;
-            const inCollection = isShowInCollection(show.id);
+              : "/placeholder-poster.png"
+            const year = show.first_air_date
+              ? new Date(show.first_air_date).getFullYear()
+              : null
+            const inCollection = isShowInCollection(show.id)
 
             return (
-              <Card key={show.id} className="hover-elevate transition-all overflow-hidden" data-testid={`card-search-result-${show.id}`}>
+              <Card
+                key={show.id}
+                className="hover-elevate transition-all overflow-hidden"
+                data-testid={`card-search-result-${show.id}`}
+              >
                 <div className="relative aspect-[2/3] bg-muted">
                   <img
                     src={posterUrl}
@@ -124,7 +163,10 @@ export default function Search() {
                 </div>
                 <div className="p-4 space-y-3">
                   <div>
-                    <h3 className="font-heading font-semibold text-base line-clamp-1 mb-2" data-testid={`text-result-title-${show.id}`}>
+                    <h3
+                      className="font-heading font-semibold text-base line-clamp-1 mb-2"
+                      data-testid={`text-result-title-${show.id}`}
+                    >
                       {show.name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -146,7 +188,7 @@ export default function Search() {
                     </p>
                   </div>
                   {inCollection ? (
-                    <Button 
+                    <Button
                       variant="secondary"
                       size="sm"
                       className="w-full"
@@ -171,23 +213,24 @@ export default function Search() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           onClick={() => handleAddShow(show.id)}
                           data-testid={`menu-item-want-to-watch-${show.id}`}
                         >
                           Want to Watch
                         </DropdownMenuItem>
-                        {(show.status === 'Ended' || show.status === 'Canceled') && (
-                          <DropdownMenuItem 
-                            onClick={() => handleAddShow(show.id, 'completed')}
+                        {(show.status === "Ended" ||
+                          show.status === "Canceled") && (
+                          <DropdownMenuItem
+                            onClick={() => handleAddShow(show.id, "completed")}
                             data-testid={`menu-item-mark-completed-${show.id}`}
                           >
                             Mark as Completed
                           </DropdownMenuItem>
                         )}
-                        {show.status === 'Returning Series' && (
-                          <DropdownMenuItem 
-                            onClick={() => handleAddShow(show.id, 'caught_up')}
+                        {show.status === "Returning Series" && (
+                          <DropdownMenuItem
+                            onClick={() => handleAddShow(show.id, "caught_up")}
                             data-testid={`menu-item-mark-caught-up-${show.id}`}
                           >
                             Mark as Caught Up
@@ -198,7 +241,7 @@ export default function Search() {
                   )}
                 </div>
               </Card>
-            );
+            )
           })}
         </div>
       )}
@@ -208,7 +251,8 @@ export default function Search() {
           <CardHeader>
             <CardTitle className="font-heading">No Results</CardTitle>
             <CardDescription>
-              No shows found for "{debouncedSearch}". Try a different search term.
+              No shows found for "{debouncedSearch}". Try a different search
+              term.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -219,12 +263,12 @@ export default function Search() {
           <CardHeader>
             <CardTitle className="font-heading">Start Searching</CardTitle>
             <CardDescription>
-              Enter a TV show name to search the database and add shows to your collection.
+              Enter a TV show name to search the database and add shows to your
+              collection.
             </CardDescription>
           </CardHeader>
         </Card>
       )}
     </div>
-  );
+  )
 }
-

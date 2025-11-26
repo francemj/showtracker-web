@@ -1,60 +1,68 @@
-import { useState } from 'react';
-import { useAuth } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react"
+import { useAuth } from "@/lib/auth"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TrendingUp } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AuthPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const { login, signup } = useAuth();
-  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false)
+  const { login, signup } = useAuth()
+  const { toast } = useToast()
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const formData = new FormData(e.currentTarget);
-    
+    e.preventDefault()
+    setIsLoading(true)
+    const formData = new FormData(e.currentTarget)
+
     try {
       await login(
-        formData.get('email') as string,
-        formData.get('password') as string
-      );
+        formData.get("email") as string,
+        formData.get("password") as string
+      )
     } catch (error: any) {
       toast({
-        title: 'Login Failed',
-        description: error.message || 'Invalid credentials. Please try again.',
-        variant: 'destructive',
-      });
+        title: "Login Failed",
+        description: error.message || "Invalid credentials. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    const formData = new FormData(e.currentTarget);
-    
+    e.preventDefault()
+    setIsLoading(true)
+    const formData = new FormData(e.currentTarget)
+
     try {
       await signup(
-        formData.get('email') as string,
-        formData.get('password') as string,
-        formData.get('name') as string
-      );
+        formData.get("email") as string,
+        formData.get("password") as string,
+        formData.get("name") as string
+      )
     } catch (error: any) {
       toast({
-        title: 'Signup Failed',
-        description: error.message || 'Could not create account. Please try again.',
-        variant: 'destructive',
-      });
+        title: "Signup Failed",
+        description:
+          error.message || "Could not create account. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -64,23 +72,33 @@ export default function AuthPage() {
             <div className="flex items-center justify-center w-14 h-14 bg-primary rounded-xl">
               <TrendingUp className="w-8 h-8 text-primary-foreground" />
             </div>
-            <h1 className="text-4xl font-heading font-bold text-foreground">TV Tracker</h1>
+            <h1 className="text-4xl font-heading font-bold text-foreground">
+              TV Tracker
+            </h1>
           </div>
-          <p className="text-muted-foreground">Track your favorite TV shows and never miss an episode</p>
+          <p className="text-muted-foreground">
+            Track your favorite TV shows and never miss an episode
+          </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="font-heading">Welcome</CardTitle>
-            <CardDescription>Sign in to your account or create a new one</CardDescription>
+            <CardDescription>
+              Sign in to your account or create a new one
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
-                <TabsTrigger value="signup" data-testid="tab-signup">Sign Up</TabsTrigger>
+                <TabsTrigger value="login" data-testid="tab-login">
+                  Sign In
+                </TabsTrigger>
+                <TabsTrigger value="signup" data-testid="tab-signup">
+                  Sign Up
+                </TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -111,11 +129,11 @@ export default function AuthPage() {
                     disabled={isLoading}
                     data-testid="button-login"
                   >
-                    {isLoading ? 'Signing in...' : 'Sign In'}
+                    {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup">
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
@@ -158,7 +176,7 @@ export default function AuthPage() {
                     disabled={isLoading}
                     data-testid="button-signup"
                   >
-                    {isLoading ? 'Creating account...' : 'Create Account'}
+                    {isLoading ? "Creating account..." : "Create Account"}
                   </Button>
                 </form>
               </TabsContent>
@@ -170,5 +188,5 @@ export default function AuthPage() {
         </Card>
       </div>
     </div>
-  );
+  )
 }
