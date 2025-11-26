@@ -8,6 +8,7 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
+    "lint-staged": "lint-staged",
     "prepare": "husky install"
   },
   "dependencies": {
@@ -108,6 +109,7 @@
     "husky": "^9.1.7",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",
+    "lint-staged": "^16.2.7",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
     "vite": "^5.4.20"
