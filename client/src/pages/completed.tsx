@@ -1,14 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
-import { ShowCard } from '@/components/show-card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShowWithProgress } from '@shared/schema';
-import { CheckCircle2 } from 'lucide-react';
+import { useQuery } from "@tanstack/react-query"
+import { ShowCard } from "@/components/show-card"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { ShowWithProgress } from "@shared/schema"
+import { CheckCircle2 } from "lucide-react"
 
 export default function Completed() {
   const { data: shows, isLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/completed'],
-  });
+    queryKey: ["/api/shows/completed"],
+  })
 
   return (
     <div className="space-y-8">
@@ -17,8 +22,12 @@ export default function Completed() {
           <CheckCircle2 className="w-6 h-6 text-accent" />
         </div>
         <div>
-          <h1 className="text-4xl font-heading font-bold text-foreground">Completed Shows</h1>
-          <p className="text-muted-foreground">Shows you've finished watching</p>
+          <h1 className="text-4xl font-heading font-bold text-foreground">
+            Completed Shows
+          </h1>
+          <p className="text-muted-foreground">
+            Shows you've finished watching
+          </p>
         </div>
       </div>
 
@@ -39,11 +48,12 @@ export default function Completed() {
           <CardHeader>
             <CardTitle className="font-heading">No Completed Shows</CardTitle>
             <CardDescription>
-              You haven't completed any shows yet. Keep watching to add shows to this list!
+              You haven't completed any shows yet. Keep watching to add shows to
+              this list!
             </CardDescription>
           </CardHeader>
         </Card>
       )}
     </div>
-  );
+  )
 }
