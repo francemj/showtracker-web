@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { useParams } from "wouter"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
@@ -13,13 +13,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+
 import { Separator } from "@/components/ui/separator"
 import {
   AlertDialog,
@@ -63,31 +57,6 @@ export default function ShowDetail() {
   >({
     queryKey: ["/api/shows", id, "progress"],
     enabled: !!id,
-  })
-
-  const updateStatusMutation = useMutation({
-    mutationFn: async (status: string) => {
-      return apiRequest("PATCH", `/api/user/shows/${id}`, { status })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/caught-up-upcoming"],
-      })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
-      queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
-      toast({
-        title: "Status Updated",
-        description: "Show status has been updated.",
-      })
-    },
   })
 
   const toggleEpisodeMutation = useMutation({
@@ -553,51 +522,6 @@ export default function ShowDetail() {
               />
             </div>
           </Card>
-
-          {show.userShow && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-heading">
-                  Your Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Select
-                  value={show.userShow.status}
-                  onValueChange={(value) => updateStatusMutation.mutate(value)}
-                  data-testid="select-show-status"
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="want_to_watch">Want to Watch</SelectItem>
-                    <SelectItem value="watching">Watching</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {show.progress !== undefined && show.progress > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium text-accent">
-                        {Math.round(show.progress)}%
-                      </span>
-                    </div>
-                    <Progress value={show.progress} className="h-2" />
-                    {show.watchedEpisodes !== undefined &&
-                      show.totalEpisodes !== undefined && (
-                        <p className="text-xs text-muted-foreground">
-                          {show.watchedEpisodes} / {show.totalEpisodes} episodes
-                          watched
-                        </p>
-                      )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         <div className="lg:col-span-2 space-y-6">
