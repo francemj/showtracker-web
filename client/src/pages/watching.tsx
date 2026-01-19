@@ -1,14 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
-import { ShowCard } from '@/components/show-card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShowWithProgress } from '@shared/schema';
-import { Eye } from 'lucide-react';
+import { useQuery } from "@tanstack/react-query"
+import { ShowCard } from "@/components/show-card"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { ShowWithProgress } from "@shared/schema"
+import { Eye } from "lucide-react"
 
 export default function Watching() {
   const { data: shows, isLoading } = useQuery<ShowWithProgress[]>({
-    queryKey: ['/api/shows/watching'],
-  });
+    queryKey: ["/api/shows/watching"],
+  })
 
   return (
     <div className="space-y-8">
@@ -17,8 +22,12 @@ export default function Watching() {
           <Eye className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-4xl font-heading font-bold text-foreground">Currently Watching</h1>
-          <p className="text-muted-foreground">Shows you're actively following</p>
+          <h1 className="text-4xl font-heading font-bold text-foreground">
+            Currently Watching
+          </h1>
+          <p className="text-muted-foreground">
+            Shows you're actively following
+          </p>
         </div>
       </div>
 
@@ -39,11 +48,12 @@ export default function Watching() {
           <CardHeader>
             <CardTitle className="font-heading">No Shows</CardTitle>
             <CardDescription>
-              You're not currently watching any shows. Add shows from the search page to start tracking!
+              You're not currently watching any shows. Add shows from the search
+              page to start tracking!
             </CardDescription>
           </CardHeader>
         </Card>
       )}
     </div>
-  );
+  )
 }

@@ -1,23 +1,23 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { AuthProvider, useAuth } from "@/lib/auth";
-import { AppSidebar } from "@/components/app-sidebar";
-import AuthPage from "@/pages/auth";
-import Dashboard from "@/pages/dashboard";
-import Search from "@/pages/search";
-import WantToWatch from "@/pages/want-to-watch";
-import Watching from "@/pages/watching";
-import CaughtUp from "@/pages/caught-up";
-import Completed from "@/pages/completed";
-import ShowDetail from "@/pages/show-detail";
-import Import from "@/pages/import";
-import NotFound from "@/pages/not-found";
+import { Switch, Route } from "wouter"
+import { queryClient } from "./lib/queryClient"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { Toaster } from "@/components/ui/toaster"
+import { TooltipProvider } from "@/components/ui/tooltip"
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { AuthProvider, useAuth } from "@/lib/auth"
+import { AppSidebar } from "@/components/app-sidebar"
+import AuthPage from "@/pages/auth"
+import Dashboard from "@/pages/dashboard"
+import Search from "@/pages/search"
+import WantToWatch from "@/pages/want-to-watch"
+import Watching from "@/pages/watching"
+import CaughtUp from "@/pages/caught-up"
+import Completed from "@/pages/completed"
+import ShowDetail from "@/pages/show-detail"
+import Import from "@/pages/import"
+import NotFound from "@/pages/not-found"
 
 function Router() {
   return (
@@ -32,11 +32,11 @@ function Router() {
       <Route path="/import" component={Import} />
       <Route component={NotFound} />
     </Switch>
-  );
+  )
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -46,17 +46,17 @@ function AuthenticatedApp() {
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (!isAuthenticated) {
-    return <AuthPage />;
+    return <AuthPage />
   }
 
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
-  };
+  }
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -73,7 +73,7 @@ function AuthenticatedApp() {
         </div>
       </div>
     </SidebarProvider>
-  );
+  )
 }
 
 function App() {
@@ -88,7 +88,7 @@ function App() {
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
-  );
+  )
 }
 
-export default App;
+export default App
