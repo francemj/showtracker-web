@@ -4,7 +4,6 @@ import {
   Bookmark,
   TrendingUp,
   CheckCircle2,
-  Upload,
   User,
   LogOut,
   Zap,
@@ -56,11 +55,6 @@ const menuItems = [
     title: "Completed",
     url: "/completed",
     icon: CheckCircle2,
-  },
-  {
-    title: "Import Data",
-    url: "/import",
-    icon: Upload,
   },
 ]
 

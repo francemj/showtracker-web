@@ -78,14 +78,6 @@
 - Checkbox for watched status
 - Progress indicator showing completion percentage per season
 
-### Import Page
-**TV Time Import**:
-- Upload area with drag-and-drop zone (dashed border, rounded)
-- File upload button (indigo primary)
-- Progress bar during import
-- Results table showing matched/unmatched shows
-- Manual matching interface for unmatched entries
-
 ### Progress Tracking Elements
 - **Episode Progress Bars**: Height h-2, rounded-full, emerald accent
 - **Season Completion**: Circular progress indicators

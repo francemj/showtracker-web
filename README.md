@@ -1,7 +1,7 @@
 # TV Tracker - TV Show Tracking Application
 
 ## Overview
-TV Tracker is a comprehensive web-based application enabling users to search for TV shows, track their watching progress across seasons and episodes, manage their collection, and import watch history from TV Time. The project aims to provide a seamless and intuitive experience for TV enthusiasts to organize and monitor their viewing habits.
+TV Tracker is a comprehensive web-based application enabling users to search for TV shows, track their watching progress across seasons and episodes, and manage their collection. The project aims to provide a seamless and intuitive experience for TV enthusiasts to organize and monitor their viewing habits.
 
 ## User Preferences
 I prefer simple language. I want iterative development. Ask before making major changes. I prefer detailed explanations. Do not make changes to the folder Z. Do not make changes to the file Y.
@@ -18,7 +18,6 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 - **Authentication**: User signup/login via Auth0, session-based authentication, protected routes, and user profile management.
 - **Show Management**: Search, add, update, and categorize shows (Want to Watch, Watching, Completed).
 - **Progress Tracking**: Mark episodes/seasons as watched, visual progress bars, dashboard statistics, smart auto-completion (show status updates based on episode progress), and reciprocal auto-update (episode progress updates show status).
-- **Data Import**: TV Time CSV import with automatic show matching and import result reporting.
 - **Smart Auto-Complete (Status → Episodes)**: When a user marks a show as "Completed", all episodes are automatically marked as watched, efficiently handling large numbers of episodes.
 - **Reciprocal Auto-Update (Episodes → Status)**: When all episodes are manually marked watched, the show status automatically updates to "Completed".
 - **Episode Caching and Status Inference**: Episodes are cached in the database with air dates. Show status is inferred based on watch progress and aired episodes (not total episodes), accurately handling ongoing, ended, and limited series.

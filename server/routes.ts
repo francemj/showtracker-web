@@ -2,7 +2,6 @@ import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import session from "express-session"
 import bcrypt from "bcrypt"
-import Papa from "papaparse"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import {
@@ -1003,101 +1002,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Bulk update progress error:", error)
         res.status(500).json({ message: "Failed to update progress" })
-      }
-    }
-  )
-
-  // Import from TV Time
-  app.post(
-    "/api/import/tv-time",
-    authMiddleware,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        if (!req.files || !req.files.file) {
-          return res.status(400).json({ message: "No file uploaded" })
-        }
-
-        const file = req.files.file as any
-        const csvContent = file.data.toString("utf-8")
-
-        const parsed = Papa.parse(csvContent, {
-          header: true,
-          skipEmptyLines: true,
-        })
-
-        const shows = new Map<string, any>()
-
-        // Extract unique shows from CSV
-        for (const row of parsed.data as any[]) {
-          const showName =
-            row["TV Show Name"] || row["tv_show_name"] || row["show_name"]
-          if (showName && !shows.has(showName)) {
-            shows.set(showName, row)
-          }
-        }
-
-        let matched = 0
-        let unmatched = 0
-        const unmatchedShows: string[] = []
-
-        // Try to match and add each show
-        for (const [showName] of Array.from(shows)) {
-          try {
-            const results = await searchTVShows(showName)
-            if (results && results.length > 0) {
-              const bestMatch = results[0]
-
-              // Add show to database
-              await supabase.from("shows").upsert({
-                id: bestMatch.id,
-                name: bestMatch.name,
-                overview: bestMatch.overview,
-                poster_path: bestMatch.poster_path,
-                backdrop_path: bestMatch.backdrop_path,
-                first_air_date: bestMatch.first_air_date,
-                vote_average: bestMatch.vote_average?.toString(),
-                genres: [],
-              })
-
-              // Add to user's collection
-              await supabase.from("user_shows").upsert({
-                user_id: req.userId,
-                show_id: bestMatch.id,
-                status: "watching",
-              })
-
-              matched++
-            } else {
-              unmatched++
-              unmatchedShows.push(showName)
-            }
-          } catch (error) {
-            console.error("Error adding show:", error)
-            unmatched++
-            unmatchedShows.push(showName)
-          }
-        }
-
-        // Save import history
-        await supabase.from("import_history").insert({
-          user_id: req.userId,
-          source: "tv_time",
-          file_name: file.name,
-          total_shows: shows.size,
-          matched_shows: matched,
-          unmatched_shows: unmatched,
-          status: "completed",
-        })
-
-        res.json({
-          total: shows.size,
-          matched,
-          unmatched,
-          unmatchedShows: unmatchedShows.slice(0, 20),
-        })
-      } catch (error) {
-        console.error("Import error:", error)
-        res.status(500).json({ message: "Failed to import data" })
       }
     }
   )

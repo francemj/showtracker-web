@@ -16,7 +16,6 @@ import Watching from "@/pages/watching"
 import CaughtUp from "@/pages/caught-up"
 import Completed from "@/pages/completed"
 import ShowDetail from "@/pages/show-detail"
-import Import from "@/pages/import"
 import NotFound from "@/pages/not-found"
 
 function Router() {
@@ -29,7 +28,6 @@ function Router() {
       <Route path="/caught-up" component={CaughtUp} />
       <Route path="/completed" component={Completed} />
       <Route path="/show/:id" component={ShowDetail} />
-      <Route path="/import" component={Import} />
       <Route component={NotFound} />
     </Switch>
   )
