@@ -45,9 +45,6 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/shows", show.id] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
 
       toast({

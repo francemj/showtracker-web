@@ -427,23 +427,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
-  app.get(
-    "/api/shows/continue-watching",
-    authMiddleware,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const shows = await getShowsWithProgress(req.userId!, "watching")
-        const continueWatching = shows.filter(
-          (s: any) => s.progress > 0 && s.progress < 100
-        )
-        res.json(continueWatching)
-      } catch (error) {
-        console.error("Get continue watching error:", error)
-        res.status(500).json({ message: "Failed to get shows" })
-      }
-    }
-  )
-
   // Get show details
   app.get(
     "/api/shows/:id",

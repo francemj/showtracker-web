@@ -24,7 +24,7 @@ export default function Dashboard() {
   const { data: continueWatching, isLoading: continueLoading } = useQuery<
     ShowWithProgress[]
   >({
-    queryKey: ["/api/shows/continue-watching"],
+    queryKey: ["/api/shows/watching"],
   })
 
   const { data: caughtUpShows, isLoading: caughtUpLoading } = useQuery<

@@ -50,9 +50,6 @@ export default function Search() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
       const statusLabel =
         variables.initialStatus === "completed"
           ? "Completed"

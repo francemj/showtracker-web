@@ -86,9 +86,6 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
     },
   })
 
@@ -110,9 +107,6 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
       const statusLabel =
         variables.initialStatus === "completed"
           ? "Completed"
@@ -157,9 +151,6 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/continue-watching"],
-      })
       toast({
         title: "Season Updated",
         description: "All episodes in season have been updated.",
@@ -261,9 +252,6 @@ export default function ShowDetail() {
     queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-    queryClient.invalidateQueries({
-      queryKey: ["/api/shows/continue-watching"],
-    })
 
     toast({
       title: "Episodes Marked",
@@ -333,9 +321,6 @@ export default function ShowDetail() {
     queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-    queryClient.invalidateQueries({
-      queryKey: ["/api/shows/continue-watching"],
-    })
 
     toast({
       title: "Episodes Unmarked",
