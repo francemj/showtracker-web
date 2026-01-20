@@ -236,6 +236,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
+  // Validate status for user's shows (refreshes TMDB data, caches episodes, re-runs inference)
+  app.post(
+    "/api/user/shows/validate-status",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      const scope = req.body?.scope ?? "all"
+      const userId = req.userId!
+
+      res.status(202).json({ message: "Validation started" })
+
+      setImmediate(async () => {
+        try {
+          let query = supabase
+            .from("user_shows")
+            .select("show_id")
+            .eq("user_id", userId)
+            .neq("status", "completed")
+
+          if (scope === "caught_up_only") {
+            query = query.eq("status", "caught_up")
+          }
+
+          const { data: rows, error } = await query
+
+          if (error || !rows?.length) {
+            if (error) console.error("validate-status: fetch user_shows", error)
+            return
+          }
+
+          for (const row of rows) {
+            const showId = row.show_id as number
+            try {
+              const tmdbShow = await upsertShowFromTmdb(showId)
+              if (tmdbShow?.number_of_seasons) {
+                const seasons = await Promise.all(
+                  Array.from(
+                    { length: tmdbShow.number_of_seasons },
+                    (_, i) => i + 1
+                  ).map((n) => getTVShowSeason(showId, n))
+                )
+                await cacheEpisodesInDatabase(showId, seasons)
+              }
+              await updateInferredStatus(userId, showId)
+            } catch (err: any) {
+              console.error(`validate-status: show ${showId}`, err?.message)
+            }
+          }
+        } catch (err: any) {
+          console.error("validate-status: run failed", err)
+        }
+      })
+    }
+  )
+
   // Add show to user collection
   app.post(
     "/api/user/shows",
@@ -244,28 +298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { showId, initialStatus } = req.body
 
-        // Get show details from TMDB
-        const tmdbShow = await getTVShowDetails(showId)
-
-        // Upsert show to database
-        const { error: showError } = await supabase.from("shows").upsert({
-          id: tmdbShow.id,
-          name: tmdbShow.name,
-          overview: tmdbShow.overview,
-          poster_path: tmdbShow.poster_path,
-          backdrop_path: tmdbShow.backdrop_path,
-          first_air_date: tmdbShow.first_air_date,
-          vote_average: tmdbShow.vote_average?.toString(),
-          number_of_seasons: tmdbShow.number_of_seasons,
-          number_of_episodes: tmdbShow.number_of_episodes,
-          status: tmdbShow.status,
-          genres: tmdbShow.genres?.map((g: any) => g.name),
-          tmdb_data: tmdbShow,
-        })
-
-        if (showError) {
-          console.error("Show upsert error:", showError)
-        }
+        const tmdbShow = await upsertShowFromTmdb(showId)
 
         // Add to user's collection
         // Default to want_to_watch if no initialStatus provided
@@ -676,11 +709,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { id } = req.params
         const { seasonNumber, episodeNumber, watched } = req.body
+        const showId = parseInt(id)
 
         const { error } = await supabase.from("watch_progress").upsert(
           {
             user_id: req.userId,
-            show_id: parseInt(id),
+            show_id: showId,
             season_number: seasonNumber,
             episode_number: episodeNumber,
             watched,
@@ -695,8 +729,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Failed to update progress" })
         }
 
+        // Ensure user_shows exists so updateInferredStatus can update it
+        const { data: existing } = await supabase
+          .from("user_shows")
+          .select("id")
+          .eq("user_id", req.userId)
+          .eq("show_id", showId)
+          .maybeSingle()
+
+        if (!existing) {
+          await supabase.from("user_shows").insert({
+            user_id: req.userId,
+            show_id: showId,
+            status: "watching",
+          })
+        }
+
         // Update inferred status in background (don't wait)
-        updateInferredStatus(req.userId!, parseInt(id)).catch((err) =>
+        updateInferredStatus(req.userId!, showId).catch((err) =>
           console.error("Background status update failed:", err)
         )
 
@@ -816,6 +866,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app)
   return httpServer
+}
+
+async function upsertShowFromTmdb(showId: number) {
+  const tmdbShow = await getTVShowDetails(showId)
+  const { error: showError } = await supabase.from("shows").upsert({
+    id: tmdbShow.id,
+    name: tmdbShow.name,
+    overview: tmdbShow.overview,
+    poster_path: tmdbShow.poster_path,
+    backdrop_path: tmdbShow.backdrop_path,
+    first_air_date: tmdbShow.first_air_date,
+    vote_average: tmdbShow.vote_average?.toString(),
+    number_of_seasons: tmdbShow.number_of_seasons,
+    number_of_episodes: tmdbShow.number_of_episodes,
+    status: tmdbShow.status,
+    genres: tmdbShow.genres?.map((g: any) => g.name),
+    tmdb_data: tmdbShow,
+  })
+  if (showError) {
+    console.error("Show upsert error:", showError)
+  }
+  return tmdbShow
 }
 
 // Get next unaired episode for a show (for caught-up shows)
@@ -1151,6 +1223,41 @@ async function markShowEpisodesWatched(
   }
 }
 
+// Ensure episodes are cached for a show (fetches from TMDB if missing). No-op if already cached.
+async function ensureEpisodesCached(showId: number): Promise<void> {
+  const { count } = await supabase
+    .from("episodes")
+    .select("*", { count: "exact", head: true })
+    .eq("show_id", showId)
+  if ((count ?? 0) > 0) return
+
+  let { data: show } = await supabase
+    .from("shows")
+    .select("number_of_seasons")
+    .eq("id", showId)
+    .single()
+
+  if (!show?.number_of_seasons) {
+    await upsertShowFromTmdb(showId)
+    const r = await supabase
+      .from("shows")
+      .select("number_of_seasons")
+      .eq("id", showId)
+      .single()
+    show = r.data
+  }
+
+  const n = show?.number_of_seasons
+  if (!n) return
+
+  const seasons = await Promise.all(
+    Array.from({ length: n }, (_, i) => i + 1).map((s) =>
+      getTVShowSeason(showId, s)
+    )
+  )
+  await cacheEpisodesInDatabase(showId, seasons)
+}
+
 // Cache episodes in the database for faster lookups
 async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
   try {
@@ -1246,14 +1353,25 @@ async function updateInferredStatus(userId: string, showId: number) {
       return
     }
 
-    const totalAiredEpisodes = airedCount || 0
+    let totalAiredEpisodes = airedCount || 0
 
-    // If no episodes cached yet, skip status update
+    // If no episodes cached yet, try to fetch and cache from TMDB, then re-query
     if (totalAiredEpisodes === 0) {
-      console.log(
-        `⚠ No cached episodes for show ${showId}, skipping status update`
-      )
-      return
+      await ensureEpisodesCached(showId)
+      const { count: airedCount2, error: countError2 } = await supabase
+        .from("episodes")
+        .select("*", { count: "exact", head: true })
+        .eq("show_id", showId)
+        .neq("season_number", 0)
+        .lte("air_date", now)
+        .not("air_date", "is", null)
+      if (!countError2) totalAiredEpisodes = airedCount2 ?? 0
+      if (totalAiredEpisodes === 0) {
+        console.log(
+          `⚠ No cached episodes for show ${showId}, skipping status update`
+        )
+        return
+      }
     }
 
     // Determine new status based on aired episodes

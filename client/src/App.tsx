@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { AppSidebar } from "@/components/app-sidebar"
+import { StatusValidationTrigger } from "@/components/status-validation-trigger"
 import AuthPage from "@/pages/auth"
 import Dashboard from "@/pages/dashboard"
 import Search from "@/pages/search"
@@ -62,6 +63,7 @@ function AuthenticatedApp() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
+      <StatusValidationTrigger />
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
