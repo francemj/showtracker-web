@@ -1,8 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express"
 import fileUpload from "express-fileupload"
 import cors from "cors"
-import { registerRoutes } from "../server/routes"
 import { isProduction } from "../server/env-config"
+import { registerRoutes } from "../server/routes"
 import { setupVite, serveStatic, log } from "../server/vite"
 
 if (isProduction()) {
@@ -85,42 +85,29 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message })
 })
 
-if (isVercel) {
-  // Vercel serverless function mode
-  // Initialize routes lazily (async setup)
-  let appInitialized = false
-  let initPromise: Promise<void> | null = null
+// Vercel serverless: init state and handler (export must be top-level)
+let appInitialized = false
+let initPromise: Promise<void> | null = null
 
-  async function initializeApp() {
-    if (appInitialized) return
+async function initializeApp() {
+  if (appInitialized) return
+  if (initPromise) return initPromise
+  initPromise = (async () => {
+    await registerRoutes(app)
+    appInitialized = true
+  })()
+  return initPromise
+}
 
-    if (initPromise) {
-      return initPromise
-    }
+// @vercel/node uses this when deployed; converts between Vercel and Express req/res
+export default async function handler(req: any, res: any) {
+  await initializeApp()
+  return new Promise<void>((resolve) => {
+    app(req, res, () => resolve())
+  })
+}
 
-    initPromise = (async () => {
-      // Register all routes (we ignore the server return value for Vercel)
-      await registerRoutes(app)
-      appInitialized = true
-    })()
-
-    return initPromise
-  }
-
-  // Vercel serverless function handler
-  // @vercel/node automatically converts between Vercel and Express request/response
-  export default async function handler(req: any, res: any) {
-    // Ensure app is initialized before handling requests
-    await initializeApp()
-    
-    // Delegate to Express app - @vercel/node handles the conversion
-    return new Promise<void>((resolve) => {
-      app(req, res, () => {
-        resolve()
-      })
-    })
-  }
-} else {
+if (!isVercel) {
   // Local development/production server mode
   ;(async () => {
     const server = await registerRoutes(app)
