@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShowCard } from "@/components/show-card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TrendingUp, CheckCircle2, Clock, Eye, Zap } from "lucide-react"
+import { TrendingUp, Clock, Eye, Zap } from "lucide-react"
 import { ShowWithProgress } from "@shared/schema"
 
 export default function Dashboard() {
@@ -75,7 +75,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium min-h-8 flex items-center">
-              Currently Watching
+              Watching
             </CardTitle>
             <Eye className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
@@ -97,9 +97,9 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-sm font-medium min-h-8 flex items-center">
-              Completed
+              Caught Up
             </CardTitle>
-            <CheckCircle2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -191,9 +191,17 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {caughtUpShows.map((show) => (
-              <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
-            ))}
+            {caughtUpShows
+              .sort((a, b) => {
+                return (
+                  (new Date(a.nextEpisode?.airDate || "").getTime() ||
+                    Infinity) -
+                  (new Date(b.nextEpisode?.airDate || "").getTime() || Infinity)
+                )
+              })
+              .map((show) => (
+                <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
+              ))}
           </div>
         </div>
       ) : null}

@@ -46,9 +46,6 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({
-        queryKey: ["/api/shows/caught-up-upcoming"],
-      })
-      queryClient.invalidateQueries({
         queryKey: ["/api/shows/continue-watching"],
       })
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
@@ -72,6 +69,9 @@ export function ShowCard({ show, href }: ShowCardProps) {
     e.stopPropagation()
     markEpisodeMutation.mutate()
   }
+
+  const displayStatusBadge =
+    show.userShow?.status && (!isCaughtUp || !show.nextEpisode)
 
   const content = (
     <Card
@@ -208,7 +208,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
           </div>
         )}
 
-        {show.userShow?.status && (
+        {show.userShow && displayStatusBadge && (
           <Badge
             variant={
               show.userShow.status === "watching"

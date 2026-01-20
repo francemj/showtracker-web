@@ -48,9 +48,6 @@ export default function Search() {
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows/caught-up-upcoming"],
-      })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
       queryClient.invalidateQueries({

@@ -188,9 +188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .select("status")
           .eq("user_id", req.userId)
 
-        const { data: watchProgress } = await supabase
+        const { count: episodesWatched } = await supabase
           .from("watch_progress")
-          .select("*")
+          .select("*", { count: "exact", head: true })
           .eq("user_id", req.userId)
           .eq("watched", true)
 
@@ -200,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userShows?.filter((s) => s.status === "watching").length || 0,
           completedShows:
             userShows?.filter((s) => s.status === "completed").length || 0,
-          episodesWatched: watchProgress?.length || 0,
+          episodesWatched: episodesWatched || 0,
         }
 
         res.json(stats)
@@ -358,44 +358,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
-  // Update show status
-  app.patch(
-    "/api/user/shows/:showId",
-    authMiddleware,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { showId } = req.params
-        const { status } = req.body
-
-        const { data, error } = await supabase
-          .from("user_shows")
-          .update({ status, updated_at: new Date().toISOString() })
-          .eq("user_id", req.userId)
-          .eq("show_id", parseInt(showId))
-          .select()
-          .single()
-
-        if (error) {
-          return res.status(500).json({ message: "Failed to update show" })
-        }
-
-        // If status is set to "Completed", mark all episodes as watched
-        if (status === "completed") {
-          markShowEpisodesWatched(req.userId!, parseInt(showId), true)
-            .then(() => updateInferredStatus(req.userId!, parseInt(showId)))
-            .catch((err) =>
-              console.error("Background episode marking failed:", err)
-            )
-        }
-
-        res.json(data)
-      } catch (error) {
-        console.error("Update show error:", error)
-        res.status(500).json({ message: "Failed to update show" })
-      }
-    }
-  )
-
   // Get shows by status
   app.get(
     "/api/shows/watching",
@@ -466,93 +428,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   )
 
   app.get(
-    "/api/shows/caught-up-upcoming",
-    authMiddleware,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const shows = await getShowsWithProgress(req.userId!, "caught_up")
-
-        // Enhance with next episode info
-        const showsWithNext = await Promise.all(
-          shows.map(async (show) => {
-            const nextEp = await getNextUnairedEpisode(show.id)
-            return {
-              ...show,
-              nextEpisode: nextEp,
-            }
-          })
-        )
-
-        // Filter to only shows that have upcoming episodes
-        const withUpcoming = showsWithNext.filter((s) => s.nextEpisode !== null)
-
-        res.json(withUpcoming)
-      } catch (error) {
-        console.error("Get caught up upcoming shows error:", error)
-        res.status(500).json({ message: "Failed to get shows" })
-      }
-    }
-  )
-
-  app.get(
-    "/api/shows/recent",
-    authMiddleware,
-    async (req: AuthRequest, res: Response) => {
-      try {
-        const { data: userShows } = await supabase
-          .from("user_shows")
-          .select("*, shows(*)")
-          .eq("user_id", req.userId)
-          .order("added_at", { ascending: false })
-          .limit(8)
-
-        const shows = await Promise.all(
-          (userShows || []).map(async (us: any) => {
-            const progress = await calculateShowProgress(
-              req.userId!,
-              us.show_id
-            )
-            const show = us.shows
-
-            // Map snake_case database fields to camelCase for frontend
-            return {
-              id: show.id,
-              name: show.name,
-              overview: show.overview,
-              posterPath: show.poster_path,
-              backdropPath: show.backdrop_path,
-              firstAirDate: show.first_air_date,
-              voteAverage: show.vote_average,
-              numberOfSeasons: show.number_of_seasons,
-              numberOfEpisodes: show.number_of_episodes,
-              status: show.status,
-              genres: show.genres,
-              tmdbData: show.tmdb_data,
-              lastUpdated: show.last_updated,
-              userShow: {
-                id: us.id,
-                userId: us.user_id,
-                showId: us.show_id,
-                status: us.status,
-                rating: us.rating,
-                notes: us.notes,
-                addedAt: us.added_at,
-                updatedAt: us.updated_at,
-              },
-              ...progress,
-            }
-          })
-        )
-
-        res.json(shows)
-      } catch (error) {
-        console.error("Get recent shows error:", error)
-        res.status(500).json({ message: "Failed to get shows" })
-      }
-    }
-  )
-
-  app.get(
     "/api/shows/continue-watching",
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
@@ -561,7 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const continueWatching = shows.filter(
           (s: any) => s.progress > 0 && s.progress < 100
         )
-        res.json(continueWatching.slice(0, 4))
+        res.json(continueWatching)
       } catch (error) {
         console.error("Get continue watching error:", error)
         res.status(500).json({ message: "Failed to get shows" })
