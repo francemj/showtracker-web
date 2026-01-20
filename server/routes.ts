@@ -584,7 +584,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .single()
 
         if (!show) {
-          return res.status(404).json({ message: "Show not found" })
+          const tmdbShow = await getTVShowDetails(parseInt(id))
+          return res.json({
+            id: tmdbShow.id,
+            name: tmdbShow.name,
+            overview: tmdbShow.overview,
+            posterPath: tmdbShow.poster_path,
+            backdropPath: tmdbShow.backdrop_path,
+            firstAirDate: tmdbShow.first_air_date,
+            voteAverage: tmdbShow.vote_average,
+            numberOfSeasons: tmdbShow.number_of_seasons,
+            numberOfEpisodes: tmdbShow.number_of_episodes,
+            status: tmdbShow.status,
+            genres: tmdbShow.genres?.map((g: any) => g.name),
+            tmdbData: tmdbShow,
+            lastUpdated: null,
+            userShow: null,
+            watchedEpisodes: 0,
+            totalEpisodes: tmdbShow.number_of_episodes ?? 0,
+            progress: 0,
+            nextEpisode: undefined,
+          })
+        }
+
+        if (show.status == null) {
+          const tmdbShow = await getTVShowDetails(parseInt(id))
+          await supabase.from("shows").upsert({
+            id: tmdbShow.id,
+            name: tmdbShow.name,
+            overview: tmdbShow.overview,
+            poster_path: tmdbShow.poster_path,
+            backdrop_path: tmdbShow.backdrop_path,
+            first_air_date: tmdbShow.first_air_date,
+            vote_average: tmdbShow.vote_average?.toString(),
+            number_of_seasons: tmdbShow.number_of_seasons,
+            number_of_episodes: tmdbShow.number_of_episodes,
+            status: tmdbShow.status,
+            genres: tmdbShow.genres?.map((g: any) => g.name),
+            tmdb_data: tmdbShow,
+          })
+          show.status = tmdbShow.status
         }
 
         const { data: userShow } = await supabase

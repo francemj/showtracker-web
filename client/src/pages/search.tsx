@@ -10,20 +10,8 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Search as SearchIcon,
-  Plus,
-  Check,
-  Star,
-  Calendar,
-  ChevronDown,
-} from "lucide-react"
+import { AddToCollectionButton } from "@/components/add-to-collection-button"
+import { Search as SearchIcon, Check, Star, Calendar } from "lucide-react"
 import { TMDBShow } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
@@ -199,45 +187,16 @@ export default function Search() {
                       In Collection
                     </Button>
                   ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="sm"
-                          disabled={addShowMutation.isPending}
-                          className="w-full"
-                          data-testid={`button-add-show-${show.id}`}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add to Collection
-                          <ChevronDown className="w-4 h-4 ml-1" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem
-                          onClick={() => handleAddShow(show.id)}
-                          data-testid={`menu-item-want-to-watch-${show.id}`}
-                        >
-                          Want to Watch
-                        </DropdownMenuItem>
-                        {(show.status === "Ended" ||
-                          show.status === "Canceled") && (
-                          <DropdownMenuItem
-                            onClick={() => handleAddShow(show.id, "completed")}
-                            data-testid={`menu-item-mark-completed-${show.id}`}
-                          >
-                            Mark as Completed
-                          </DropdownMenuItem>
-                        )}
-                        {show.status === "Returning Series" && (
-                          <DropdownMenuItem
-                            onClick={() => handleAddShow(show.id, "caught_up")}
-                            data-testid={`menu-item-mark-caught-up-${show.id}`}
-                          >
-                            Mark as Caught Up
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <AddToCollectionButton
+                      showId={show.id}
+                      status={show.status}
+                      onAdd={handleAddShow}
+                      isPending={addShowMutation.isPending}
+                      isUserShow={inCollection}
+                      size="sm"
+                      className="w-full"
+                      dataTestId={`button-add-show-${show.id}`}
+                    />
                   )}
                 </div>
               </Card>

@@ -25,21 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Star,
-  Calendar,
-  Clock,
-  Tv,
-  CheckCircle2,
-  Plus,
-  ChevronDown,
-} from "lucide-react"
+import { AddToCollectionButton } from "@/components/add-to-collection-button"
+import { Star, Calendar, Clock, Tv, CheckCircle2 } from "lucide-react"
 import { ShowWithProgress, TMDBSeason } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -639,62 +626,19 @@ export default function ShowDetail() {
 
           <Separator />
 
-          {!show.userShow && (
-            <div className="mb-6">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="lg"
-                    disabled={addShowMutation.isPending}
-                    data-testid="button-add-to-collection"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add to Collection
-                    <ChevronDown className="w-4 h-4 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuItem
-                    onClick={() =>
-                      addShowMutation.mutate({
-                        showId: show.id,
-                        initialStatus: "want_to_watch",
-                      })
-                    }
-                    data-testid="menu-item-want-to-watch"
-                  >
-                    Want to Watch
-                  </DropdownMenuItem>
-                  {(show.status === "Ended" || show.status === "Canceled") && (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        addShowMutation.mutate({
-                          showId: show.id,
-                          initialStatus: "completed",
-                        })
-                      }
-                      data-testid="menu-item-mark-completed"
-                    >
-                      Mark as Completed
-                    </DropdownMenuItem>
-                  )}
-                  {show.status === "Returning Series" && (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        addShowMutation.mutate({
-                          showId: show.id,
-                          initialStatus: "caught_up",
-                        })
-                      }
-                      data-testid="menu-item-mark-caught-up"
-                    >
-                      Mark as Caught Up
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
+          <div className="mb-6">
+            <AddToCollectionButton
+              showId={show.id}
+              status={show.status}
+              onAdd={(id, s) =>
+                addShowMutation.mutate({ showId: id, initialStatus: s })
+              }
+              isPending={addShowMutation.isPending}
+              isUserShow={!!show.userShow}
+              size="lg"
+              dataTestId="button-add-to-collection"
+            />
+          </div>
 
           <div>
             <h2 className="text-2xl font-heading font-bold text-foreground mb-4">
