@@ -1,4 +1,5 @@
 import { Switch, Route } from "wouter"
+import { Auth0Provider } from "@auth0/auth0-react"
 import { queryClient } from "./lib/queryClient"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/toaster"
@@ -17,6 +18,9 @@ import CaughtUp from "@/pages/caught-up"
 import Completed from "@/pages/completed"
 import ShowDetail from "@/pages/show-detail"
 import NotFound from "@/pages/not-found"
+
+const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN as string
+const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID as string
 
 function Router() {
   return (
@@ -79,9 +83,23 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <AuthProvider>
-            <AuthenticatedApp />
-          </AuthProvider>
+          <Auth0Provider
+            domain={auth0Domain}
+            clientId={auth0ClientId}
+            authorizationParams={{
+              redirect_uri:
+                typeof window !== "undefined"
+                  ? window.location.origin
+                  : undefined,
+              scope: "openid profile email",
+            }}
+            cacheLocation="memory"
+            useRefreshTokens
+          >
+            <AuthProvider>
+              <AuthenticatedApp />
+            </AuthProvider>
+          </Auth0Provider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

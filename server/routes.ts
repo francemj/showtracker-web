@@ -1,14 +1,9 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import session from "express-session"
-import bcrypt from "bcrypt"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
-import {
-  signupWithAuth0,
-  loginWithAuth0,
-  migrateUserToAuth0,
-} from "./lib/auth0"
+import { getUserFromAccessToken } from "./lib/auth0"
 
 declare module "express-session" {
   interface SessionData {
@@ -48,275 +43,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
   )
 
   // Auth routes
-  app.post("/api/auth/signup", async (req: Request, res: Response) => {
-    let auth0UserId: string | null = null
-
+  app.post("/api/auth/callback", async (req: Request, res: Response) => {
     try {
-      const { email, password, name } = req.body
-
-      if (!email || !password || !name) {
-        return res.status(400).json({ message: "Missing required fields" })
+      const { access_token } = req.body
+      if (!access_token || typeof access_token !== "string") {
+        return res.status(400).json({ message: "Missing access_token" })
       }
 
-      // Check if user exists in Supabase
-      const { data: existingUser } = await supabase
+      const auth0User = await getUserFromAccessToken(access_token)
+      const { sub, email, name, picture } = auth0User
+
+      // 1) Find by auth0_id (existing Auth0 or migrated user)
+      const { data: existingByAuth0 } = await supabase
         .from("users")
         .select("*")
-        .eq("email", email)
+        .eq("auth0_id", sub)
         .single()
 
-      if (existingUser) {
-        return res.status(400).json({ message: "User already exists" })
+      if (existingByAuth0) {
+        req.session.userId = existingByAuth0.id
+        return res.json({ user: existingByAuth0 })
       }
 
-      // Create user in Auth0
-      const auth0Result = await signupWithAuth0(email, password, name)
-      auth0UserId = auth0Result.auth0Id
+      // 2) Legacy: same email with local_ auth0_id — link this Auth0 account to existing Supabase user
+      if (email) {
+        const { data: legacy } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", email)
+          .like("auth0_id", "local_%")
+          .limit(1)
+          .maybeSingle()
 
-      // Create user in Supabase with Auth0 ID
-      const { data: user, error } = await supabase
+        if (legacy) {
+          const { error: updateErr } = await supabase
+            .from("users")
+            .update({ auth0_id: sub, picture: picture || legacy.picture })
+            .eq("id", legacy.id)
+
+          if (!updateErr) {
+            await supabase
+              .from("user_credentials")
+              .delete()
+              .eq("user_id", legacy.id)
+            req.session.userId = legacy.id
+            return res.json({
+              user: {
+                ...legacy,
+                auth0_id: sub,
+                picture: picture || legacy.picture,
+              },
+            })
+          }
+        }
+      }
+
+      // 3) New user
+      const { data: newUser, error: insertErr } = await supabase
         .from("users")
         .insert({
-          email: auth0Result.email,
-          name: auth0Result.name || name,
-          auth0_id: auth0Result.auth0Id,
-          picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366F1&color=fff`,
+          email: email || `${sub.replace(/[^a-zA-Z0-9]/g, "_")}@auth0.local`,
+          name: name || "User",
+          auth0_id: sub,
+          picture:
+            picture ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=6366F1&color=fff`,
         })
         .select()
         .single()
 
-      if (error || !user) {
-        console.error("Supabase insert failed:", error)
-
-        // Rollback: Delete Auth0 user if Supabase insert failed
-        if (auth0UserId) {
-          try {
-            const { ManagementClient } = await import("auth0")
-            const management = new ManagementClient({
-              domain: process.env.AUTH0_DOMAIN!,
-              clientId: process.env.AUTH0_CLIENT_ID!,
-              clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-            })
-            await management.users.delete(auth0UserId)
-            console.log(`Rolled back Auth0 user creation for ${email}`)
-          } catch (rollbackError) {
-            console.error("Failed to rollback Auth0 user:", rollbackError)
-          }
-        }
-
-        return res.status(500).json({
-          message: "Failed to create user account. Please try again.",
-        })
+      if (insertErr || !newUser) {
+        console.error("Supabase insert failed:", insertErr)
+        return res.status(500).json({ message: "Failed to create user" })
       }
 
-      req.session.userId = user.id
-      res.json({ user })
+      req.session.userId = newUser.id
+      res.json({ user: newUser })
     } catch (error: any) {
-      console.error("Signup error:", error)
-
-      // Rollback Auth0 user if any error occurred
-      if (auth0UserId) {
-        try {
-          const { ManagementClient } = await import("auth0")
-          const management = new ManagementClient({
-            domain: process.env.AUTH0_DOMAIN!,
-            clientId: process.env.AUTH0_CLIENT_ID!,
-            clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-          })
-          await management.users.delete(auth0UserId)
-          console.log(`Rolled back Auth0 user due to error`)
-        } catch (rollbackError) {
-          console.error("Failed to rollback Auth0 user:", rollbackError)
-        }
-      }
-
+      console.error("Auth callback error:", error)
+      const status = error.message?.includes("Invalid or expired") ? 401 : 500
       res
-        .status(500)
-        .json({ message: error.message || "Internal server error" })
-    }
-  })
-
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
-    try {
-      const { email, password } = req.body
-
-      if (!email || !password) {
-        return res.status(400).json({ message: "Missing required fields" })
-      }
-
-      // Check if user exists in Supabase
-      const { data: user } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", email)
-        .single()
-
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" })
-      }
-
-      // Check if user has an Auth0 ID (already migrated)
-      if (user.auth0_id && !user.auth0_id.startsWith("local_")) {
-        // User already migrated to Auth0, authenticate with Auth0
-        try {
-          await loginWithAuth0(email, password)
-          req.session.userId = user.id
-          return res.json({ user })
-        } catch (auth0Error) {
-          console.error("Auth0 login failed:", auth0Error)
-          return res.status(401).json({ message: "Invalid credentials" })
-        }
-      }
-
-      // User has not been migrated yet, check bcrypt credentials
-      const { data: credentials } = await supabase
-        .from("user_credentials")
-        .select("password_hash")
-        .eq("user_id", user.id)
-        .single()
-
-      if (!credentials) {
-        return res.status(401).json({ message: "Invalid credentials" })
-      }
-
-      // Verify password with bcrypt
-      const validPassword = await bcrypt.compare(
-        password,
-        credentials.password_hash
-      )
-      if (!validPassword) {
-        return res.status(401).json({ message: "Invalid credentials" })
-      }
-
-      // Password is valid, migrate user to Auth0
-      let migrationResult: { auth0Id: string; wasCreated: boolean } | null =
-        null
-
-      try {
-        migrationResult = await migrateUserToAuth0(
-          user.id,
-          email,
-          password,
-          user.name || "User"
-        )
-
-        // Update user's auth0_id in Supabase (idempotent - only if still has original local_ value)
-        const { data: updatedUsers, error: updateError } = await supabase
-          .from("users")
-          .update({ auth0_id: migrationResult.auth0Id })
-          .eq("id", user.id)
-          .like("auth0_id", "local_%")
-          .select()
-
-        // Check if we actually updated a row (this request won the race)
-        const didUpdate =
-          !updateError && updatedUsers && updatedUsers.length > 0
-
-        if (!didUpdate) {
-          // Another request already migrated this user, or update failed
-          // Re-fetch user to verify current state
-          const { data: currentUser } = await supabase
-            .from("users")
-            .select("auth0_id")
-            .eq("id", user.id)
-            .single()
-
-          if (currentUser && !currentUser.auth0_id.startsWith("local_")) {
-            // User was successfully migrated by another request
-            console.log(
-              `Migration skipped for ${email} - already migrated by concurrent request`
-            )
-
-            // Only delete if we created this Auth0 user (not if we reused existing)
-            if (migrationResult.wasCreated) {
-              try {
-                const { ManagementClient } = await import("auth0")
-                const management = new ManagementClient({
-                  domain: process.env.AUTH0_DOMAIN!,
-                  clientId: process.env.AUTH0_CLIENT_ID!,
-                  clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-                })
-
-                await management.users.delete(migrationResult.auth0Id)
-                console.log(
-                  `Cleaned up duplicate Auth0 user ${migrationResult.auth0Id}`
-                )
-              } catch (cleanupError) {
-                console.error(
-                  "Failed to cleanup duplicate Auth0 user:",
-                  cleanupError
-                )
-              }
-            }
-          } else {
-            // Update failed but user still has local_ prefix
-            // Only delete if we created this Auth0 user
-            console.error(
-              `Migration update failed for ${email}, cleaning up for retry`
-            )
-
-            if (migrationResult.wasCreated) {
-              try {
-                const { ManagementClient } = await import("auth0")
-                const management = new ManagementClient({
-                  domain: process.env.AUTH0_DOMAIN!,
-                  clientId: process.env.AUTH0_CLIENT_ID!,
-                  clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-                })
-
-                await management.users.delete(migrationResult.auth0Id)
-                console.log(
-                  `Cleaned up Auth0 user ${migrationResult.auth0Id} to allow migration retry`
-                )
-              } catch (cleanupError) {
-                console.error(
-                  "Failed to cleanup Auth0 user for retry:",
-                  cleanupError
-                )
-              }
-            }
-          }
-        } else {
-          // Successfully migrated - delete bcrypt credentials
-          const { error: deleteError } = await supabase
-            .from("user_credentials")
-            .delete()
-            .eq("user_id", user.id)
-
-          if (deleteError) {
-            console.error("Failed to delete bcrypt credentials:", deleteError)
-          } else {
-            console.log(`Successfully migrated user ${email} to Auth0`)
-          }
-        }
-      } catch (migrationError: any) {
-        console.error("Migration to Auth0 failed:", migrationError)
-
-        // Only clean up if we created the Auth0 user
-        if (migrationResult?.wasCreated) {
-          try {
-            const { ManagementClient } = await import("auth0")
-            const management = new ManagementClient({
-              domain: process.env.AUTH0_DOMAIN!,
-              clientId: process.env.AUTH0_CLIENT_ID!,
-              clientSecret: process.env.AUTH0_CLIENT_SECRET!,
-            })
-
-            await management.users.delete(migrationResult.auth0Id)
-            console.log(
-              `Cleaned up Auth0 user ${migrationResult.auth0Id} after migration error`
-            )
-          } catch (cleanupError) {
-            console.error("Failed to cleanup Auth0 user:", cleanupError)
-          }
-        }
-      }
-
-      req.session.userId = user.id
-      res.json({ user })
-    } catch (error: any) {
-      console.error("Login error:", error)
-      res.status(500).json({ message: "Internal server error" })
+        .status(status)
+        .json({ message: error.message || "Authentication failed" })
     }
   })
 

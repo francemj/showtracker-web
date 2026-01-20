@@ -75,20 +75,6 @@ export default [
         "error",
         { argsIgnorePattern: "^_" },
       ],
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "CallExpression[callee.name='fetch']",
-          message:
-            "Use 'apiRequest' from 'queryClient' instead of the basic 'fetch' API. This ensures proper error handling, authentication, and request wrapping.",
-        },
-        {
-          selector:
-            "CallExpression[callee.object.name='window'][callee.property.name='fetch']",
-          message:
-            "Use 'apiRequest' from 'queryClient' instead of the basic 'fetch' API. This ensures proper error handling, authentication, and request wrapping.",
-        },
-      ],
       "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [
         "warn",
@@ -117,9 +103,22 @@ export default [
 
   // Override for specific files
   {
-    files: ["**/index.ts", "**/src/lib/queryClient.ts"],
+    files: ["**/client/**"],
     rules: {
-      "no-restricted-syntax": "off",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='fetch']",
+          message:
+            "Use 'apiRequest' from 'queryClient' instead of the basic 'fetch' API. This ensures proper error handling, authentication, and request wrapping.",
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='window'][callee.property.name='fetch']",
+          message:
+            "Use 'apiRequest' from 'queryClient' instead of the basic 'fetch' API. This ensures proper error handling, authentication, and request wrapping.",
+        },
+      ],
     },
   },
 ]

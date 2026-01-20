@@ -5,6 +5,7 @@ import {
   useEffect,
   ReactNode,
 } from "react"
+import { useAuth0 } from "@auth0/auth0-react"
 import { apiRequest } from "./queryClient"
 
 interface User {
@@ -18,8 +19,7 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
-  signup: (email: string, password: string, name: string) => Promise<void>
+  login: (options?: { signUp?: boolean }) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -28,6 +28,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const {
+    loginWithPopup,
+    getAccessTokenSilently,
+    logout: auth0Logout,
+  } = useAuth0()
 
   useEffect(() => {
     checkAuth()
@@ -35,9 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      const response = await apiRequest("POST", "/api/auth/me", {
-        credentials: "include",
-      })
+      const response = await apiRequest("GET", "/api/auth/me")
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
@@ -49,40 +52,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const login = async (email: string, password: string) => {
-    const response = await apiRequest("POST", "/api/auth/login", {
-      email,
-      password,
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || "Login failed")
+  const login = async (options?: { signUp?: boolean }) => {
+    try {
+      await loginWithPopup({
+        authorizationParams: options?.signUp ? { screen_hint: "signup" } : {},
+      })
+      const accessToken = await getAccessTokenSilently()
+      const response = await apiRequest("POST", "/api/auth/callback", {
+        access_token: accessToken,
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.message || "Login failed")
+      }
+      const data = await response.json()
+      setUser(data.user)
+    } catch (error: any) {
+      if (error?.error === "popup_closed_by_user") {
+        return
+      }
+      throw error
     }
-
-    const data = await response.json()
-    setUser(data.user)
-  }
-
-  const signup = async (email: string, password: string, name: string) => {
-    const response = await apiRequest("POST", "/api/auth/signup", {
-      email,
-      password,
-      name,
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.message || "Signup failed")
-    }
-
-    const data = await response.json()
-    setUser(data.user)
   }
 
   const logout = async () => {
     await apiRequest("POST", "/api/auth/logout")
     setUser(null)
+    auth0Logout({ logoutParams: { returnTo: window.location.origin } })
   }
 
   return (
@@ -92,7 +88,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
-        signup,
         logout,
       }}
     >
