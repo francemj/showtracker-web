@@ -95,7 +95,7 @@ function App() {
                   : undefined,
               scope: "openid profile email",
             }}
-            cacheLocation="memory"
+            cacheLocation="localstorage"
             useRefreshTokens
           >
             <AuthProvider>
