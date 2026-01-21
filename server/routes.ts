@@ -2,7 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
-import { getUserFromAccessToken } from "./lib/auth0"
+import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 
 interface AuthRequest extends Request {
   userId?: string
@@ -20,11 +20,11 @@ const authMiddleware = async (
 
   const token = authHeader.slice(7)
   try {
-    const auth0User = await getUserFromAccessToken(token)
+    const sub = await getSubFromToken(token)
     const { data: user } = await supabase
       .from("users")
       .select("id")
-      .eq("auth0_id", auth0User.sub)
+      .eq("auth0_id", sub)
       .single()
 
     if (!user) {
@@ -129,12 +129,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const token = authHeader.slice(7)
-      const auth0User = await getUserFromAccessToken(token)
+      const sub = await getSubFromToken(token)
 
       const { data: user } = await supabase
         .from("users")
         .select("*")
-        .eq("auth0_id", auth0User.sub)
+        .eq("auth0_id", sub)
         .single()
 
       if (!user) {
