@@ -1,15 +1,8 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
-import session from "express-session"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken } from "./lib/auth0"
-
-declare module "express-session" {
-  interface SessionData {
-    userId: string
-  }
-}
 
 interface AuthRequest extends Request {
   userId?: string
@@ -20,28 +13,31 @@ const authMiddleware = async (
   res: Response,
   next: NextFunction
 ) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ message: "Unauthorized" })
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Missing authorization token" })
   }
-  req.userId = req.session.userId
-  next()
+
+  const token = authHeader.slice(7)
+  try {
+    const auth0User = await getUserFromAccessToken(token)
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth0_id", auth0User.sub)
+      .single()
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" })
+    }
+    req.userId = user.id
+    next()
+  } catch {
+    return res.status(401).json({ message: "Invalid token" })
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Session middleware
-  app.use(
-    session({
-      secret: process.env.SESSION_SECRET || "tv-tracker-secret-key",
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: process.env.NODE_ENV === "production",
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      },
-    })
-  )
-
   // Auth routes
   app.post("/api/auth/callback", async (req: Request, res: Response) => {
     try {
@@ -61,7 +57,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single()
 
       if (existingByAuth0) {
-        req.session.userId = existingByAuth0.id
         return res.json({ user: existingByAuth0 })
       }
 
@@ -86,7 +81,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .from("user_credentials")
               .delete()
               .eq("user_id", legacy.id)
-            req.session.userId = legacy.id
             return res.json({
               user: {
                 ...legacy,
@@ -117,7 +111,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to create user" })
       }
 
-      req.session.userId = newUser.id
       res.json({ user: newUser })
     } catch (error: any) {
       console.error("Auth callback error:", error)
@@ -130,14 +123,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     try {
-      if (!req.session.userId) {
+      const authHeader = req.headers.authorization
+      if (!authHeader?.startsWith("Bearer ")) {
         return res.status(401).json({ message: "Not authenticated" })
       }
+
+      const token = authHeader.slice(7)
+      const auth0User = await getUserFromAccessToken(token)
 
       const { data: user } = await supabase
         .from("users")
         .select("*")
-        .eq("id", req.session.userId)
+        .eq("auth0_id", auth0User.sub)
         .single()
 
       if (!user) {
@@ -147,14 +144,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ user })
     } catch (error) {
       console.error("Auth check error:", error)
-      res.status(500).json({ message: "Internal server error" })
+      const isAuthError = (error as Error)?.message?.includes(
+        "Invalid or expired"
+      )
+      res.status(isAuthError ? 401 : 500).json({
+        message: isAuthError ? "Invalid token" : "Internal server error",
+      })
     }
   })
 
-  app.post("/api/auth/logout", (req: Request, res: Response) => {
-    req.session.destroy(() => {
-      res.json({ message: "Logged out" })
-    })
+  app.post("/api/auth/logout", (_req: Request, res: Response) => {
+    res.json({ message: "Logged out" })
   })
 
   // Search shows

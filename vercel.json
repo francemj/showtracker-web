@@ -2,10 +2,17 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
+  "functions": {
+    "api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "server/**,shared/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "destination": "/api"
     },
     {
       "source": "/(.*)",

@@ -117,7 +117,7 @@ export default [
 
   // Override for specific files
   {
-    files: ["**/index.ts", "**/src/lib/queryClient.ts"],
+    files: ["**/index.ts", "**/src/lib/queryClient.ts", "**/server/**"],
     rules: {
       "no-restricted-syntax": "off",
     },

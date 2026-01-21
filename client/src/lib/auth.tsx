@@ -6,7 +6,7 @@ import {
   ReactNode,
 } from "react"
 import { useAuth0 } from "@auth0/auth0-react"
-import { apiRequest } from "./queryClient"
+import { apiRequest, setApiTokenGetter } from "./queryClient"
 
 interface User {
   id: string
@@ -33,6 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getAccessTokenSilently,
     logout: auth0Logout,
   } = useAuth0()
+
+  useEffect(() => {
+    setApiTokenGetter(async () => {
+      try {
+        return await getAccessTokenSilently()
+      } catch {
+        return null
+      }
+    })
+  }, [getAccessTokenSilently])
 
   useEffect(() => {
     checkAuth()

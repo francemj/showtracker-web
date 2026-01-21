@@ -1,12 +1,21 @@
 import express, { type Request, Response, NextFunction } from "express"
 import fileUpload from "express-fileupload"
 import cors from "cors"
-import { isProduction } from "../server/env-config"
+import "../server/env-config"
 import { registerRoutes } from "../server/routes"
-import { setupVite, serveStatic, log } from "../server/vite"
 
-if (isProduction()) {
-  import("../server/lib/supabase-keep-alive")
+// Detect if running on Vercel
+const isVercel = !!process.env.VERCEL
+
+// Simple log function that works everywhere
+function log(message: string, source = "express") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  })
+  console.log(`${formattedTime} [${source}] ${message}`)
 }
 
 declare module "http" {
@@ -14,9 +23,6 @@ declare module "http" {
     rawBody: unknown
   }
 }
-
-// Detect if running on Vercel
-const isVercel = !!process.env.VERCEL
 
 // Create and configure Express app
 const app = express()
@@ -111,6 +117,10 @@ if (!isVercel) {
   // Local development/production server mode
   ;(async () => {
     const server = await registerRoutes(app)
+
+    // Dynamically import vite module only for local dev (uses import.meta which doesn't work in CommonJS)
+    // vite.ts is in dev/ directory (not server/) because it needs ESM for @tailwindcss/vite
+    const { setupVite, serveStatic } = await import("../dev/vite")
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route
