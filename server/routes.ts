@@ -419,7 +419,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         )
 
-        res.json(showsWithNext)
+        const sortedShows = showsWithNext.sort((a, b) => {
+          return (
+            (new Date(a.nextEpisode?.airDate || "").getTime() || Infinity) -
+            (new Date(b.nextEpisode?.airDate || "").getTime() || Infinity)
+          )
+        })
+
+        res.json(sortedShows)
       } catch (error) {
         console.error("Get caught up shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })

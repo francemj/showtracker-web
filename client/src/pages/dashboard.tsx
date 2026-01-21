@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ShowCard } from "@/components/show-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TrendingUp, Clock, Eye, Zap } from "lucide-react"
 import { ShowWithProgress } from "@shared/schema"
+import { ShowGrid } from "@/components/show-grid"
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery<{
@@ -139,99 +139,46 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {continueLoading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="aspect-[2/3]" />
-            ))}
-          </div>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+            Continue Watching
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Pick up where you left off
+          </p>
         </div>
-      ) : continueWatching && continueWatching.length > 0 ? (
-        <div className="space-y-4">
+        <ShowGrid shows={continueWatching} isLoading={continueLoading} />
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
+            <Zap className="w-5 h-5 text-teal-600" />
+          </div>
           <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
-              Continue Watching
+            <h2 className="text-2xl font-heading font-bold text-foreground">
+              Caught Up
             </h2>
             <p className="text-sm text-muted-foreground">
-              Pick up where you left off
+              Shows where you've watched all available episodes
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {continueWatching.map((show) => (
-              <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
-            ))}
-          </div>
         </div>
-      ) : null}
+        <ShowGrid shows={caughtUpShows} isLoading={caughtUpLoading} />
+      </div>
 
-      {caughtUpLoading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="aspect-[2/3]" />
-            ))}
-          </div>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+            Start Watching
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Shows you want to watch
+          </p>
         </div>
-      ) : caughtUpShows && caughtUpShows.length > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
-              <Zap className="w-5 h-5 text-teal-600" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-heading font-bold text-foreground">
-                Caught Up
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Shows where you've watched all available episodes
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {caughtUpShows
-              .sort((a, b) => {
-                return (
-                  (new Date(a.nextEpisode?.airDate || "").getTime() ||
-                    Infinity) -
-                  (new Date(b.nextEpisode?.airDate || "").getTime() || Infinity)
-                )
-              })
-              .map((show) => (
-                <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
-              ))}
-          </div>
-        </div>
-      ) : null}
-
-      {showsLoading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="aspect-[2/3]" />
-            ))}
-          </div>
-        </div>
-      ) : wantToWatchShows && wantToWatchShows.length > 0 ? (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
-              Start Watching
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Shows you want to watch
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {wantToWatchShows.slice(0, 8).map((show) => (
-              <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
-            ))}
-          </div>
-        </div>
-      ) : null}
+        <ShowGrid shows={wantToWatchShows} isLoading={showsLoading} />
+      </div>
     </div>
   )
 }
