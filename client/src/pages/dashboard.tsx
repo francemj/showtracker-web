@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TrendingUp, Clock, Eye, Zap } from "lucide-react"
 import { ShowWithProgress } from "@shared/schema"
-import { ShowGrid } from "@/components/show-grid"
+import { ShowGrid, showGridClass } from "@/components/show-grid"
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery<{
@@ -21,11 +21,10 @@ export default function Dashboard() {
     queryKey: ["/api/shows/want-to-watch"],
   })
 
-  const { data: continueWatching, isLoading: continueLoading } = useQuery<
-    ShowWithProgress[]
-  >({
-    queryKey: ["/api/shows/watching"],
-  })
+  const { data: currentlyWatching, isLoading: currentlyWatchingLoading } =
+    useQuery<ShowWithProgress[]>({
+      queryKey: ["/api/shows/watching"],
+    })
 
   const { data: caughtUpShows, isLoading: caughtUpLoading } = useQuery<
     ShowWithProgress[]
@@ -77,7 +76,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium min-h-8 flex items-center">
               Watching
             </CardTitle>
-            <Eye className="w-4 h-4 text-muted-foreground shrink-0" />
+            <Eye className="w-4 h-4 text-primary shrink-0" />
           </CardHeader>
           <CardContent>
             {statsLoading ? (
@@ -139,20 +138,27 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
-            Continue Watching
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Pick up where you left off
-          </p>
+      <div className={showGridClass}>
+        <div className="flex items-center gap-3 col-span-full my-2">
+          <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
+            <Eye className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+              Currently Watching
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Pick up where you left off
+            </p>
+          </div>
         </div>
-        <ShowGrid shows={continueWatching} isLoading={continueLoading} />
-      </div>
+        <ShowGrid
+          shows={currentlyWatching}
+          isLoading={currentlyWatchingLoading}
+          noContainer
+        />
 
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 col-span-full my-2">
           <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
             <Zap className="w-5 h-5 text-teal-600" />
           </div>
@@ -165,11 +171,13 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <ShowGrid shows={caughtUpShows} isLoading={caughtUpLoading} />
-      </div>
+        <ShowGrid
+          shows={caughtUpShows}
+          isLoading={caughtUpLoading}
+          noContainer
+        />
 
-      <div className="space-y-4">
-        <div>
+        <div className="col-span-full my-2">
           <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
             Start Watching
           </h2>
@@ -177,7 +185,11 @@ export default function Dashboard() {
             Shows you want to watch
           </p>
         </div>
-        <ShowGrid shows={wantToWatchShows} isLoading={showsLoading} />
+        <ShowGrid
+          shows={wantToWatchShows}
+          isLoading={showsLoading}
+          noContainer
+        />
       </div>
     </div>
   )
