@@ -16,6 +16,7 @@ import { TMDBShow, UserShow } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useDebounce } from "@/hooks/use-debounce"
+import { Link } from "wouter"
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -87,14 +88,14 @@ export default function Search() {
         </p>
       </div>
 
-      <div className="relative max-w-2xl">
+      <div className="relative max-w-lg">
         <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
           type="search"
           placeholder="Search for TV shows..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 h-12 text-base"
+          className="pl-10 h-12 w-full text-base"
           data-testid="input-search-shows"
         />
       </div>
@@ -128,70 +129,71 @@ export default function Search() {
             const userShow = findUserShow(show.id)
 
             return (
-              <Card
-                key={show.id}
-                className="hover-elevate transition-all overflow-hidden"
-                data-testid={`card-search-result-${show.id}`}
-              >
-                <div className="relative aspect-[2/3] bg-muted">
-                  <img
-                    src={posterUrl}
-                    alt={show.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-4 space-y-3">
-                  <div>
-                    <h3
-                      className="font-heading font-semibold text-base line-clamp-1 mb-2"
-                      data-testid={`text-result-title-${show.id}`}
-                    >
-                      {show.name}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                      {year && (
-                        <Badge variant="outline" className="text-xs">
-                          <Calendar className="w-3 h-3 mr-1" />
-                          {year}
-                        </Badge>
-                      )}
-                      {show.vote_average > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          <Star className="w-3 h-3 mr-1 fill-yellow-400 text-yellow-400" />
-                          {show.vote_average.toFixed(1)}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {show.overview}
-                    </p>
-                  </div>
-                  {userShow ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
-                      disabled
-                      data-testid={`button-in-collection-${show.id}`}
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      In Collection
-                    </Button>
-                  ) : (
-                    <AddToCollectionButton
-                      showId={show.id}
-                      status={show.status}
-                      onAdd={handleAddShow}
-                      isPending={addShowMutation.isPending}
-                      userShow={userShow}
-                      size="sm"
-                      className="w-full"
-                      dataTestId={`button-add-show-${show.id}`}
+              <Link href={`/show/${show.id}`} key={show.id}>
+                <Card
+                  className="hover-elevate transition-all overflow-hidden"
+                  data-testid={`card-search-result-${show.id}`}
+                >
+                  <div className="relative aspect-[2/3] bg-muted">
+                    <img
+                      src={posterUrl}
+                      alt={show.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
                     />
-                  )}
-                </div>
-              </Card>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <h3
+                        className="font-heading font-semibold text-base line-clamp-1 mb-2"
+                        data-testid={`text-result-title-${show.id}`}
+                      >
+                        {show.name}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        {year && (
+                          <Badge variant="outline" className="text-xs">
+                            <Calendar className="w-3 h-3 mr-1" />
+                            {year}
+                          </Badge>
+                        )}
+                        {show.vote_average > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            <Star className="w-3 h-3 mr-1 fill-yellow-400 text-yellow-400" />
+                            {show.vote_average.toFixed(1)}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {show.overview}
+                      </p>
+                    </div>
+                    {userShow ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        disabled
+                        data-testid={`button-in-collection-${show.id}`}
+                      >
+                        <Check className="w-4 h-4 mr-1" />
+                        In Collection
+                      </Button>
+                    ) : (
+                      <AddToCollectionButton
+                        showId={show.id}
+                        status={show.status}
+                        onAdd={handleAddShow}
+                        isPending={addShowMutation.isPending}
+                        userShow={userShow}
+                        size="sm"
+                        className="w-full"
+                        dataTestId={`button-add-show-${show.id}`}
+                      />
+                    )}
+                  </div>
+                </Card>
+              </Link>
             )
           })}
         </div>

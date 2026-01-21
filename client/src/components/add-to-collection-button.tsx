@@ -55,9 +55,6 @@ export function AddToCollectionButton({
         ? `-${showId}`
         : undefined
 
-  console.log("userShow", userShow)
-  console.log("showIsEnded", showIsEnded)
-  console.log("showIsReturningSeries", showIsReturningSeries)
   if (userShow) {
     if (showIsEnded && userShow.status !== "completed") {
       return (
@@ -97,7 +94,7 @@ export function AddToCollectionButton({
       <Button
         size={size}
         disabled={isPending}
-        className="rounded-r-none"
+        className="rounded-r-none flex-1"
         onClick={() => onAdd(showId)}
         data-testid={dataTestId}
       >

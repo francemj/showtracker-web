@@ -22,7 +22,10 @@ export function ShowGrid({
     return (
       <div className={showGridClass}>
         {[...Array(8)].map((_, i) => (
-          <Skeleton key={i} className="aspect-[2/3]" />
+          <Skeleton
+            key={i}
+            className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
+          />
         ))}
       </div>
     )
