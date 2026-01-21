@@ -7,6 +7,7 @@ import {
   User,
   LogOut,
   Zap,
+  Eye,
 } from "lucide-react"
 import { Link, useLocation } from "wouter"
 import {
@@ -44,7 +45,7 @@ const menuItems = [
   {
     title: "Currently Watching",
     url: "/watching",
-    icon: TrendingUp,
+    icon: Eye,
   },
   {
     title: "Caught Up",

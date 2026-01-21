@@ -603,8 +603,37 @@ export default function ShowDetail() {
               onAdd={(id, s) =>
                 addShowMutation.mutate({ showId: id, initialStatus: s })
               }
+              onMarkAll={() => {
+                if (seasons && seasons.length > 0) {
+                  // Mark all episodes as watched
+                  // find the last aired episode
+                  const lastAiredSeason = seasons?.reduce((max, season) => {
+                    return Math.max(
+                      max,
+                      season.episodes?.reduce((max, episode) => {
+                        if (hasEpisodeAired(episode.air_date)) {
+                          return Math.max(max, episode.episode_number)
+                        }
+                        return max
+                      }, 0) ?? 0
+                    )
+                  }, 0)
+                  const lastAiredEpisode =
+                    seasons
+                      ?.find(
+                        (season) => season.season_number === lastAiredSeason
+                      )
+                      ?.episodes?.reduce((max, episode) => {
+                        if (hasEpisodeAired(episode.air_date)) {
+                          return Math.max(max, episode.episode_number)
+                        }
+                        return max
+                      }, 0) ?? 0
+                  handleEpisodeToggle(lastAiredSeason, lastAiredEpisode, true)
+                }
+              }}
               isPending={addShowMutation.isPending}
-              isUserShow={!!show.userShow}
+              userShow={show.userShow}
               size="lg"
               dataTestId="button-add-to-collection"
             />

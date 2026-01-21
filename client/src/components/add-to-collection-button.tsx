@@ -7,15 +7,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Plus, ChevronDown, Loader2 } from "lucide-react"
+import { Plus, ChevronDown, Loader2, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { UserShow } from "@shared/schema"
 
 export interface AddToCollectionButtonProps {
   showId: number
   status: string | undefined | null
   onAdd: (showId: number, initialStatus?: string) => void
+  onMarkAll?: () => void
   isPending: boolean
-  isUserShow: boolean
+  userShow: UserShow | undefined
   size?: "sm" | "default" | "lg"
   className?: string
   dataTestId?: string
@@ -25,8 +27,9 @@ export function AddToCollectionButton({
   showId,
   status,
   onAdd,
+  onMarkAll,
   isPending,
-  isUserShow,
+  userShow,
   size = "default",
   className,
   dataTestId,
@@ -40,16 +43,54 @@ export function AddToCollectionButton({
   })
 
   const effectiveStatus = status ?? data?.status
-  const showMarkCompleted =
-    !isUserShow &&
-    (effectiveStatus === "Ended" || effectiveStatus === "Canceled")
-  const showMarkCaughtUp = !isUserShow && effectiveStatus === "Returning Series"
+  const showIsEnded =
+    effectiveStatus === "Ended" || effectiveStatus === "Canceled"
+  const showIsReturningSeries = effectiveStatus === "Returning Series"
+  const showMarkCompleted = !userShow && showIsEnded
+  const showMarkCaughtUp = !userShow && showIsReturningSeries
   const menuTestIdSuffix =
     dataTestId === "button-add-to-collection"
       ? ""
       : dataTestId
         ? `-${showId}`
         : undefined
+
+  console.log("userShow", userShow)
+  console.log("showIsEnded", showIsEnded)
+  console.log("showIsReturningSeries", showIsReturningSeries)
+  if (userShow) {
+    if (showIsEnded && userShow.status !== "completed") {
+      return (
+        <Button
+          size={size}
+          disabled={isPending}
+          className="rounded-r-none"
+          onClick={() => onMarkAll?.()}
+          data-testid={dataTestId}
+        >
+          <Check className="w-4 h-4 mr-1" />
+          Completed
+        </Button>
+      )
+    }
+
+    if (showIsReturningSeries && userShow.status !== "caught_up") {
+      return (
+        <Button
+          size={size}
+          disabled={isPending}
+          className="rounded-r-none"
+          onClick={() => onMarkAll?.()}
+          data-testid={dataTestId}
+        >
+          <Check className="w-4 h-4 mr-1" />
+          Caught Up
+        </Button>
+      )
+    }
+
+    return null
+  }
 
   return (
     <div className={cn("inline-flex", className)}>

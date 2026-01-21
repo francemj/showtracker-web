@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { AddToCollectionButton } from "@/components/add-to-collection-button"
 import { Search as SearchIcon, Check, Star, Calendar } from "lucide-react"
-import { TMDBShow } from "@shared/schema"
+import { TMDBShow, UserShow } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useDebounce } from "@/hooks/use-debounce"
@@ -27,9 +27,7 @@ export default function Search() {
     enabled: debouncedSearch.length >= 2,
   })
 
-  const { data: userShows } = useQuery<
-    Array<{ showId: number; status: string }>
-  >({
+  const { data: userShows } = useQuery<Array<UserShow>>({
     queryKey: ["/api/user/shows"],
   })
 
@@ -70,8 +68,8 @@ export default function Search() {
     },
   })
 
-  const isShowInCollection = (showId: number): boolean => {
-    return userShows?.some((us) => us.showId === showId) || false
+  const findUserShow = (showId: number): UserShow | undefined => {
+    return userShows?.find((us) => us.showId === showId)
   }
 
   const handleAddShow = (showId: number, initialStatus?: string) => {
@@ -127,7 +125,7 @@ export default function Search() {
             const year = show.first_air_date
               ? new Date(show.first_air_date).getFullYear()
               : null
-            const inCollection = isShowInCollection(show.id)
+            const userShow = findUserShow(show.id)
 
             return (
               <Card
@@ -169,7 +167,7 @@ export default function Search() {
                       {show.overview}
                     </p>
                   </div>
-                  {inCollection ? (
+                  {userShow ? (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -186,7 +184,7 @@ export default function Search() {
                       status={show.status}
                       onAdd={handleAddShow}
                       isPending={addShowMutation.isPending}
-                      isUserShow={inCollection}
+                      userShow={userShow}
                       size="sm"
                       className="w-full"
                       dataTestId={`button-add-show-${show.id}`}
