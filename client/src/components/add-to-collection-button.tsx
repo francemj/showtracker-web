@@ -106,7 +106,7 @@ export function AddToCollectionButton({
           <Button
             size={size}
             disabled={isPending}
-            className="rounded-l-none border-l px-2"
+            className="rounded-l-none border-l px-2 shrink-0"
             aria-label="Add to collection options"
           >
             <ChevronDown className="w-4 h-4" />

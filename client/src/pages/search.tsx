@@ -101,18 +101,12 @@ export default function Search() {
       </div>
 
       {isLoading && debouncedSearch && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i}>
-              <div className="flex gap-4 p-4">
-                <Skeleton className="w-24 h-36 rounded-md flex-shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-5 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-16 w-full" />
-                </div>
-              </div>
-            </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(12)].map((_, i) => (
+            <Skeleton
+              key={i}
+              className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
+            />
           ))}
         </div>
       )}

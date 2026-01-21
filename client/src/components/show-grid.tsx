@@ -10,7 +10,7 @@ interface ShowGridProps {
 }
 
 export const showGridClass =
-  "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6"
+  "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6 gap-6"
 
 export function ShowGrid({
   shows,
@@ -18,10 +18,23 @@ export function ShowGrid({
   emptyMessage,
   noContainer,
 }: ShowGridProps) {
-  if (isLoading)
+  if (isLoading) {
+    if (noContainer) {
+      return (
+        <>
+          {[...Array(12)].map((_, i) => (
+            <Skeleton
+              key={i}
+              className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
+            />
+          ))}
+        </>
+      )
+    }
+
     return (
       <div className={showGridClass}>
-        {[...Array(8)].map((_, i) => (
+        {[...Array(12)].map((_, i) => (
           <Skeleton
             key={i}
             className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
@@ -29,6 +42,7 @@ export function ShowGrid({
         ))}
       </div>
     )
+  }
 
   if (shows && shows.length > 0) {
     if (noContainer) {
