@@ -97,7 +97,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
         )}
       </div>
 
-      <div className="p-4 space-y-3 flex-1">
+      <div className="p-4 space-y-3 flex-1 min-w-0">
         <div>
           <h3
             className="font-heading font-semibold text-base line-clamp-1"
@@ -132,7 +132,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
             </div>
             <Progress value={progress} className="h-2" />
             <div className="flex items-center justify-between gap-2">
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <p className="text-xs font-medium truncate">
                   Next: S{show.nextEpisode.seasonNumber}E
                   {show.nextEpisode.episodeNumber}
@@ -230,7 +230,11 @@ export function ShowCard({ show, href }: ShowCardProps) {
   )
 
   if (href) {
-    return <Link href={href}>{content}</Link>
+    return (
+      <Link href={href} className="block w-full">
+        {content}
+      </Link>
+    )
   }
 
   return content
