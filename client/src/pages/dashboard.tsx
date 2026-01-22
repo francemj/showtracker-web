@@ -72,7 +72,8 @@ export default function Dashboard() {
   })
 
   const numberOfColumns = gridColumns[breakpoint]
-  const effectiveLimit = Math.min(LIMIT, numberOfColumns)
+  const effectiveLimit =
+    breakpoint === "base" ? LIMIT : Math.min(LIMIT, numberOfColumns)
   const wantToWatchShows = wantToWatchData?.shows || []
   const currentlyWatching = currentlyWatchingData?.shows || []
   const caughtUpShows = caughtUpData?.shows || []
