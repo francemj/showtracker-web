@@ -168,8 +168,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Query parameter required" })
         }
 
-        const results = await searchTVShows(query)
-        res.json(results)
+        const page = parseInt(req.query.page as string) || 1
+        const result = await searchTVShows(query, page)
+        res.json(result)
       } catch (error) {
         console.error("Search error:", error)
         res.status(500).json({ message: "Failed to search shows" })
@@ -364,8 +365,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const shows = await getShowsWithProgress(req.userId!, "watching", true)
-        res.json(shows)
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 20
+        const result = await getShowsWithProgress(
+          req.userId!,
+          "watching",
+          true,
+          page,
+          limit
+        )
+        res.json(result)
       } catch (error) {
         console.error("Get watching shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })
@@ -378,8 +387,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const shows = await getShowsWithProgress(req.userId!, "completed")
-        res.json(shows)
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 20
+        const result = await getShowsWithProgress(
+          req.userId!,
+          "completed",
+          false,
+          page,
+          limit
+        )
+        res.json(result)
       } catch (error) {
         console.error("Get completed shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })
@@ -392,8 +409,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const shows = await getShowsWithProgress(req.userId!, "want_to_watch")
-        res.json(shows)
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 20
+        const result = await getShowsWithProgress(
+          req.userId!,
+          "want_to_watch",
+          false,
+          page,
+          limit
+        )
+        res.json(result)
       } catch (error) {
         console.error("Get want to watch shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })
@@ -406,11 +431,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const shows = await getShowsWithProgress(req.userId!, "caught_up")
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 20
+        const result = await getShowsWithProgress(
+          req.userId!,
+          "caught_up",
+          false,
+          page,
+          limit
+        )
 
         // Enhance with next episode info (when available)
         const showsWithNext = await Promise.all(
-          shows.map(async (show) => {
+          result.shows.map(async (show) => {
             const nextEp = await getNextUnairedEpisode(show.id)
             return {
               ...show,
@@ -426,7 +459,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           )
         })
 
-        res.json(sortedShows)
+        res.json({
+          ...result,
+          shows: sortedShows,
+        })
       } catch (error) {
         console.error("Get caught up shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })
@@ -834,21 +870,24 @@ async function getNextUnairedEpisode(showId: number) {
 async function getShowsWithProgress(
   userId: string,
   status: string,
-  sortByRecentWatch: boolean = false
+  sortByRecentWatch: boolean = false,
+  page: number = 1,
+  limit: number = 20
 ) {
+  const offset = (page - 1) * limit
   const query = supabase
     .from("user_shows")
-    .select("*, shows(*)")
+    .select("*, shows(*)", { count: "exact" })
     .eq("user_id", userId)
     .eq("status", status)
 
   if (sortByRecentWatch) {
     // For watching shows, we want to sort by most recent watch activity
     // We'll get the data first, then sort in memory
-    const { data: userShows } = await query
+    const { data: userShows, count } = await query
 
     if (!userShows || userShows.length === 0) {
-      return []
+      return { shows: [], total: 0, page, totalPages: 0 }
     }
 
     // Get most recent watch timestamp for each show
@@ -878,8 +917,12 @@ async function getShowsWithProgress(
       return dateB - dateA // Descending
     })
 
+    // Apply pagination
+    const paginatedShows = showsWithTimestamps.slice(offset, offset + limit)
+    const totalPages = Math.ceil((count || 0) / limit)
+
     const shows = await Promise.all(
-      showsWithTimestamps.map(async (us: any) => {
+      paginatedShows.map(async (us: any) => {
         const progress = await calculateShowProgress(userId, us.show_id)
         const show = us.shows
 
@@ -913,12 +956,14 @@ async function getShowsWithProgress(
       })
     )
 
-    return shows
+    return { shows, total: count || 0, page, totalPages }
   } else {
     // Normal sorting by updated_at
-    const { data: userShows } = await query.order("updated_at", {
-      ascending: false,
-    })
+    const { data: userShows, count } = await query
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    const totalPages = Math.ceil((count || 0) / limit)
 
     const shows = await Promise.all(
       (userShows || []).map(async (us: any) => {
@@ -955,7 +1000,7 @@ async function getShowsWithProgress(
       })
     )
 
-    return shows
+    return { shows, total: count || 0, page, totalPages }
   }
 }
 
