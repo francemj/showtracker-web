@@ -5,15 +5,20 @@ if (!TMDB_API_KEY) {
   throw new Error("Missing TMDB_API_KEY environment variable")
 }
 
-export async function searchTVShows(query: string) {
+export async function searchTVShows(query: string, page: number = 1) {
   const response = await fetch(
-    `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`
+    `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`
   )
   if (!response.ok) {
     throw new Error("Failed to search TV shows")
   }
   const data = await response.json()
-  return data.results
+  return {
+    results: data.results,
+    page: data.page,
+    totalPages: data.total_pages,
+    totalResults: data.total_results,
+  }
 }
 
 export async function getTVShowDetails(showId: number) {

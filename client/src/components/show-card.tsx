@@ -111,7 +111,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
               <span>{year}</span>
               {show.numberOfSeasons && (
                 <>
-                  <span className="mx-1">•</span>
+                  <span>•</span>
                   <span>
                     {show.numberOfSeasons} Season
                     {show.numberOfSeasons !== 1 ? "s" : ""}

@@ -1,11 +1,18 @@
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TrendingUp, Clock, Eye, Zap } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { TrendingUp, Clock, Eye, Zap, ArrowRight } from "lucide-react"
 import { ShowWithProgress } from "@shared/schema"
-import { ShowGrid, showGridClass } from "@/components/show-grid"
+import { gridColumns, ShowGrid, showGridClass } from "@/components/show-grid"
+import { Link } from "wouter"
+import { apiRequest } from "@/lib/queryClient"
+import { useBreakpoint } from "@/hooks/use-breakpoint"
+
+const LIMIT = 6
 
 export default function Dashboard() {
+  const breakpoint = useBreakpoint()
   const { data: stats, isLoading: statsLoading } = useQuery<{
     totalShows: number
     watchingShows: number
@@ -15,22 +22,61 @@ export default function Dashboard() {
     queryKey: ["/api/stats"],
   })
 
-  const { data: wantToWatchShows, isLoading: showsLoading } = useQuery<
-    ShowWithProgress[]
-  >({
-    queryKey: ["/api/shows/want-to-watch"],
+  const { data: wantToWatchData, isLoading: showsLoading } = useQuery<{
+    shows: ShowWithProgress[]
+    total: number
+    page: number
+    totalPages: number
+  }>({
+    queryKey: ["/api/shows/want-to-watch", "dashboard"],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/shows/want-to-watch?page=1&limit=${LIMIT}`
+      )
+      return res.json()
+    },
   })
 
-  const { data: currentlyWatching, isLoading: currentlyWatchingLoading } =
-    useQuery<ShowWithProgress[]>({
-      queryKey: ["/api/shows/watching"],
+  const { data: currentlyWatchingData, isLoading: currentlyWatchingLoading } =
+    useQuery<{
+      shows: ShowWithProgress[]
+      total: number
+      page: number
+      totalPages: number
+    }>({
+      queryKey: ["/api/shows/watching", "dashboard"],
+      queryFn: async () => {
+        const res = await apiRequest(
+          "GET",
+          `/api/shows/watching?page=1&limit=${LIMIT}`
+        )
+        return res.json()
+      },
     })
 
-  const { data: caughtUpShows, isLoading: caughtUpLoading } = useQuery<
-    ShowWithProgress[]
-  >({
-    queryKey: ["/api/shows/caught-up"],
+  const { data: caughtUpData, isLoading: caughtUpLoading } = useQuery<{
+    shows: ShowWithProgress[]
+    total: number
+    page: number
+    totalPages: number
+  }>({
+    queryKey: ["/api/shows/caught-up", "dashboard"],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "GET",
+        `/api/shows/caught-up?page=1&limit=${LIMIT}`
+      )
+      return res.json()
+    },
   })
+
+  const numberOfColumns = gridColumns[breakpoint]
+  const effectiveLimit =
+    breakpoint === "base" ? LIMIT : Math.min(LIMIT, numberOfColumns)
+  const wantToWatchShows = wantToWatchData?.shows || []
+  const currentlyWatching = currentlyWatchingData?.shows || []
+  const caughtUpShows = caughtUpData?.shows || []
 
   return (
     <div className="space-y-8">
@@ -139,54 +185,85 @@ export default function Dashboard() {
       </div>
 
       <div className={showGridClass}>
-        <div className="flex items-center gap-3 col-span-full my-2">
-          <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
-            <Eye className="w-5 h-5 text-primary" />
+        <div className="flex items-center justify-between col-span-full my-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
+              <Eye className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+                Currently Watching
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Pick up where you left off
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
-              Currently Watching
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Pick up where you left off
-            </p>
-          </div>
+          {currentlyWatchingData &&
+            currentlyWatchingData.total > effectiveLimit && (
+              <Link href="/watching">
+                <Button variant="outline" size="sm">
+                  See All
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            )}
         </div>
         <ShowGrid
-          shows={currentlyWatching}
+          shows={currentlyWatching.slice(0, effectiveLimit)}
           isLoading={currentlyWatchingLoading}
           noContainer
         />
 
-        <div className="flex items-center gap-3 col-span-full my-2">
-          <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
-            <Zap className="w-5 h-5 text-teal-600" />
+        <div className="flex items-center justify-between col-span-full my-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 bg-teal-600/10 rounded-lg">
+              <Zap className="w-5 h-5 text-teal-600" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-heading font-bold text-foreground">
+                Caught Up
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Shows where you've watched all available episodes
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground">
-              Caught Up
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Shows where you've watched all available episodes
-            </p>
-          </div>
+          {caughtUpData && caughtUpData.total > effectiveLimit && (
+            <Link href="/caught-up">
+              <Button variant="outline" size="sm">
+                See All
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          )}
         </div>
         <ShowGrid
-          shows={caughtUpShows}
+          shows={caughtUpShows.slice(0, effectiveLimit)}
           isLoading={caughtUpLoading}
           noContainer
         />
 
-        <div className="col-span-full my-2">
-          <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
-            Start Watching
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Shows you want to watch
-          </p>
+        <div className="flex items-center justify-between col-span-full my-2">
+          <div>
+            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+              Start Watching
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Shows you want to watch
+            </p>
+          </div>
+          {wantToWatchData && wantToWatchData.total > effectiveLimit && (
+            <Link href="/want-to-watch">
+              <Button variant="outline" size="sm">
+                See All
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          )}
         </div>
         <ShowGrid
-          shows={wantToWatchShows}
+          shows={wantToWatchShows.slice(0, effectiveLimit)}
           isLoading={showsLoading}
           noContainer
         />

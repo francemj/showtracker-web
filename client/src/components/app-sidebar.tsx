@@ -21,6 +21,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
   SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -62,6 +63,7 @@ const menuItems = [
 export function AppSidebar() {
   const [location] = useLocation()
   const { user, logout } = useAuth()
+  const { closeSidebar } = useSidebar()
 
   return (
     <Sidebar>
@@ -97,7 +99,7 @@ export function AppSidebar() {
                       isActive={isActive}
                       data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
                     >
-                      <Link href={item.url}>
+                      <Link href={item.url} onClick={closeSidebar}>
                         <item.icon className="w-5 h-5" />
                         <span className="font-medium">{item.title}</span>
                       </Link>
