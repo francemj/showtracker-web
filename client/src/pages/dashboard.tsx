@@ -4,13 +4,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, Clock, Eye, Zap, ArrowRight } from "lucide-react"
 import { ShowWithProgress } from "@shared/schema"
-import { ShowGrid, showGridClass } from "@/components/show-grid"
+import { gridColumns, ShowGrid, showGridClass } from "@/components/show-grid"
 import { Link } from "wouter"
 import { apiRequest } from "@/lib/queryClient"
+import { useBreakpoint } from "@/hooks/use-breakpoint"
 
 const LIMIT = 6
 
 export default function Dashboard() {
+  const breakpoint = useBreakpoint()
   const { data: stats, isLoading: statsLoading } = useQuery<{
     totalShows: number
     watchingShows: number
@@ -69,6 +71,8 @@ export default function Dashboard() {
     },
   })
 
+  const numberOfColumns = gridColumns[breakpoint]
+  const effectiveLimit = Math.min(LIMIT, numberOfColumns)
   const wantToWatchShows = wantToWatchData?.shows || []
   const currentlyWatching = currentlyWatchingData?.shows || []
   const caughtUpShows = caughtUpData?.shows || []
@@ -194,17 +198,18 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {currentlyWatchingData && currentlyWatchingData.total > LIMIT && (
-            <Link href="/watching">
-              <Button variant="outline" size="sm">
-                See All
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          )}
+          {currentlyWatchingData &&
+            currentlyWatchingData.total > effectiveLimit && (
+              <Link href="/watching">
+                <Button variant="outline" size="sm">
+                  See All
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            )}
         </div>
         <ShowGrid
-          shows={currentlyWatching.slice(0, LIMIT)}
+          shows={currentlyWatching.slice(0, effectiveLimit)}
           isLoading={currentlyWatchingLoading}
           noContainer
         />
@@ -223,7 +228,7 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {caughtUpData && caughtUpData.total > LIMIT && (
+          {caughtUpData && caughtUpData.total > effectiveLimit && (
             <Link href="/caught-up">
               <Button variant="outline" size="sm">
                 See All
@@ -233,7 +238,7 @@ export default function Dashboard() {
           )}
         </div>
         <ShowGrid
-          shows={caughtUpShows.slice(0, LIMIT)}
+          shows={caughtUpShows.slice(0, effectiveLimit)}
           isLoading={caughtUpLoading}
           noContainer
         />
@@ -247,7 +252,7 @@ export default function Dashboard() {
               Shows you want to watch
             </p>
           </div>
-          {wantToWatchData && wantToWatchData.total > LIMIT && (
+          {wantToWatchData && wantToWatchData.total > effectiveLimit && (
             <Link href="/want-to-watch">
               <Button variant="outline" size="sm">
                 See All
@@ -257,7 +262,7 @@ export default function Dashboard() {
           )}
         </div>
         <ShowGrid
-          shows={wantToWatchShows.slice(0, LIMIT)}
+          shows={wantToWatchShows.slice(0, effectiveLimit)}
           isLoading={showsLoading}
           noContainer
         />

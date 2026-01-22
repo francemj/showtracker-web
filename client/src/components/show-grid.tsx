@@ -1,6 +1,7 @@
 import { ShowWithProgress } from "@shared/schema"
 import { ShowCard } from "./show-card"
 import { Skeleton } from "./ui/skeleton"
+import { useBreakpoint } from "@/hooks/use-breakpoint"
 
 interface ShowGridProps {
   shows?: ShowWithProgress[]
@@ -9,8 +10,15 @@ interface ShowGridProps {
   noContainer?: boolean
 }
 
-export const showGridClass =
-  "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6 gap-6"
+export const gridColumns = {
+  base: 1,
+  sm: 1,
+  md: 2,
+  lg: 4,
+  xl: 4,
+  "2xl": 6,
+}
+export const showGridClass = `grid grid-cols-${gridColumns.base} md:grid-cols-${gridColumns.md} lg:grid-cols-${gridColumns.lg} 2xl:grid-cols-${gridColumns["2xl"]} gap-6`
 
 export function ShowGrid({
   shows,
@@ -18,11 +26,12 @@ export function ShowGrid({
   emptyMessage,
   noContainer,
 }: ShowGridProps) {
+  const breakpoint = useBreakpoint()
   if (isLoading) {
     if (noContainer) {
       return (
         <>
-          {[...Array(12)].map((_, i) => (
+          {[...Array(gridColumns[breakpoint])].map((_, i) => (
             <Skeleton
               key={i}
               className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
@@ -34,7 +43,7 @@ export function ShowGrid({
 
     return (
       <div className={showGridClass}>
-        {[...Array(12)].map((_, i) => (
+        {[...Array(gridColumns[breakpoint])].map((_, i) => (
           <Skeleton
             key={i}
             className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"

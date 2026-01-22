@@ -7,11 +7,12 @@ import {
 } from "@/components/ui/card"
 import { ShowWithProgress } from "@shared/schema"
 import { CheckCircle2 } from "lucide-react"
-import { ShowGrid, showGridClass } from "@/components/show-grid"
+import { gridColumns, ShowGrid, showGridClass } from "@/components/show-grid"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
 import { apiRequest } from "@/lib/queryClient"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMemo } from "react"
+import { useBreakpoint } from "@/hooks/use-breakpoint"
 
 interface PaginatedResponse {
   shows: ShowWithProgress[]
@@ -21,6 +22,7 @@ interface PaginatedResponse {
 }
 
 export default function Completed() {
+  const breakpoint = useBreakpoint()
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery<PaginatedResponse>({
       queryKey: ["/api/shows/completed"],
@@ -85,7 +87,7 @@ export default function Completed() {
         {hasNextPage && <div ref={observerTarget} className="py-8"></div>}
 
         {isFetchingNextPage &&
-          [...Array(12)].map((_, i) => (
+          [...Array(gridColumns[breakpoint])].map((_, i) => (
             <Skeleton
               key={i}
               className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"

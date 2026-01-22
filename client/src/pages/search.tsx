@@ -18,6 +18,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Link } from "wouter"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
+import { useBreakpoint } from "@/hooks/use-breakpoint"
+import { gridColumns } from "@/components/show-grid"
 
 interface SearchResponse {
   results: TMDBShow[]
@@ -30,7 +32,7 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const { toast } = useToast()
-
+  const breakpoint = useBreakpoint()
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery<SearchResponse>({
       queryKey: ["/api/search/shows", debouncedSearch],
@@ -134,7 +136,7 @@ export default function Search() {
 
       {isLoading && debouncedSearch && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(12)].map((_, i) => (
+          {[...Array(gridColumns[breakpoint])].map((_, i) => (
             <Skeleton
               key={i}
               className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
