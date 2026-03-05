@@ -50,7 +50,7 @@ export const userShows = pgTable("user_shows", {
   showId: integer("show_id")
     .notNull()
     .references(() => shows.id, { onDelete: "cascade" }),
-  status: text("status").notNull(), // "want_to_watch", "watching", "caught_up", "completed"
+  status: text("status").notNull(), // "want_to_watch", "watching", "caught_up", "completed", "stopped"
   rating: integer("rating"), // 1-10
   notes: text("notes"),
   addedAt: timestamp("added_at").defaultNow().notNull(),

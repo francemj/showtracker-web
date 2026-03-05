@@ -178,7 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
-  // Get user stats
+  // Get user stats (exclude stopped shows and their episodes)
   app.get(
     "/api/stats",
     authMiddleware,
@@ -186,22 +186,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { data: userShows } = await supabase
           .from("user_shows")
-          .select("status")
+          .select("status, show_id")
           .eq("user_id", req.userId)
 
-        const { count: episodesWatched } = await supabase
-          .from("watch_progress")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", req.userId)
-          .eq("watched", true)
+        const activeShows = (userShows || []).filter(
+          (s: { status: string }) => s.status !== "stopped"
+        )
+        const activeShowIds = activeShows.map(
+          (s: { show_id: number }) => s.show_id
+        )
+
+        let episodesWatched = 0
+        if (activeShowIds.length > 0) {
+          const { count } = await supabase
+            .from("watch_progress")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", req.userId)
+            .eq("watched", true)
+            .in("show_id", activeShowIds)
+          episodesWatched = count || 0
+        }
 
         const stats = {
-          totalShows: userShows?.length || 0,
+          totalShows: activeShows.length,
           watchingShows:
-            userShows?.filter((s) => s.status === "watching").length || 0,
+            activeShows.filter(
+              (s: { status: string }) => s.status === "watching"
+            ).length || 0,
           completedShows:
-            userShows?.filter((s) => s.status === "completed").length || 0,
-          episodesWatched: episodesWatched || 0,
+            activeShows.filter(
+              (s: { status: string }) => s.status === "completed"
+            ).length || 0,
+          episodesWatched,
         }
 
         res.json(stats)
@@ -254,6 +270,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .select("show_id")
             .eq("user_id", userId)
             .neq("status", "completed")
+            .neq("status", "stopped")
 
           if (scope === "caught_up_only") {
             query = query.eq("status", "caught_up")
@@ -355,6 +372,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (error) {
         console.error("Add show error:", error)
         res.status(500).json({ message: "Failed to add show" })
+      }
+    }
+  )
+
+  // Remove show from user collection (soft delete: set status to "stopped")
+  app.delete(
+    "/api/user/shows/:showId",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const showId = parseInt(req.params.showId, 10)
+        if (Number.isNaN(showId)) {
+          return res.status(400).json({ message: "Invalid show ID" })
+        }
+
+        const { error: updateError } = await supabase
+          .from("user_shows")
+          .update({ status: "stopped", updated_at: new Date().toISOString() })
+          .eq("user_id", req.userId!)
+          .eq("show_id", showId)
+
+        if (updateError) {
+          console.error("Remove show: user_shows update error", updateError)
+          return res.status(500).json({ message: "Failed to remove show" })
+        }
+
+        res.status(204).send()
+      } catch (error) {
+        console.error("Remove show error:", error)
+        res.status(500).json({ message: "Failed to remove show" })
       }
     }
   )

@@ -42,6 +42,7 @@ export default function ShowDetail() {
     seasonNumber: number
     episodeNumber: number
   } | null>(null)
+  const [removeShowDialogOpen, setRemoveShowDialogOpen] = useState(false)
 
   const { data: show, isLoading: showLoading } = useQuery<ShowWithProgress>({
     queryKey: ["/api/shows", id],
@@ -122,6 +123,36 @@ export default function ShowDetail() {
       toast({
         title: "Error",
         description: "Failed to add show. Please try again.",
+        variant: "destructive",
+      })
+    },
+  })
+
+  const removeShowMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/user/shows/${id}`)
+    },
+    onSuccess: () => {
+      setRemoveShowDialogOpen(false)
+      queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
+      queryClient.invalidateQueries({
+        queryKey: ["/api/shows", id, "progress"],
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+      toast({
+        title: "Removed from collection",
+        description: "The show has been removed from your list.",
+      })
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to remove show. Please try again.",
         variant: "destructive",
       })
     },
@@ -596,7 +627,7 @@ export default function ShowDetail() {
 
           <Separator />
 
-          <div className="mb-6">
+          <div className="mb-6 flex flex-wrap items-center gap-4">
             <AddToCollectionButton
               showId={show.id}
               status={show.status}
@@ -637,6 +668,27 @@ export default function ShowDetail() {
               size="lg"
               dataTestId="button-add-to-collection"
             />
+            {show.userShow && show.userShow.status !== "stopped" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive"
+                disabled={removeShowMutation.isPending}
+                onClick={() => setRemoveShowDialogOpen(true)}
+                data-testid="button-remove-from-collection"
+              >
+                Remove from collection
+              </Button>
+            )}
+            {show.userShow?.status === "stopped" && (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="text-stopped-message"
+              >
+                You've stopped tracking this show. Your progress is saved. Mark
+                an episode as watched below to start tracking again.
+              </p>
+            )}
           </div>
 
           <div>
@@ -858,6 +910,32 @@ export default function ShowDetail() {
               data-testid="button-unmark-all-succeeding"
             >
               Unmark All Succeeding
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={removeShowDialogOpen}
+        onOpenChange={setRemoveShowDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from collection?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the show from your list. Your watch progress is
+              kept; mark an episode as watched to start tracking again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => removeShowMutation.mutate()}
+              disabled={removeShowMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-remove-from-collection"
+            >
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
