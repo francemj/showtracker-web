@@ -1,35 +1,61 @@
 import { useEffect, useRef } from "react"
 import { useLocation } from "wouter"
-import { apiRequest } from "@/lib/queryClient"
+import { apiRequest, queryClient } from "@/lib/queryClient"
 
-const STORAGE_KEY = "statusValidationLastRun"
-const THROTTLE_MS = 30 * 60 * 1000 // 30 minutes
+const STORAGE_KEY_INITIAL = "statusValidationInitial"
+const STORAGE_KEY_NAV = "statusValidationNav"
+const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
+const THROTTLE_NAV_MS = 10 * 60 * 1000 // 10 minutes
+const INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
 
-function tryRun(scope: "all" | "caught_up_only") {
+function invalidateShowQueries() {
+  queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+  queryClient.invalidateQueries({
+    queryKey: ["/api/shows/want-to-watch", "dashboard"],
+  })
+}
+
+function tryRun(
+  scope: "all" | "caught_up_only",
+  storageKey: string,
+  throttleMs: number
+): void {
   if (typeof sessionStorage === "undefined") return
-  const raw = sessionStorage.getItem(STORAGE_KEY)
+  const raw = sessionStorage.getItem(storageKey)
   const last = raw ? parseInt(raw, 10) : 0
-  if (last && Date.now() - last < THROTTLE_MS) return
-  sessionStorage.setItem(STORAGE_KEY, String(Date.now()))
-  apiRequest("POST", "/api/user/shows/validate-status", { scope }).catch(
-    () => {}
-  )
+  if (last && Date.now() - last < throttleMs) return
+
+  apiRequest("POST", "/api/user/shows/validate-status", { scope })
+    .then((res) => {
+      if (res.ok) {
+        sessionStorage.setItem(storageKey, String(Date.now()))
+        // Invalidate after delay so UI refetches once backend has updated
+        setTimeout(invalidateShowQueries, INVALIDATE_DELAY_MS)
+      }
+    })
+    .catch(() => {})
 }
 
 export function StatusValidationTrigger() {
   const [location] = useLocation()
   const isFirstLocation = useRef(true)
 
+  // Initial load: refresh all non-completed shows (throttled 30 min)
   useEffect(() => {
-    tryRun("all")
+    tryRun("all", STORAGE_KEY_INITIAL, THROTTLE_INITIAL_MS)
   }, [])
 
+  // On navigation: refresh all non-completed shows (throttled 10 min, separate from initial)
   useEffect(() => {
     if (isFirstLocation.current) {
       isFirstLocation.current = false
       return
     }
-    tryRun("caught_up_only")
+    tryRun("all", STORAGE_KEY_NAV, THROTTLE_NAV_MS)
   }, [location])
 
   return null

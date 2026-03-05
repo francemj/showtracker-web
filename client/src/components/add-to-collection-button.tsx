@@ -61,12 +61,11 @@ export function AddToCollectionButton({
         <Button
           size={size}
           disabled={isPending}
-          className="rounded-r-none"
           onClick={() => onMarkAll?.()}
           data-testid={dataTestId}
         >
           <Check className="w-4 h-4 mr-1" />
-          Completed
+          Mark as Completed
         </Button>
       )
     }
@@ -76,12 +75,11 @@ export function AddToCollectionButton({
         <Button
           size={size}
           disabled={isPending}
-          className="rounded-r-none"
           onClick={() => onMarkAll?.()}
           data-testid={dataTestId}
         >
           <Check className="w-4 h-4 mr-1" />
-          Caught Up
+          Mark as Caught Up
         </Button>
       )
     }
