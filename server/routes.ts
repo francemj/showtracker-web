@@ -606,13 +606,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json([])
         }
 
-        const seasons = await Promise.all(
-          Array.from({ length: show.number_of_seasons }, (_, i) => i + 1).map(
-            async (seasonNum) => {
-              return await getTVShowSeason(parseInt(id), seasonNum)
-            }
-          )
+        const seasonNums = Array.from(
+          { length: show.number_of_seasons },
+          (_, i) => i + 1
         )
+
+        const seasonResults = await Promise.allSettled(
+          seasonNums.map(async (seasonNum) => {
+            return await getTVShowSeason(parseInt(id), seasonNum)
+          })
+        )
+
+        const seasons = seasonResults
+          .filter(
+            (r): r is PromiseFulfilledResult<any> => r.status === "fulfilled"
+          )
+          .map((r) => r.value)
+
+        // If everything failed, surface it as an error so the client can react.
+        if (seasons.length === 0) {
+          throw new Error("Failed to get seasons from TMDB")
+        }
 
         // Cache episodes in database for faster status inference
         // This runs in background and doesn't block the response
