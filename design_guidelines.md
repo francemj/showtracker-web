@@ -36,7 +36,7 @@
 - Width: w-64
 - Dark overlay with slight transparency
 - Logo at top (p-6)
-- Navigation items with icons (Heroicons)
+- Navigation items with icons (Lucide React)
 - Active state: indigo background with rounded corners
 - Mobile: Collapsible hamburger menu
 
@@ -100,7 +100,7 @@
 ### Forms
 - Input fields: rounded-lg, border with focus ring in indigo
 - Labels: text-sm font-medium in dark slate
-- Dropdowns: Custom styled with Heroicons chevron
+- Dropdowns: Custom styled with Lucide chevrons / checkmarks
 
 ## Grid Systems
 - Show grids: `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6`

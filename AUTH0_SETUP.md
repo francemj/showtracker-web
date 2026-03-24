@@ -60,9 +60,12 @@ VITE_AUTH0_CLIENT_ID=your_client_id
 
 ```
 AUTH0_DOMAIN=your-tenant.auth0.com
+UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token
 ```
 
 - **AUTH0_DOMAIN**: Same as `VITE_AUTH0_DOMAIN`. Used to call the `/userinfo` endpoint and validate the access token.
+- **UPSTASH_REDIS_***: Required. The server caches the mapping from access token → Auth0 `sub` in Redis for a few minutes to avoid hitting `/userinfo` on every API request ([`server/lib/auth0.ts`](./server/lib/auth0.ts)). Without these variables the server will fail to start when loading the auth module.
 
 `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` are **not** required for this flow; the backend does not call Auth0’s token or Management APIs.
 
