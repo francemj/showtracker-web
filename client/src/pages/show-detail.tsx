@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { useParams } from "wouter"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +30,12 @@ import { Star, Calendar, Clock, Tv, CheckCircle2 } from "lucide-react"
 import { ShowWithProgress, TMDBSeason } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
+import {
+  STATUS_INVALIDATE_DELAY_MS,
+  invalidateStatusRelatedQueries,
+} from "@/components/status-validation-trigger"
+
+const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000 // 10 minutes
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -43,6 +49,39 @@ export default function ShowDetail() {
     episodeNumber: number
   } | null>(null)
   const [removeShowDialogOpen, setRemoveShowDialogOpen] = useState(false)
+
+  useEffect(() => {
+    if (!id || typeof sessionStorage === "undefined") return
+
+    const parsedShowId = parseInt(id, 10)
+    if (Number.isNaN(parsedShowId)) return
+
+    const storageKey = `statusValidationShow:${parsedShowId}`
+    const raw = sessionStorage.getItem(storageKey)
+    const last = raw ? parseInt(raw, 10) : 0
+    if (last && Date.now() - last < SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS) {
+      return
+    }
+
+    apiRequest("POST", "/api/user/shows/validate-status", {
+      showId: parsedShowId,
+    })
+      .then((res) => {
+        if (!res.ok) return
+        sessionStorage.setItem(storageKey, String(Date.now()))
+        setTimeout(() => {
+          invalidateStatusRelatedQueries()
+          queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
+          queryClient.invalidateQueries({
+            queryKey: ["/api/shows", id, "seasons"],
+          })
+          queryClient.invalidateQueries({
+            queryKey: ["/api/shows", id, "progress"],
+          })
+        }, STATUS_INVALIDATE_DELAY_MS)
+      })
+      .catch(() => {})
+  }, [id])
 
   const { data: show, isLoading: showLoading } = useQuery<ShowWithProgress>({
     queryKey: ["/api/shows", id],

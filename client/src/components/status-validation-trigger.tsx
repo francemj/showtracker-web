@@ -6,9 +6,9 @@ const STORAGE_KEY_INITIAL = "statusValidationInitial"
 const STORAGE_KEY_NAV = "statusValidationNav"
 const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
 const THROTTLE_NAV_MS = 10 * 60 * 1000 // 10 minutes
-const INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
+export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
 
-function invalidateShowQueries() {
+export function invalidateStatusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
@@ -34,7 +34,7 @@ function tryRun(
       if (res.ok) {
         sessionStorage.setItem(storageKey, String(Date.now()))
         // Invalidate after delay so UI refetches once backend has updated
-        setTimeout(invalidateShowQueries, INVALIDATE_DELAY_MS)
+        setTimeout(invalidateStatusRelatedQueries, STATUS_INVALIDATE_DELAY_MS)
       }
     })
     .catch(() => {})

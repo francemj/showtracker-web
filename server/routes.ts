@@ -259,12 +259,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       const scope = req.body?.scope ?? "all"
+      const validScopes = new Set(["all", "caught_up_only"])
+      if (!validScopes.has(scope)) {
+        return res.status(400).json({ message: "Invalid scope" })
+      }
+
+      let targetShowId: number | undefined
+      if (req.body?.showId !== undefined) {
+        const parsedShowId = Number(req.body.showId)
+        if (!Number.isInteger(parsedShowId) || parsedShowId <= 0) {
+          return res.status(400).json({ message: "Invalid showId" })
+        }
+        targetShowId = parsedShowId
+      }
+
       const userId = req.userId!
+      const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+      console.log(`[validate-status:${runId}] request accepted`, {
+        userId,
+        scope,
+        showId: targetShowId ?? null,
+      })
 
       res.status(202).json({ message: "Validation started" })
 
       setImmediate(async () => {
+        const runStartMs = Date.now()
         try {
+          console.log(`[validate-status:${runId}] run started`)
+
           let query = supabase
             .from("user_shows")
             .select("show_id")
@@ -275,17 +299,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (scope === "caught_up_only") {
             query = query.eq("status", "caught_up")
           }
+          if (targetShowId !== undefined) {
+            query = query.eq("show_id", targetShowId)
+          }
 
           const { data: rows, error } = await query
 
-          if (error || !rows?.length) {
-            if (error) console.error("validate-status: fetch user_shows", error)
+          if (error) {
+            console.error(
+              `[validate-status:${runId}] fetch user_shows failed`,
+              { error }
+            )
             return
           }
 
+          if (!rows?.length) {
+            console.log(`[validate-status:${runId}] no matching shows`, {
+              userId,
+              scope,
+              showId: targetShowId ?? null,
+            })
+            return
+          }
+
+          console.log(`[validate-status:${runId}] selected shows`, {
+            count: rows.length,
+          })
+
+          let succeeded = 0
+          let failed = 0
+
           for (const row of rows) {
             const showId = row.show_id as number
+            const showStartMs = Date.now()
             try {
+              console.log(`[validate-status:${runId}] show start`, { showId })
               const tmdbShow = await upsertShowFromTmdb(showId)
               if (tmdbShow?.number_of_seasons) {
                 const seasons = await Promise.all(
@@ -297,12 +345,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await cacheEpisodesInDatabase(showId, seasons)
               }
               await updateInferredStatus(userId, showId)
+              succeeded += 1
+              console.log(`[validate-status:${runId}] show complete`, {
+                showId,
+                elapsedMs: Date.now() - showStartMs,
+              })
             } catch (err: any) {
-              console.error(`validate-status: show ${showId}`, err?.message)
+              failed += 1
+              console.error(`[validate-status:${runId}] show failed`, {
+                showId,
+                error: err,
+                elapsedMs: Date.now() - showStartMs,
+              })
             }
           }
+
+          console.log(`[validate-status:${runId}] run complete`, {
+            processed: rows.length,
+            succeeded,
+            failed,
+            elapsedMs: Date.now() - runStartMs,
+          })
         } catch (err: any) {
-          console.error("validate-status: run failed", err)
+          console.error(`[validate-status:${runId}] run failed`, {
+            error: err,
+            elapsedMs: Date.now() - runStartMs,
+          })
         }
       })
     }
