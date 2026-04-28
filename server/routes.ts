@@ -3,6 +3,7 @@ import { createServer, type Server } from "http"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
+import { scheduleBackgroundTask } from "./lib/background-task"
 
 interface AuthRequest extends Request {
   userId?: string
@@ -284,94 +285,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(202).json({ message: "Validation started" })
 
-      setImmediate(async () => {
-        const runStartMs = Date.now()
-        try {
-          console.log(`[validate-status:${runId}] run started`)
-
-          let query = supabase
-            .from("user_shows")
-            .select("show_id")
-            .eq("user_id", userId)
-            .neq("status", "completed")
-            .neq("status", "stopped")
-
-          if (scope === "caught_up_only") {
-            query = query.eq("status", "caught_up")
-          }
-          if (targetShowId !== undefined) {
-            query = query.eq("show_id", targetShowId)
-          }
-
-          const { data: rows, error } = await query
-
-          if (error) {
-            console.error(
-              `[validate-status:${runId}] fetch user_shows failed`,
-              { error }
-            )
-            return
-          }
-
-          if (!rows?.length) {
-            console.log(`[validate-status:${runId}] no matching shows`, {
-              userId,
-              scope,
-              showId: targetShowId ?? null,
-            })
-            return
-          }
-
-          console.log(`[validate-status:${runId}] selected shows`, {
-            count: rows.length,
-          })
-
-          let succeeded = 0
-          let failed = 0
-
-          for (const row of rows) {
-            const showId = row.show_id as number
-            const showStartMs = Date.now()
-            try {
-              console.log(`[validate-status:${runId}] show start`, { showId })
-              const tmdbShow = await upsertShowFromTmdb(showId)
-              if (tmdbShow?.number_of_seasons) {
-                const seasons = await Promise.all(
-                  Array.from(
-                    { length: tmdbShow.number_of_seasons },
-                    (_, i) => i + 1
-                  ).map((n) => getTVShowSeason(showId, n))
-                )
-                await cacheEpisodesInDatabase(showId, seasons)
-              }
-              await updateInferredStatus(userId, showId)
-              succeeded += 1
-              console.log(`[validate-status:${runId}] show complete`, {
-                showId,
-                elapsedMs: Date.now() - showStartMs,
-              })
-            } catch (err: any) {
-              failed += 1
-              console.error(`[validate-status:${runId}] show failed`, {
-                showId,
-                error: err,
-                elapsedMs: Date.now() - showStartMs,
-              })
-            }
-          }
-
-          console.log(`[validate-status:${runId}] run complete`, {
-            processed: rows.length,
-            succeeded,
-            failed,
-            elapsedMs: Date.now() - runStartMs,
-          })
-        } catch (err: any) {
-          console.error(`[validate-status:${runId}] run failed`, {
-            error: err,
-            elapsedMs: Date.now() - runStartMs,
-          })
-        }
+      const schedulerMode = scheduleBackgroundTask(
+        async () =>
+          runValidateStatusJob({
+            runId,
+            userId,
+            scope,
+            targetShowId,
+          }),
+        { taskName: `validate-status:${runId}` }
+      )
+      console.log(`[validate-status:${runId}] background scheduled`, {
+        schedulerMode,
       })
     }
   )
@@ -904,6 +829,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app)
   return httpServer
+}
+
+async function runValidateStatusJob({
+  runId,
+  userId,
+  scope,
+  targetShowId,
+}: {
+  runId: string
+  userId: string
+  scope: "all" | "caught_up_only"
+  targetShowId?: number
+}) {
+  const runStartMs = Date.now()
+  try {
+    console.log(`[validate-status:${runId}] run started`)
+
+    let query = supabase
+      .from("user_shows")
+      .select("show_id")
+      .eq("user_id", userId)
+      .neq("status", "completed")
+      .neq("status", "stopped")
+
+    if (scope === "caught_up_only") {
+      query = query.eq("status", "caught_up")
+    }
+    if (targetShowId !== undefined) {
+      query = query.eq("show_id", targetShowId)
+    }
+
+    const { data: rows, error } = await query
+
+    if (error) {
+      console.error(`[validate-status:${runId}] fetch user_shows failed`, {
+        error,
+      })
+      return
+    }
+
+    if (!rows?.length) {
+      console.log(`[validate-status:${runId}] no matching shows`, {
+        userId,
+        scope,
+        showId: targetShowId ?? null,
+      })
+      return
+    }
+
+    console.log(`[validate-status:${runId}] selected shows`, {
+      count: rows.length,
+    })
+
+    let succeeded = 0
+    let failed = 0
+
+    for (const row of rows) {
+      const showId = row.show_id as number
+      const showStartMs = Date.now()
+      try {
+        console.log(`[validate-status:${runId}] show start`, { showId })
+        const tmdbShow = await upsertShowFromTmdb(showId)
+        if (tmdbShow?.number_of_seasons) {
+          const seasons = await Promise.all(
+            Array.from(
+              { length: tmdbShow.number_of_seasons },
+              (_, i) => i + 1
+            ).map((n) => getTVShowSeason(showId, n))
+          )
+          await cacheEpisodesInDatabase(showId, seasons)
+        }
+        await updateInferredStatus(userId, showId)
+        succeeded += 1
+        console.log(`[validate-status:${runId}] show complete`, {
+          showId,
+          elapsedMs: Date.now() - showStartMs,
+        })
+      } catch (err: any) {
+        failed += 1
+        console.error(`[validate-status:${runId}] show failed`, {
+          showId,
+          error: err,
+          elapsedMs: Date.now() - showStartMs,
+        })
+      }
+    }
+
+    console.log(`[validate-status:${runId}] run complete`, {
+      processed: rows.length,
+      succeeded,
+      failed,
+      elapsedMs: Date.now() - runStartMs,
+    })
+  } catch (err: any) {
+    console.error(`[validate-status:${runId}] run failed`, {
+      error: err,
+      elapsedMs: Date.now() - runStartMs,
+    })
+  }
 }
 
 async function upsertShowFromTmdb(showId: number) {
