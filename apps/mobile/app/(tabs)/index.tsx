@@ -58,7 +58,10 @@ function SectionHeader({
         {title}
       </Text>
       {hasMore && (
-        <TouchableOpacity onPress={() => router.push(href as any)}>
+        <TouchableOpacity
+          onPress={() => router.push(href as any)}
+          style={styles.seeAll}
+        >
           <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
             See All ({total})
           </Text>
@@ -178,6 +181,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 4,
+  },
+  seeAll: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 8,
   },
   sectionTitle: {
     fontWeight: "600",
