@@ -25,8 +25,8 @@ export default function SearchScreen() {
   const theme = useTheme()
   const qc = useQueryClient()
 
-  const { data, isLoading } = useQuery<{ shows: TMDBShow[] }>({
-    queryKey: [`/api/search/shows/${debouncedQuery}`],
+  const { data, isLoading, error } = useQuery<{ results: TMDBShow[] }>({
+    queryKey: [`/api/search/shows/${encodeURIComponent(debouncedQuery)}`],
     enabled: debouncedQuery.length >= 2,
   })
 
@@ -54,7 +54,7 @@ export default function SearchScreen() {
         loading={isLoading && debouncedQuery.length >= 2}
       />
       <FlatList
-        data={data?.shows ?? []}
+        data={data?.results ?? []}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
           <Card

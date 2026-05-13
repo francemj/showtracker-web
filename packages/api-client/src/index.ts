@@ -53,7 +53,7 @@ export const getQueryFn: <T>(options: {
   async ({ queryKey }) => {
     const token = await getApiToken()
     const res = await fetch(resolveUrl(queryKey.join("/") as string), {
-      credentials: "include",
+      credentials: apiBaseUrl ? "omit" : "include",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
 
@@ -70,12 +70,14 @@ export function makeQueryClient(): QueryClient {
     defaultOptions: {
       queries: {
         queryFn: getQueryFn({ on401: "throw" }),
+        networkMode: "always",
         refetchInterval: false,
         refetchOnWindowFocus: false,
         staleTime: Infinity,
         retry: false,
       },
       mutations: {
+        networkMode: "always",
         retry: false,
       },
     },
