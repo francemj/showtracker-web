@@ -5,5 +5,5 @@
 export default {
   "client/**/*.{js,jsx,ts,tsx}": [`prettier --write`, `eslint --fix`],
   "server/**/*.{js,jsx,ts,tsx}": [`prettier --write`, `eslint --fix`],
-  "shared/**/*.{js,jsx,ts,tsx}": [`prettier --write`, `eslint --fix`],
+  "packages/**/*.{js,jsx,ts,tsx}": [`prettier --write`, `eslint --fix`],
 }

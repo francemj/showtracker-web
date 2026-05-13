@@ -121,3 +121,18 @@ CREATE POLICY "Public access to shows" ON shows FOR ALL USING (true);
 CREATE POLICY "Public access to user_shows" ON user_shows FOR ALL USING (true);
 CREATE POLICY "Public access to watch_progress" ON watch_progress FOR ALL USING (true);
 CREATE POLICY "Public access to import_history" ON import_history FOR ALL USING (true);
+
+-- Device tokens for push notifications (mobile app)
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  platform TEXT NOT NULL, -- 'ios' | 'android'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
+
+ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public access to device_tokens" ON device_tokens FOR ALL USING (true);
