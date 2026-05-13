@@ -40,8 +40,12 @@ const authMiddleware = async (
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const userKeyGenerator = (req: AuthRequest) =>
-    req.userId ?? req.ip ?? "anonymous"
+  // Key by Bearer token prefix (unique per user, available before authMiddleware runs)
+  const userKeyGenerator = (req: AuthRequest) => {
+    const auth = req.headers.authorization
+    if (auth?.startsWith("Bearer ")) return auth.slice(7, 60)
+    return req.ip ?? "anonymous"
+  }
 
   // 120 req/min per user across all /api routes
   const apiLimiter = rateLimit({
