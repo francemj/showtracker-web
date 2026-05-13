@@ -1,0 +1,13 @@
+{
+  "name": "@showtracker/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./schema.ts"
+  },
+  "peerDependencies": {
+    "drizzle-orm": "*",
+    "drizzle-zod": "*",
+    "zod": "*"
+  }
+}
