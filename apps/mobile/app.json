@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "dev.matt.showtracker"
+      "bundleIdentifier": "dev.matt.showtracker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
