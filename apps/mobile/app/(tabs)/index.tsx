@@ -59,10 +59,7 @@ function SectionHeader({
       </Text>
       {hasMore && (
         <TouchableOpacity onPress={() => router.push(href as any)}>
-          <Text
-            variant="labelMedium"
-            style={{ color: theme.colors.primary }}
-          >
+          <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
             See All ({total})
           </Text>
         </TouchableOpacity>
@@ -83,10 +80,9 @@ export default function DashboardScreen() {
       queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
     })
 
-  const { data: wantToWatch, isLoading: wtwLoading } =
-    useQuery<ShowsResponse>({
-      queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
-    })
+  const { data: wantToWatch, isLoading: wtwLoading } = useQuery<ShowsResponse>({
+    queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
+  })
 
   const { data: caughtUp, isLoading: cuLoading } = useQuery<ShowsResponse>({
     queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
@@ -99,10 +95,14 @@ export default function DashboardScreen() {
     >
       {stats && (
         <View style={styles.statsGrid}>
-          <StatCard label="Shows" value={stats.totalShows} />
-          <StatCard label="Watching" value={stats.watchingShows} />
-          <StatCard label="Completed" value={stats.completedShows} />
-          <StatCard label="Episodes" value={stats.episodesWatched} />
+          <View style={styles.statsRow}>
+            <StatCard label="Shows" value={stats.totalShows} />
+            <StatCard label="Watching" value={stats.watchingShows} />
+          </View>
+          <View style={styles.statsRow}>
+            <StatCard label="Completed" value={stats.completedShows} />
+            <StatCard label="Episodes" value={stats.episodesWatched} />
+          </View>
         </View>
       )}
 
@@ -157,8 +157,10 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   statsGrid: {
+    gap: 8,
+  },
+  statsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
   },
   statCard: {
