@@ -46,6 +46,8 @@ export async function sendBulkPushNotifications(
     chunks.push(notifications.slice(i, i + 100))
   }
 
+  // TODO: check response body for per-token errors (Expo returns HTTP 200 even for
+  // failed tokens; errors are in data[].status === "error") and clean up stale tokens
   await Promise.all(
     chunks.map((chunk) =>
       fetch(EXPO_PUSH_URL, {
