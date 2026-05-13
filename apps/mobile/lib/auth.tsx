@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const credentials = await auth0.credentialsManager.getCredentials()
       if (!credentials?.accessToken) {
+        console.warn("[auth] syncUser: no access token in credentials manager")
         setUser(null)
         return
       }
@@ -48,9 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json()
         setUser(data.user ?? data)
       } else {
+        const body = await res.text().catch(() => "(unreadable)")
+        console.warn(`[auth] syncUser: API returned ${res.status}`, body)
         setUser(null)
       }
-    } catch {
+    } catch (e) {
+      console.error("[auth] syncUser failed:", e)
       setUser(null)
     }
   }, [])
@@ -78,10 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async () => {
     setIsLoading(true)
     try {
-      await auth0.webAuth.authorize({
+      const credentials = await auth0.webAuth.authorize({
         scope: "openid profile email",
         audience: `https://${AUTH0_DOMAIN}/userinfo`,
       })
+      await auth0.credentialsManager.saveCredentials(credentials)
       await syncUser()
     } finally {
       setIsLoading(false)
