@@ -188,10 +188,10 @@ export type DeviceToken = typeof deviceTokens.$inferSelect
 
 // Additional types for frontend
 export type NextEpisode = {
-  seasonNumber: number
-  episodeNumber: number
-  name: string
-  airDate?: string
+  season: number
+  episode: number
+  airDate: string
+  daysUntil: number
 }
 
 export type ShowWithProgress = Show & {

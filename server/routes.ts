@@ -1,6 +1,6 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
-import rateLimit from "express-rate-limit"
+import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
@@ -44,7 +44,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const userKeyGenerator = (req: AuthRequest) => {
     const auth = req.headers.authorization
     if (auth?.startsWith("Bearer ")) return auth.slice(7, 60)
-    return req.ip ?? "anonymous"
+    return ipKeyGenerator(req.ip ?? "anonymous")
   }
 
   // 120 req/min per user across all /api routes
