@@ -34,9 +34,10 @@ const STATUS_CONFIG: Record<
 
 type Props = {
   status: string
+  variant?: "card" | "detail"
 }
 
-export function StatusBadge({ status }: Props) {
+export function StatusBadge({ status, variant = "card" }: Props) {
   const config = STATUS_CONFIG[status] ?? {
     label: status,
     backgroundColor: "#f3f4f6",
@@ -45,8 +46,16 @@ export function StatusBadge({ status }: Props) {
 
   return (
     <Chip
-      style={{ backgroundColor: config.backgroundColor, alignSelf: "flex-start" }}
-      textStyle={{ color: config.textColor, fontSize: 11, lineHeight: 14 }}
+      style={{
+        backgroundColor: config.backgroundColor,
+        alignSelf: "flex-start",
+        ...(variant === "detail" ? { paddingVertical: 9 } : {}),
+      }}
+      textStyle={{
+        color: config.textColor,
+        fontSize: variant === "detail" ? 14 : 11,
+        lineHeight: 14,
+      }}
       compact
     >
       {config.label}

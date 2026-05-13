@@ -227,7 +227,9 @@ export default function ShowDetailScreen() {
         {isInCollection ? (
           <View style={styles.actionRow}>
             <View style={styles.statusRow}>
-              {currentStatus && <StatusBadge status={currentStatus} />}
+              {currentStatus && (
+                <StatusBadge status={currentStatus} variant="detail" />
+              )}
               <Menu
                 visible={statusMenuVisible}
                 onDismiss={() => setStatusMenuVisible(false)}
@@ -252,15 +254,16 @@ export default function ShowDetailScreen() {
                   />
                 ))}
               </Menu>
+              <Button
+                mode="outlined"
+                compact
+                textColor={theme.colors.error}
+                onPress={() => removeShow.mutate()}
+                loading={removeShow.isPending}
+              >
+                Remove
+              </Button>
             </View>
-            <Button
-              mode="outlined"
-              textColor={theme.colors.error}
-              onPress={() => removeShow.mutate()}
-              loading={removeShow.isPending}
-            >
-              Remove
-            </Button>
           </View>
         ) : (
           <Button
@@ -274,7 +277,10 @@ export default function ShowDetailScreen() {
 
         {show.watchedEpisodes != null && show.totalEpisodes != null && (
           <View style={styles.progressSection}>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            <Text
+              variant="bodySmall"
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
               {show.watchedEpisodes} / {show.totalEpisodes} episodes watched
             </Text>
             <ProgressBar

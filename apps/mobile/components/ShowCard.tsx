@@ -27,9 +27,18 @@ export function ShowCard({ show, compact = false }: Props) {
         ? show.watchedEpisodes / show.totalEpisodes
         : null
 
+  const isCaughtUp = show.userShow?.status === "caught_up"
+  const nextEp = show.nextEpisode
+  const hasUpcoming = isCaughtUp && nextEp != null && nextEp.daysUntil >= 0
+  const showStatusBadge = show.userShow?.status && (!isCaughtUp || !hasUpcoming)
+
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: theme.colors.surface }]}
+      style={[
+        styles.card,
+        { backgroundColor: theme.colors.background },
+        compact && styles.cardCompact,
+      ]}
       onPress={() => router.push(`/shows/${show.id}`)}
       activeOpacity={0.7}
     >
@@ -59,9 +68,29 @@ export function ShowCard({ show, compact = false }: Props) {
             {show.firstAirDate.slice(0, 4)}
           </Text>
         )}
-        {show.userShow && (
+        {showStatusBadge && show.userShow && (
           <View style={styles.badgeRow}>
             <StatusBadge status={show.userShow.status} />
+          </View>
+        )}
+        {hasUpcoming && nextEp && (
+          <View style={styles.badgeRow}>
+            <View
+              style={[
+                styles.upcomingBadge,
+                { borderColor: "rgba(20,184,166,0.3)" },
+              ]}
+            >
+              <Text
+                variant="bodySmall"
+                style={{ color: "#0d9488", fontWeight: "500" }}
+              >
+                S{nextEp.season}E{nextEp.episode}{" "}
+                {nextEp.daysUntil === 0
+                  ? "today"
+                  : `in ${nextEp.daysUntil} ${nextEp.daysUntil === 1 ? "day" : "days"}`}
+              </Text>
+            </View>
           </View>
         )}
         {progress != null && (
@@ -94,12 +123,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     elevation: 1,
   },
+  cardCompact: {
+    width: 200,
+  },
   poster: {
     width: 60,
     height: 90,
   },
   info: {
     flex: 1,
+    minWidth: 0,
     padding: 8,
     gap: 4,
   },
@@ -116,5 +149,13 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 4,
     borderRadius: 2,
+  },
+  upcomingBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: "rgba(20,184,166,0.08)",
   },
 })

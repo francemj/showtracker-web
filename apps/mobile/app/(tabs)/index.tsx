@@ -121,7 +121,6 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    minWidth: "45%",
   },
   statContent: {
     alignItems: "center",
