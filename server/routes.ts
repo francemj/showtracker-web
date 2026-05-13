@@ -1,5 +1,6 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
+import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
@@ -39,6 +40,34 @@ const authMiddleware = async (
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Key by Bearer token prefix (unique per user, available before authMiddleware runs)
+  const userKeyGenerator = (req: AuthRequest) => {
+    const auth = req.headers.authorization
+    if (auth?.startsWith("Bearer ")) return auth.slice(7, 60)
+    return ipKeyGenerator(req.ip ?? "anonymous")
+  }
+
+  // 120 req/min per user across all /api routes
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    keyGenerator: userKeyGenerator,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => !req.path.startsWith("/api"),
+  })
+
+  // Tighter limit on search (TMDB calls are expensive)
+  const searchLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    keyGenerator: userKeyGenerator,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+
+  app.use(apiLimiter)
+
   // Auth routes
   app.post("/api/auth/callback", async (req: Request, res: Response) => {
     try {
@@ -158,10 +187,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Logged out" })
   })
 
+  // Register mobile push notification token
+  app.post(
+    "/api/devices/register",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { token, platform } = req.body as {
+          token: string
+          platform: string
+        }
+        if (!token || !platform) {
+          return res
+            .status(400)
+            .json({ message: "token and platform are required" })
+        }
+        if (platform !== "ios" && platform !== "android") {
+          return res
+            .status(400)
+            .json({ message: "platform must be 'ios' or 'android'" })
+        }
+
+        await supabase.from("device_tokens").upsert(
+          {
+            user_id: req.userId,
+            token,
+            platform,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "token" }
+        )
+
+        res.json({ message: "Device registered" })
+      } catch (err) {
+        console.error("Error registering device:", err)
+        res.status(500).json({ message: "Failed to register device" })
+      }
+    }
+  )
+
   // Search shows
   app.get(
     "/api/search/shows/:query",
     authMiddleware,
+    searchLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
         const { query } = req.params

@@ -33,8 +33,8 @@ export function ShowCard({ show, href }: ShowCardProps) {
       if (!show.nextEpisode) return
 
       return apiRequest("POST", `/api/shows/${show.id}/progress`, {
-        seasonNumber: show.nextEpisode.seasonNumber,
-        episodeNumber: show.nextEpisode.episodeNumber,
+        seasonNumber: show.nextEpisode.season,
+        episodeNumber: show.nextEpisode.episode,
         watched: true,
       })
     },
@@ -49,7 +49,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
 
       toast({
         title: "Episode marked as watched",
-        description: `S${show.nextEpisode?.seasonNumber}E${show.nextEpisode?.episodeNumber} - ${show.nextEpisode?.name}`,
+        description: `S${show.nextEpisode?.season}E${show.nextEpisode?.episode}`,
       })
     },
     onError: () => {
@@ -134,11 +134,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0 overflow-hidden">
                 <p className="text-xs font-medium truncate">
-                  Next: S{show.nextEpisode.seasonNumber}E
-                  {show.nextEpisode.episodeNumber}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {show.nextEpisode.name}
+                  Next: S{show.nextEpisode.season}E{show.nextEpisode.episode}
                 </p>
               </div>
               <Button
@@ -173,16 +169,16 @@ export function ShowCard({ show, href }: ShowCardProps) {
           </div>
         )}
 
-        {isCaughtUp && (show as any).nextEpisode && (
+        {isCaughtUp && show.nextEpisode && show.nextEpisode.daysUntil >= 0 && (
           <div className="space-y-2">
             <Badge
               variant="outline"
               className="text-xs bg-teal-600/10 border-teal-600/20 text-teal-700 dark:text-teal-400"
             >
-              S{(show as any).nextEpisode.season}E
-              {(show as any).nextEpisode.episode} in{" "}
-              {(show as any).nextEpisode.daysUntil}{" "}
-              {(show as any).nextEpisode.daysUntil === 1 ? "day" : "days"}
+              S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
+              {show.nextEpisode.daysUntil === 0
+                ? "today"
+                : `in ${show.nextEpisode.daysUntil} ${show.nextEpisode.daysUntil === 1 ? "day" : "days"}`}
             </Badge>
           </div>
         )}

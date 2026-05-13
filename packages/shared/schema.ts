@@ -107,6 +107,20 @@ export const watchProgress = pgTable("watch_progress", {
   watchedAt: timestamp("watched_at"),
 })
 
+// Device tokens for push notifications (mobile app)
+export const deviceTokens = pgTable("device_tokens", {
+  id: text("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()::text`),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  platform: text("platform").notNull(), // "ios" | "android"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
 // Import history
 export const importHistory = pgTable("import_history", {
   id: text("id")
@@ -170,12 +184,14 @@ export type InsertWatchProgress = z.infer<typeof insertWatchProgressSchema>
 export type ImportHistory = typeof importHistory.$inferSelect
 export type InsertImportHistory = z.infer<typeof insertImportHistorySchema>
 
+export type DeviceToken = typeof deviceTokens.$inferSelect
+
 // Additional types for frontend
 export type NextEpisode = {
-  seasonNumber: number
-  episodeNumber: number
-  name: string
-  airDate?: string
+  season: number
+  episode: number
+  airDate: string
+  daysUntil: number
 }
 
 export type ShowWithProgress = Show & {

@@ -1,9 +1,15 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query"
+import { QueryClient, type QueryFunction } from "@tanstack/react-query"
 
 let getApiToken: () => Promise<string | null> = async () => null
+let apiBaseUrl = ""
 
 export function setApiTokenGetter(fn: () => Promise<string | null>) {
   getApiToken = fn
+}
+
+// Mobile apps need an absolute base URL; web app passes "" (uses relative paths)
+export function setApiBaseUrl(url: string) {
+  apiBaseUrl = url.replace(/\/$/, "")
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -13,21 +19,25 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+function resolveUrl(url: string): string {
+  return url.startsWith("http") ? url : `${apiBaseUrl}${url}`
+}
+
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined
+  data?: unknown
 ): Promise<Response> {
   const token = await getApiToken()
   const headers: Record<string, string> = {
     ...(data ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   }
-  const res = await fetch(url, {
+  const res = await fetch(resolveUrl(url), {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: apiBaseUrl ? "omit" : "include",
   })
 
   await throwIfResNotOk(res)
@@ -35,14 +45,15 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw"
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     const token = await getApiToken()
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
+    const res = await fetch(resolveUrl(queryKey.join("/") as string), {
+      credentials: apiBaseUrl ? "omit" : "include",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
 
@@ -54,17 +65,21 @@ export const getQueryFn: <T>(options: {
     return await res.json()
   }
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+export function makeQueryClient(): QueryClient {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        queryFn: getQueryFn({ on401: "throw" }),
+        networkMode: "always",
+        refetchInterval: false,
+        refetchOnWindowFocus: false,
+        staleTime: Infinity,
+        retry: false,
+      },
+      mutations: {
+        networkMode: "always",
+        retry: false,
+      },
     },
-    mutations: {
-      retry: false,
-    },
-  },
-})
+  })
+}

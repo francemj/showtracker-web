@@ -133,7 +133,6 @@ export function AppSidebar() {
         </div>
         <Button
           variant="outline"
-          size="sm"
           onClick={logout}
           className="w-full bg-transparent border-sidebar-foreground/20 text-sidebar-foreground hover:bg-sidebar-foreground/10"
           data-testid="button-logout"

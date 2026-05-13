@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "ShowTracker",
+    "slug": "showtracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "showtracker",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.matt.showtracker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "dev.matt.showtracker",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "react-native-auth0",
+        {
+          "domain": "showtracker.ca.auth0.com"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#ffffff"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9012472e-03f5-4184-9cda-ee4b35517e63"
+      },
+      "apiUrl": "https://showtracker-web.vercel.app",
+      "auth0Domain": "showtracker.ca.auth0.com",
+      "auth0ClientId": "AViXvnyWSKOt1mAVt52oDpDTjFu3QSQO",
+      "router": {}
+    },
+    "owner": "francemj-organization"
+  }
+}
