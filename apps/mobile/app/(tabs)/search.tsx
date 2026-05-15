@@ -1,26 +1,33 @@
-import React, { useState, useMemo } from "react"
-import { View, FlatList, StyleSheet, Image } from "react-native"
+import React, { useState, useMemo, useRef } from "react"
 import {
-  Searchbar,
-  Card,
-  Text,
-  Button,
-  Chip,
-  Menu,
-  ActivityIndicator,
-  useTheme,
-} from "react-native-paper"
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query"
+  View,
+  FlatList,
+  StyleSheet,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator as RNActivityIndicator,
+} from "react-native"
+import { Text, Menu, ActivityIndicator } from "react-native-paper"
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
 import type { TMDBShow, UserShow } from "@showtracker/shared"
+import {
+  useAppTheme,
+  STATUS_COLORS,
+  StatusKey,
+  STATUS_LABELS,
+  SERIF,
+  SANS,
+  SANS_600,
+  SANS_700,
+  MONO,
+  MONO_500,
+} from "../../lib/theme"
 
-const TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w200"
+const TMDB_W200 = "https://image.tmdb.org/t/p/w200"
 
 interface SearchResponse {
   results: TMDBShow[]
@@ -38,7 +45,16 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
-function AddButton({
+function CollectionBadge({ status, t }: { status: StatusKey; t: ReturnType<typeof useAppTheme> }) {
+  const sp = STATUS_COLORS[status]
+  return (
+    <View style={[styles.collectionBadge, { backgroundColor: sp.light.solid }]}>
+      <Text style={styles.collectionBadgeText}>✓</Text>
+    </View>
+  )
+}
+
+function SearchResultRow({
   show,
   userShow,
   onAdd,
@@ -49,135 +65,152 @@ function AddButton({
   onAdd: (showId: number, status?: string) => void
   isPending: boolean
 }) {
+  const t = useAppTheme()
+  const router = useRouter()
   const [menuVisible, setMenuVisible] = useState(false)
 
-  const { data: showDetail, isLoading: detailLoading } = useQuery<{
-    status?: string
-  }>({
+  const { data: showDetail } = useQuery<{ status?: string }>({
     queryKey: ["/api/shows", show.id],
     enabled: menuVisible && show.status == null,
   })
 
   const effectiveStatus = show.status ?? showDetail?.status
-  const isEnded =
-    effectiveStatus === "Ended" || effectiveStatus === "Canceled"
+  const isEnded = effectiveStatus === "Ended" || effectiveStatus === "Canceled"
   const isReturning = effectiveStatus === "Returning Series"
 
-  if (userShow) {
-    return (
-      <Chip icon="check" style={styles.inCollectionChip} compact>
-        In Collection
-      </Chip>
-    )
-  }
+  const collectionStatus = userShow?.status as StatusKey | undefined
 
   return (
-    <View style={styles.addRow}>
-      <Button
-        mode="outlined"
-        compact
-        onPress={() => onAdd(show.id)}
-        loading={isPending}
-        disabled={isPending}
-        style={styles.addButton}
-      >
-        Add
-      </Button>
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={
-          <Button
-            mode="outlined"
-            compact
-            onPress={() => setMenuVisible(true)}
-            disabled={isPending}
-            style={styles.chevronButton}
+    <TouchableOpacity
+      style={[styles.resultRow, { borderBottomColor: t.border }]}
+      onPress={() => router.push(`/shows/${show.id}`)}
+      activeOpacity={0.7}
+    >
+      {/* Poster */}
+      <View style={styles.posterWrap}>
+        {show.poster_path ? (
+          <Image
+            source={{ uri: `${TMDB_W200}${show.poster_path}` }}
+            style={styles.poster}
+          />
+        ) : (
+          <View style={[styles.poster, { backgroundColor: t.surfaceAlt }]} />
+        )}
+        {collectionStatus && <CollectionBadge status={collectionStatus} t={t} />}
+      </View>
+
+      {/* Info */}
+      <View style={styles.info}>
+        <Text style={[styles.showTitle, { color: t.fg }]} numberOfLines={2}>
+          {show.name}
+        </Text>
+        <View style={styles.metaRow}>
+          {show.first_air_date && (
+            <Text style={[styles.metaText, { color: t.fgMuted }]}>
+              {show.first_air_date.slice(0, 4)}
+            </Text>
+          )}
+          {show.vote_average > 0 && (
+            <>
+              <View style={[styles.metaDot, { backgroundColor: t.fgFaint }]} />
+              <Text style={[styles.metaText, { color: t.fgMuted }]}>
+                ★ {show.vote_average.toFixed(1)}
+              </Text>
+            </>
+          )}
+          {collectionStatus && (
+            <>
+              <View style={[styles.metaDot, { backgroundColor: t.fgFaint }]} />
+              <Text style={[styles.metaText, { color: STATUS_COLORS[collectionStatus].light.fg, fontFamily: MONO_500 }]}>
+                In {STATUS_LABELS[collectionStatus]}
+              </Text>
+            </>
+          )}
+        </View>
+        {show.overview ? (
+          <Text style={[styles.overview, { color: t.fgMuted }]} numberOfLines={2}>
+            {show.overview}
+          </Text>
+        ) : null}
+        {!userShow && (
+          <Menu
+            visible={menuVisible}
+            onDismiss={() => setMenuVisible(false)}
+            anchor={
+              <TouchableOpacity
+                style={[styles.addBtn, { borderColor: t.fg }]}
+                onPress={() => {
+                  if (isPending) return
+                  setMenuVisible(true)
+                }}
+                activeOpacity={0.7}
+              >
+                {isPending ? (
+                  <RNActivityIndicator size="small" color={t.fg} />
+                ) : (
+                  <Text style={[styles.addBtnText, { color: t.fg }]}>+ Add</Text>
+                )}
+              </TouchableOpacity>
+            }
           >
-            ▾
-          </Button>
-        }
-      >
-        <Menu.Item
-          onPress={() => {
-            onAdd(show.id, "want_to_watch")
-            setMenuVisible(false)
-          }}
-          title="Want to Watch"
-        />
-        {detailLoading && <Menu.Item title="Loading…" disabled />}
-        {isEnded && (
-          <Menu.Item
-            onPress={() => {
-              onAdd(show.id, "completed")
-              setMenuVisible(false)
-            }}
-            title="Mark as Completed"
-          />
+            <Menu.Item
+              onPress={() => { onAdd(show.id, "want_to_watch"); setMenuVisible(false) }}
+              title="Want to Watch"
+            />
+            <Menu.Item
+              onPress={() => { onAdd(show.id, "watching"); setMenuVisible(false) }}
+              title="Watching"
+            />
+            {isEnded && (
+              <Menu.Item
+                onPress={() => { onAdd(show.id, "completed"); setMenuVisible(false) }}
+                title="Mark as Completed"
+              />
+            )}
+            {isReturning && (
+              <Menu.Item
+                onPress={() => { onAdd(show.id, "caught_up"); setMenuVisible(false) }}
+                title="Mark as Caught Up"
+              />
+            )}
+          </Menu>
         )}
-        {isReturning && (
-          <Menu.Item
-            onPress={() => {
-              onAdd(show.id, "caught_up")
-              setMenuVisible(false)
-            }}
-            title="Mark as Caught Up"
-          />
-        )}
-      </Menu>
-    </View>
+      </View>
+    </TouchableOpacity>
   )
 }
 
 export default function SearchScreen() {
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebounce(query, 400)
-  const router = useRouter()
-  const theme = useTheme()
+  const t = useAppTheme()
   const qc = useQueryClient()
+  const insets = useSafeAreaInsets()
+  const inputRef = useRef<TextInput>(null)
 
-  const {
-    data,
-    isLoading,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery<SearchResponse>({
-    queryKey: ["/api/search/shows", debouncedQuery],
-    queryFn: async ({ pageParam = 1 }) => {
-      const res = await apiRequest(
-        "GET",
-        `/api/search/shows/${encodeURIComponent(debouncedQuery)}?page=${pageParam}`
-      )
-      return res.json()
-    },
-    getNextPageParam: (lastPage) =>
-      lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
-    initialPageParam: 1,
-    enabled: debouncedQuery.length >= 2,
-  })
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
+    useInfiniteQuery<SearchResponse>({
+      queryKey: ["/api/search/shows", debouncedQuery],
+      queryFn: async ({ pageParam = 1 }) => {
+        const res = await apiRequest(
+          "GET",
+          `/api/search/shows/${encodeURIComponent(debouncedQuery)}?page=${pageParam}`
+        )
+        return res.json()
+      },
+      getNextPageParam: (lastPage) =>
+        lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
+      initialPageParam: 1,
+      enabled: debouncedQuery.length >= 2,
+    })
 
-  const results = useMemo(
-    () => data?.pages.flatMap((p) => p.results) ?? [],
-    [data]
-  )
+  const results = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data])
 
-  const { data: userShows } = useQuery<UserShow[]>({
-    queryKey: ["/api/user/shows"],
-  })
+  const { data: userShows } = useQuery<UserShow[]>({ queryKey: ["/api/user/shows"] })
 
   const addMutation = useMutation({
-    mutationFn: async ({
-      showId,
-      status,
-    }: {
-      showId: number
-      status?: string
-    }) => {
-      await apiRequest("POST", "/api/user/shows", {
-        showId,
-        status: status ?? "want_to_watch",
-      })
+    mutationFn: async ({ showId, status }: { showId: number; status?: string }) => {
+      await apiRequest("POST", "/api/user/shows", { showId, status: status ?? "want_to_watch" })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
@@ -185,120 +218,76 @@ export default function SearchScreen() {
     },
   })
 
-  const findUserShow = (showId: number) =>
-    userShows?.find((us) => us.showId === showId)
+  const findUserShow = (showId: number) => userShows?.find((us) => us.showId === showId)
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <Searchbar
-        placeholder="Search TV shows..."
-        value={query}
-        onChangeText={setQuery}
-        style={styles.searchbar}
-        loading={isLoading && debouncedQuery.length >= 2}
-      />
+    <View style={[styles.container, { backgroundColor: t.bg }]}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
+        <Text style={[styles.title, { color: t.fg }]}>Search</Text>
+      </View>
 
+      {/* Search input */}
+      <View style={styles.inputWrap}>
+        <View style={[styles.inputContainer, { backgroundColor: t.surface, borderColor: t.border }]}>
+          <Text style={[styles.searchIcon, { color: t.fgMuted }]}>⌕</Text>
+          <TextInput
+            ref={inputRef}
+            style={[styles.input, { color: t.fg, fontFamily: SANS }]}
+            placeholder="Search TV shows…"
+            placeholderTextColor={t.fgFaint}
+            value={query}
+            onChangeText={setQuery}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
+              <Text style={[styles.clearBtnText, { color: t.fgMuted }]}>✕</Text>
+            </TouchableOpacity>
+          )}
+          {isLoading && debouncedQuery.length >= 2 && (
+            <ActivityIndicator size="small" color={t.fgMuted} />
+          )}
+        </View>
+      </View>
+
+      {/* Empty / no-query state */}
       {!debouncedQuery && (
         <View style={styles.emptyState}>
-          <Text variant="titleMedium">Start Searching</Text>
-          <Text
-            variant="bodyMedium"
-            style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-          >
+          <Text style={[styles.emptyTitle, { color: t.fg }]}>Start Searching</Text>
+          <Text style={[styles.emptyBody, { color: t.fgMuted }]}>
             Enter a TV show name to search and add to your collection.
           </Text>
         </View>
       )}
 
-      {!isLoading &&
-        debouncedQuery.length >= 2 &&
-        results.length === 0 && (
-          <View style={styles.emptyState}>
-            <Text variant="titleMedium">No Results</Text>
-            <Text
-              variant="bodyMedium"
-              style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}
-            >
-              No shows found for "{debouncedQuery}". Try a different search
-              term.
-            </Text>
-          </View>
-        )}
+      {!isLoading && debouncedQuery.length >= 2 && results.length === 0 && (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyTitle, { color: t.fg }]}>No Results</Text>
+          <Text style={[styles.emptyBody, { color: t.fgMuted }]}>
+            Nothing found for "{debouncedQuery}".
+          </Text>
+        </View>
+      )}
 
       <FlatList
         data={results}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => {
-          const userShow = findUserShow(item.id)
-          return (
-            <Card
-              style={styles.card}
-              onPress={() => router.push(`/shows/${item.id}`)}
-            >
-              <View style={styles.cardRow}>
-                {item.poster_path ? (
-                  <Image
-                    source={{ uri: `${TMDB_IMAGE_BASE}${item.poster_path}` }}
-                    style={styles.poster}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.poster,
-                      { backgroundColor: theme.colors.surfaceVariant },
-                    ]}
-                  />
-                )}
-                <View style={styles.cardInfo}>
-                  <Text variant="titleSmall" numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <View style={styles.badgeRow}>
-                    {item.first_air_date && (
-                      <Chip compact style={styles.badge}>
-                        {item.first_air_date.slice(0, 4)}
-                      </Chip>
-                    )}
-                    {item.vote_average > 0 && (
-                      <Chip compact icon="star" style={styles.badge}>
-                        {item.vote_average.toFixed(1)}
-                      </Chip>
-                    )}
-                  </View>
-                  {item.overview ? (
-                    <Text
-                      variant="bodySmall"
-                      numberOfLines={2}
-                      style={{ color: theme.colors.onSurfaceVariant }}
-                    >
-                      {item.overview}
-                    </Text>
-                  ) : null}
-                  <AddButton
-                    show={item}
-                    userShow={userShow}
-                    onAdd={(showId, status) =>
-                      addMutation.mutate({ showId, status })
-                    }
-                    isPending={addMutation.isPending}
-                  />
-                </View>
-              </View>
-            </Card>
-          )
-        }}
+        renderItem={({ item }) => (
+          <SearchResultRow
+            show={item}
+            userShow={findUserShow(item.id)}
+            onAdd={(showId, status) => addMutation.mutate({ showId, status })}
+            isPending={addMutation.isPending}
+          />
+        )}
         contentContainerStyle={styles.list}
         keyboardDismissMode="on-drag"
-        onEndReached={() => {
-          if (hasNextPage && !isFetchingNextPage) fetchNextPage()
-        }}
+        onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage() }}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
-          isFetchingNextPage ? (
-            <ActivityIndicator style={styles.loadingMore} />
-          ) : null
+          isFetchingNextPage ? <ActivityIndicator style={styles.loadingMore} /> : null
         }
       />
     </View>
@@ -307,18 +296,144 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchbar: { margin: 12 },
-  emptyState: { margin: 24 },
-  list: { padding: 12, gap: 8 },
-  card: { overflow: "hidden" },
-  cardRow: { flexDirection: "row" },
-  poster: { width: 70, height: 105 },
-  cardInfo: { flex: 1, padding: 10, gap: 4, minWidth: 0 },
-  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  badge: { alignSelf: "flex-start" },
-  addRow: { flexDirection: "row", gap: 4, marginTop: 4 },
-  addButton: { alignSelf: "flex-start" },
-  chevronButton: { alignSelf: "flex-start", minWidth: 0, paddingHorizontal: 4 },
-  inCollectionChip: { alignSelf: "flex-start", marginTop: 4 },
-  loadingMore: { marginVertical: 16 },
+  header: {
+    paddingHorizontal: 22,
+    paddingBottom: 16,
+  },
+  title: {
+    fontFamily: SERIF,
+    fontSize: 44,
+    letterSpacing: -0.8,
+    lineHeight: 44,
+  },
+  inputWrap: {
+    paddingHorizontal: 22,
+    paddingBottom: 14,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  searchIcon: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    padding: 0,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  clearBtnText: {
+    fontSize: 13,
+  },
+  emptyState: {
+    padding: 24,
+  },
+  emptyTitle: {
+    fontFamily: SERIF,
+    fontSize: 24,
+    letterSpacing: -0.3,
+    marginBottom: 6,
+  },
+  emptyBody: {
+    fontFamily: SANS,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  list: {
+    paddingHorizontal: 22,
+  },
+  resultRow: {
+    flexDirection: "row",
+    gap: 14,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    alignItems: "flex-start",
+  },
+  posterWrap: {
+    position: "relative",
+    flexShrink: 0,
+  },
+  poster: {
+    width: 68,
+    height: 102,
+    borderRadius: 6,
+  },
+  collectionBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  collectionBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: SANS_700,
+  },
+  info: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  showTitle: {
+    fontFamily: SERIF,
+    fontSize: 22,
+    letterSpacing: -0.2,
+    lineHeight: 26,
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+  },
+  metaText: {
+    fontFamily: MONO,
+    fontSize: 11,
+  },
+  metaDot: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+  },
+  overview: {
+    fontFamily: SANS,
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  addBtn: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  addBtnText: {
+    fontFamily: SANS_600,
+    fontSize: 12.5,
+  },
+  loadingMore: {
+    marginVertical: 16,
+  },
 })

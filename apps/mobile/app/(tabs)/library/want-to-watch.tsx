@@ -1,17 +1,13 @@
 import React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ShowList } from "../../../components/ShowList"
+import { PosterGrid } from "../../../components/PosterGrid"
 import type { ShowWithProgress } from "@showtracker/shared"
 
+const PAGE_SIZE = 40
+
 export default function WantToWatchScreen() {
-  const { data, isLoading } = useQuery<{ shows: ShowWithProgress[] }>({
-    queryKey: ["/api/shows/want-to-watch?page=1&limit=50"],
+  const { data, isLoading } = useQuery<{ shows: ShowWithProgress[]; total: number }>({
+    queryKey: [`/api/shows/want-to-watch?page=1&limit=${PAGE_SIZE}`],
   })
-  return (
-    <ShowList
-      shows={data?.shows}
-      isLoading={isLoading}
-      emptyMessage="Nothing queued up yet."
-    />
-  )
+  return <PosterGrid shows={data?.shows} isLoading={isLoading} status="want_to_watch" />
 }
