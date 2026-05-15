@@ -4,21 +4,61 @@ import { Text } from "react-native-paper"
 import { Slot, useRouter, usePathname } from "expo-router"
 import { useQuery } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { useAppTheme, STATUS_COLORS, SERIF, SANS, SANS_700, MONO } from "../../../lib/theme"
+import {
+  useAppTheme,
+  STATUS_COLORS,
+  SERIF,
+  SANS,
+  SANS_700,
+  MONO,
+} from "../../../lib/theme"
 
 type ShowsResponse = { shows: unknown[]; total: number }
 
 const TABS = [
-  { id: "watching",      label: "Watching",    href: "/(tabs)/library/watching",      segment: "watching",      apiKey: "/api/shows/watching?page=1&limit=1" },
-  { id: "want_to_watch", label: "Want",         href: "/(tabs)/library/want-to-watch", segment: "want-to-watch", apiKey: "/api/shows/want-to-watch?page=1&limit=1" },
-  { id: "caught_up",     label: "Caught Up",    href: "/(tabs)/library/caught-up",     segment: "caught-up",     apiKey: "/api/shows/caught-up?page=1&limit=1" },
-  { id: "completed",     label: "Completed",    href: "/(tabs)/library/completed",     segment: "completed",     apiKey: "/api/shows/completed?page=1&limit=1" },
+  {
+    id: "watching",
+    label: "Watching",
+    href: "/(tabs)/library/watching",
+    segment: "watching",
+    apiKey: "/api/shows/watching?page=1&limit=1",
+  },
+  {
+    id: "want_to_watch",
+    label: "Want",
+    href: "/(tabs)/library/want-to-watch",
+    segment: "want-to-watch",
+    apiKey: "/api/shows/want-to-watch?page=1&limit=1",
+  },
+  {
+    id: "caught_up",
+    label: "Caught Up",
+    href: "/(tabs)/library/caught-up",
+    segment: "caught-up",
+    apiKey: "/api/shows/caught-up?page=1&limit=1",
+  },
+  {
+    id: "completed",
+    label: "Completed",
+    href: "/(tabs)/library/completed",
+    segment: "completed",
+    apiKey: "/api/shows/completed?page=1&limit=1",
+  },
 ] as const
 
 type TabId = (typeof TABS)[number]["id"]
 
 function StatusDot({ color, size = 6 }: { color: string; size?: number }) {
-  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+      }}
+    />
+  )
 }
 
 export default function LibraryLayout() {
@@ -28,23 +68,28 @@ export default function LibraryLayout() {
   const insets = useSafeAreaInsets()
 
   // Fetch total counts for each tab
-  const { data: watchingData } = useQuery<ShowsResponse>({ queryKey: ["/api/shows/watching?page=1&limit=1"] })
-  const { data: wtwData }      = useQuery<ShowsResponse>({ queryKey: ["/api/shows/want-to-watch?page=1&limit=1"] })
-  const { data: cuData }       = useQuery<ShowsResponse>({ queryKey: ["/api/shows/caught-up?page=1&limit=1"] })
-  const { data: compData }     = useQuery<ShowsResponse>({ queryKey: ["/api/shows/completed?page=1&limit=1"] })
+  const { data: watchingData } = useQuery<ShowsResponse>({
+    queryKey: ["/api/shows/watching?page=1&limit=1"],
+  })
+  const { data: wtwData } = useQuery<ShowsResponse>({
+    queryKey: ["/api/shows/want-to-watch?page=1&limit=1"],
+  })
+  const { data: cuData } = useQuery<ShowsResponse>({
+    queryKey: ["/api/shows/caught-up?page=1&limit=1"],
+  })
+  const { data: compData } = useQuery<ShowsResponse>({
+    queryKey: ["/api/shows/completed?page=1&limit=1"],
+  })
 
   const totals: Record<TabId, number | undefined> = {
-    watching:      watchingData?.total,
+    watching: watchingData?.total,
     want_to_watch: wtwData?.total,
-    caught_up:     cuData?.total,
-    completed:     compData?.total,
+    caught_up: cuData?.total,
+    completed: compData?.total,
   }
 
   const activeTab = TABS.find((tab) => pathname.includes(tab.segment))
-  const activeSp = activeTab ? STATUS_COLORS[activeTab.id] : STATUS_COLORS.watching
-
   const activeCount = activeTab ? totals[activeTab.id] : undefined
-  const totalAll = Object.values(totals).reduce<number>((sum, v) => sum + (v ?? 0), 0)
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -60,7 +105,10 @@ export default function LibraryLayout() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.tabsContent, { borderBottomColor: t.border }]}
+        contentContainerStyle={[
+          styles.tabsContent,
+          { borderBottomColor: t.border },
+        ]}
         style={styles.tabsScroll}
       >
         {TABS.map((tab) => {
@@ -82,17 +130,21 @@ export default function LibraryLayout() {
               activeOpacity={0.7}
             >
               <StatusDot color={solidColor} />
-              <Text style={[
-                styles.tabLabel,
-                {
-                  color: isActive ? t.fg : t.fgMuted,
-                  fontFamily: isActive ? SANS_700 : SANS,
-                },
-              ]}>
+              <Text
+                style={[
+                  styles.tabLabel,
+                  {
+                    color: isActive ? t.fg : t.fgMuted,
+                    fontFamily: isActive ? SANS_700 : SANS,
+                  },
+                ]}
+              >
                 {tab.label}
               </Text>
               {count != null && (
-                <Text style={[styles.tabCount, { color: t.fgFaint }]}>{count}</Text>
+                <Text style={[styles.tabCount, { color: t.fgFaint }]}>
+                  {count}
+                </Text>
               )}
             </TouchableOpacity>
           )

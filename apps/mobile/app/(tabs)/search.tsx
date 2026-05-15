@@ -9,7 +9,12 @@ import {
   ActivityIndicator as RNActivityIndicator,
 } from "react-native"
 import { Text, Menu, ActivityIndicator } from "react-native-paper"
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
@@ -45,7 +50,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced
 }
 
-function CollectionBadge({ status, t }: { status: StatusKey; t: ReturnType<typeof useAppTheme> }) {
+function CollectionBadge({ status }: { status: StatusKey }) {
   const sp = STATUS_COLORS[status]
   return (
     <View style={[styles.collectionBadge, { backgroundColor: sp.light.solid }]}>
@@ -96,7 +101,7 @@ function SearchResultRow({
         ) : (
           <View style={[styles.poster, { backgroundColor: t.surfaceAlt }]} />
         )}
-        {collectionStatus && <CollectionBadge status={collectionStatus} t={t} />}
+        {collectionStatus && <CollectionBadge status={collectionStatus} />}
       </View>
 
       {/* Info */}
@@ -121,14 +126,25 @@ function SearchResultRow({
           {collectionStatus && (
             <>
               <View style={[styles.metaDot, { backgroundColor: t.fgFaint }]} />
-              <Text style={[styles.metaText, { color: STATUS_COLORS[collectionStatus].light.fg, fontFamily: MONO_500 }]}>
+              <Text
+                style={[
+                  styles.metaText,
+                  {
+                    color: STATUS_COLORS[collectionStatus].light.fg,
+                    fontFamily: MONO_500,
+                  },
+                ]}
+              >
                 In {STATUS_LABELS[collectionStatus]}
               </Text>
             </>
           )}
         </View>
         {show.overview ? (
-          <Text style={[styles.overview, { color: t.fgMuted }]} numberOfLines={2}>
+          <Text
+            style={[styles.overview, { color: t.fgMuted }]}
+            numberOfLines={2}
+          >
             {show.overview}
           </Text>
         ) : null}
@@ -148,28 +164,42 @@ function SearchResultRow({
                 {isPending ? (
                   <RNActivityIndicator size="small" color={t.fg} />
                 ) : (
-                  <Text style={[styles.addBtnText, { color: t.fg }]}>+ Add</Text>
+                  <Text style={[styles.addBtnText, { color: t.fg }]}>
+                    + Add
+                  </Text>
                 )}
               </TouchableOpacity>
             }
           >
             <Menu.Item
-              onPress={() => { onAdd(show.id, "want_to_watch"); setMenuVisible(false) }}
+              onPress={() => {
+                onAdd(show.id, "want_to_watch")
+                setMenuVisible(false)
+              }}
               title="Want to Watch"
             />
             <Menu.Item
-              onPress={() => { onAdd(show.id, "watching"); setMenuVisible(false) }}
+              onPress={() => {
+                onAdd(show.id, "watching")
+                setMenuVisible(false)
+              }}
               title="Watching"
             />
             {isEnded && (
               <Menu.Item
-                onPress={() => { onAdd(show.id, "completed"); setMenuVisible(false) }}
+                onPress={() => {
+                  onAdd(show.id, "completed")
+                  setMenuVisible(false)
+                }}
                 title="Mark as Completed"
               />
             )}
             {isReturning && (
               <Menu.Item
-                onPress={() => { onAdd(show.id, "caught_up"); setMenuVisible(false) }}
+                onPress={() => {
+                  onAdd(show.id, "caught_up")
+                  setMenuVisible(false)
+                }}
                 title="Mark as Caught Up"
               />
             )}
@@ -204,13 +234,27 @@ export default function SearchScreen() {
       enabled: debouncedQuery.length >= 2,
     })
 
-  const results = useMemo(() => data?.pages.flatMap((p) => p.results) ?? [], [data])
+  const results = useMemo(
+    () => data?.pages.flatMap((p) => p.results) ?? [],
+    [data]
+  )
 
-  const { data: userShows } = useQuery<UserShow[]>({ queryKey: ["/api/user/shows"] })
+  const { data: userShows } = useQuery<UserShow[]>({
+    queryKey: ["/api/user/shows"],
+  })
 
   const addMutation = useMutation({
-    mutationFn: async ({ showId, status }: { showId: number; status?: string }) => {
-      await apiRequest("POST", "/api/user/shows", { showId, status: status ?? "want_to_watch" })
+    mutationFn: async ({
+      showId,
+      status,
+    }: {
+      showId: number
+      status?: string
+    }) => {
+      await apiRequest("POST", "/api/user/shows", {
+        showId,
+        status: status ?? "want_to_watch",
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
@@ -218,7 +262,8 @@ export default function SearchScreen() {
     },
   })
 
-  const findUserShow = (showId: number) => userShows?.find((us) => us.showId === showId)
+  const findUserShow = (showId: number) =>
+    userShows?.find((us) => us.showId === showId)
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -229,7 +274,12 @@ export default function SearchScreen() {
 
       {/* Search input */}
       <View style={styles.inputWrap}>
-        <View style={[styles.inputContainer, { backgroundColor: t.surface, borderColor: t.border }]}>
+        <View
+          style={[
+            styles.inputContainer,
+            { backgroundColor: t.surface, borderColor: t.border },
+          ]}
+        >
           <Text style={[styles.searchIcon, { color: t.fgMuted }]}>⌕</Text>
           <TextInput
             ref={inputRef}
@@ -242,7 +292,10 @@ export default function SearchScreen() {
             autoCorrect={false}
           />
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
+            <TouchableOpacity
+              onPress={() => setQuery("")}
+              style={styles.clearBtn}
+            >
               <Text style={[styles.clearBtnText, { color: t.fgMuted }]}>✕</Text>
             </TouchableOpacity>
           )}
@@ -255,7 +308,9 @@ export default function SearchScreen() {
       {/* Empty / no-query state */}
       {!debouncedQuery && (
         <View style={styles.emptyState}>
-          <Text style={[styles.emptyTitle, { color: t.fg }]}>Start Searching</Text>
+          <Text style={[styles.emptyTitle, { color: t.fg }]}>
+            Start Searching
+          </Text>
           <Text style={[styles.emptyBody, { color: t.fgMuted }]}>
             Enter a TV show name to search and add to your collection.
           </Text>
@@ -284,10 +339,14 @@ export default function SearchScreen() {
         )}
         contentContainerStyle={styles.list}
         keyboardDismissMode="on-drag"
-        onEndReached={() => { if (hasNextPage && !isFetchingNextPage) fetchNextPage() }}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) fetchNextPage()
+        }}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
-          isFetchingNextPage ? <ActivityIndicator style={styles.loadingMore} /> : null
+          isFetchingNextPage ? (
+            <ActivityIndicator style={styles.loadingMore} />
+          ) : null
         }
       />
     </View>

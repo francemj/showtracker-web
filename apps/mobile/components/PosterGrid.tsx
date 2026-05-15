@@ -7,11 +7,18 @@ import {
   StyleSheet,
   Dimensions,
   Text,
-  Animated,
 } from "react-native"
 import { useRouter } from "expo-router"
 import type { ShowWithProgress } from "@showtracker/shared"
-import { useAppTheme, STATUS_COLORS, StatusKey, SERIF_ITALIC, SANS, SANS_600, SANS_700, MONO } from "../lib/theme"
+import {
+  useAppTheme,
+  StatusKey,
+  SERIF_ITALIC,
+  SANS,
+  SANS_600,
+  SANS_700,
+  MONO,
+} from "../lib/theme"
 
 const TMDB_W342 = "https://image.tmdb.org/t/p/w342"
 const SCREEN_WIDTH = Dimensions.get("window").width
@@ -30,16 +37,40 @@ function SkeletonCard() {
   const t = useAppTheme()
   return (
     <View style={[styles.cell, { width: POSTER_WIDTH }]}>
-      <View style={[styles.posterSkeleton, { backgroundColor: t.surfaceAlt, width: POSTER_WIDTH, height: POSTER_HEIGHT }]} />
-      <View style={[styles.skelLine, { backgroundColor: t.surfaceAlt, width: "80%", marginTop: 10 }]} />
-      <View style={[styles.skelLineSmall, { backgroundColor: t.surfaceAlt, width: "50%" }]} />
+      <View
+        style={[
+          styles.posterSkeleton,
+          {
+            backgroundColor: t.surfaceAlt,
+            width: POSTER_WIDTH,
+            height: POSTER_HEIGHT,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.skelLine,
+          { backgroundColor: t.surfaceAlt, width: "80%", marginTop: 10 },
+        ]}
+      />
+      <View
+        style={[
+          styles.skelLineSmall,
+          { backgroundColor: t.surfaceAlt, width: "50%" },
+        ]}
+      />
     </View>
   )
 }
 
-function EmptyState({ status, t }: { status: StatusKey; t: ReturnType<typeof useAppTheme> }) {
+function EmptyState({
+  status: _status,
+  t,
+}: {
+  status: StatusKey
+  t: ReturnType<typeof useAppTheme>
+}) {
   const router = useRouter()
-  const sp = STATUS_COLORS[status]
 
   return (
     <View style={styles.emptyCenter}>
@@ -49,7 +80,12 @@ function EmptyState({ status, t }: { status: StatusKey; t: ReturnType<typeof use
             key={i}
             style={[
               styles.ghostPoster,
-              { borderColor: t.borderStrong, opacity, width: POSTER_WIDTH * 0.52, height: POSTER_HEIGHT * 0.52 },
+              {
+                borderColor: t.borderStrong,
+                opacity,
+                width: POSTER_WIDTH * 0.52,
+                height: POSTER_HEIGHT * 0.52,
+              },
             ]}
           />
         ))}
@@ -63,7 +99,9 @@ function EmptyState({ status, t }: { status: StatusKey; t: ReturnType<typeof use
         onPress={() => router.push("/(tabs)/search")}
         activeOpacity={0.8}
       >
-        <Text style={[styles.emptyBtnText, { color: t.bg }]}>Browse Search →</Text>
+        <Text style={[styles.emptyBtnText, { color: t.bg }]}>
+          Browse Search →
+        </Text>
       </TouchableOpacity>
     </View>
   )
@@ -72,13 +110,13 @@ function EmptyState({ status, t }: { status: StatusKey; t: ReturnType<typeof use
 export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
   const t = useAppTheme()
   const router = useRouter()
-  const sp = STATUS_COLORS[status]
-  const solidColor = sp.light.solid
 
   if (isLoading) {
     return (
       <View style={styles.grid}>
-        {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} />)}
+        {[1, 2, 3, 4].map((i) => (
+          <SkeletonCard key={i} />
+        ))}
       </View>
     )
   }
@@ -97,9 +135,13 @@ export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
       onEndReached={onEndReached}
       onEndReachedThreshold={0.3}
       renderItem={({ item: show }) => {
-        const posterUri = show.posterPath ? `${TMDB_W342}${show.posterPath}` : null
+        const posterUri = show.posterPath
+          ? `${TMDB_W342}${show.posterPath}`
+          : null
         const progress =
-          show.watchedEpisodes != null && show.totalEpisodes != null && show.totalEpisodes > 0
+          show.watchedEpisodes != null &&
+          show.totalEpisodes != null &&
+          show.totalEpisodes > 0
             ? show.watchedEpisodes / show.totalEpisodes
             : null
         const hasProgress = (show.watchedEpisodes ?? 0) > 0
@@ -110,24 +152,36 @@ export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
             onPress={() => router.push(`/shows/${show.id}`)}
             activeOpacity={0.8}
           >
-            <View style={[styles.posterWrap, { width: POSTER_WIDTH, height: POSTER_HEIGHT }]}>
+            <View
+              style={[
+                styles.posterWrap,
+                { width: POSTER_WIDTH, height: POSTER_HEIGHT },
+              ]}
+            >
               {posterUri ? (
                 <Image source={{ uri: posterUri }} style={styles.poster} />
               ) : (
-                <View style={[styles.poster, { backgroundColor: t.surfaceAlt }]} />
+                <View
+                  style={[styles.poster, { backgroundColor: t.surfaceAlt }]}
+                />
               )}
               {hasProgress && progress != null && (
                 <View style={styles.progressOverlay}>
                   <View style={styles.progressTrack}>
                     <View
-                      style={[styles.progressFill, { width: `${progress * 100}%` as any }]}
+                      style={[
+                        styles.progressFill,
+                        { width: `${progress * 100}%` as any },
+                      ]}
                     />
                   </View>
                 </View>
               )}
               {!hasProgress && show.totalEpisodes != null && (
                 <View style={styles.epsBadge}>
-                  <Text style={styles.epsBadgeText}>{show.totalEpisodes} eps</Text>
+                  <Text style={styles.epsBadgeText}>
+                    {show.totalEpisodes} eps
+                  </Text>
                 </View>
               )}
             </View>
@@ -138,11 +192,13 @@ export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
               <Text style={[styles.metaText, { color: t.fgMuted }]}>
                 {show.firstAirDate?.slice(0, 4) ?? ""}
               </Text>
-              {hasProgress && show.watchedEpisodes != null && show.totalEpisodes != null && (
-                <Text style={[styles.metaText, { color: t.fgMuted }]}>
-                  {show.watchedEpisodes}/{show.totalEpisodes}
-                </Text>
-              )}
+              {hasProgress &&
+                show.watchedEpisodes != null &&
+                show.totalEpisodes != null && (
+                  <Text style={[styles.metaText, { color: t.fgMuted }]}>
+                    {show.watchedEpisodes}/{show.totalEpisodes}
+                  </Text>
+                )}
             </View>
           </TouchableOpacity>
         )

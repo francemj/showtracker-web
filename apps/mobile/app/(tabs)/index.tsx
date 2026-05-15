@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ImageBackground,
   TouchableOpacity,
-  Dimensions,
 } from "react-native"
 import { Text, ActivityIndicator } from "react-native-paper"
 import { LinearGradient } from "expo-linear-gradient"
@@ -45,7 +44,9 @@ type ShowsResponse = {
 
 function StatusDot({ color }: { color: string }) {
   return (
-    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+    <View
+      style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }}
+    />
   )
 }
 
@@ -71,24 +72,55 @@ function HeroSection({
   return (
     <View style={styles.heroContainer}>
       {backdropUri ? (
-        <ImageBackground source={{ uri: backdropUri }} style={styles.heroImage} resizeMode="cover">
+        <ImageBackground
+          source={{ uri: backdropUri }}
+          style={styles.heroImage}
+          resizeMode="cover"
+        >
           <LinearGradient
-            colors={["rgba(0,0,0,0.55)", "transparent", "transparent", "rgba(0,0,0,0.75)", t.bg]}
+            colors={[
+              "rgba(0,0,0,0.55)",
+              "transparent",
+              "transparent",
+              "rgba(0,0,0,0.75)",
+              t.bg,
+            ]}
             locations={[0, 0.25, 0.4, 0.75, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <HeroContent show={show} next={next} sp={sp} onMarkWatched={onMarkWatched} isPending={isPending} insets={insets} t={t} />
+          <HeroContent
+            show={show}
+            next={next}
+            sp={sp}
+            onMarkWatched={onMarkWatched}
+            isPending={isPending}
+            insets={insets}
+          />
         </ImageBackground>
       ) : (
         <View style={[styles.heroImage, { backgroundColor: t.surfaceAlt }]}>
-          <HeroContent show={show} next={next} sp={sp} onMarkWatched={onMarkWatched} isPending={isPending} insets={insets} t={t} />
+          <HeroContent
+            show={show}
+            next={next}
+            sp={sp}
+            onMarkWatched={onMarkWatched}
+            isPending={isPending}
+            insets={insets}
+          />
         </View>
       )}
     </View>
   )
 }
 
-function HeroContent({ show, next, sp, onMarkWatched, isPending, insets, t }: any) {
+function HeroContent({
+  show,
+  next,
+  sp,
+  onMarkWatched,
+  isPending,
+  insets,
+}: any) {
   const router = useRouter()
   return (
     <>
@@ -129,7 +161,7 @@ function HeroContent({ show, next, sp, onMarkWatched, isPending, insets, t }: an
             {isPending ? (
               <ActivityIndicator size="small" color="#000" />
             ) : (
-              <Text style={styles.heroMarkBtnText}>✓  Mark watched</Text>
+              <Text style={styles.heroMarkBtnText}>✓ Mark watched</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -191,7 +223,9 @@ function CarouselSection({
         <Text style={[styles.sectionTitle, { color: t.fg }]}>{title}</Text>
         {total != null && total > DASHBOARD_LIMIT && (
           <TouchableOpacity onPress={() => router.push(href as any)}>
-            <Text style={[styles.seeAll, { color: solidColor }]}>See all →</Text>
+            <Text style={[styles.seeAll, { color: solidColor }]}>
+              See all →
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -204,11 +238,18 @@ function CarouselSection({
           contentContainerStyle={styles.carousel}
         >
           {shows.map((show) => (
-            <CarouselCard key={show.id} show={show} status={status} solidColor={solidColor} />
+            <CarouselCard
+              key={show.id}
+              show={show}
+              status={status}
+              solidColor={solidColor}
+            />
           ))}
         </ScrollView>
       ) : (
-        <Text style={[styles.emptyText, { color: t.fgFaint }]}>Nothing here yet</Text>
+        <Text style={[styles.emptyText, { color: t.fgFaint }]}>
+          Nothing here yet
+        </Text>
       )}
     </View>
   )
@@ -228,7 +269,9 @@ function CarouselCard({
   const posterUri = show.posterPath ? `${TMDB_W300}${show.posterPath}` : null
   const isCaughtUp = status === "caught_up"
   const progress =
-    show.watchedEpisodes != null && show.totalEpisodes != null && show.totalEpisodes > 0
+    show.watchedEpisodes != null &&
+    show.totalEpisodes != null &&
+    show.totalEpisodes > 0
       ? show.watchedEpisodes / show.totalEpisodes
       : null
 
@@ -242,7 +285,9 @@ function CarouselCard({
         {posterUri ? (
           <Image source={{ uri: posterUri }} style={styles.carouselPoster} />
         ) : (
-          <View style={[styles.carouselPoster, { backgroundColor: t.surfaceAlt }]} />
+          <View
+            style={[styles.carouselPoster, { backgroundColor: t.surfaceAlt }]}
+          />
         )}
         {isCaughtUp && show.nextEpisode && (
           <View style={styles.upcomingBadge}>
@@ -257,7 +302,15 @@ function CarouselCard({
         {!isCaughtUp && progress != null && (
           <View style={styles.progressOverlay}>
             <View style={[styles.progressTrack]}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: solidColor }]} />
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${progress * 100}%` as any,
+                    backgroundColor: solidColor,
+                  },
+                ]}
+              />
             </View>
           </View>
         )}
@@ -267,10 +320,10 @@ function CarouselCard({
       </Text>
       <Text style={[styles.carouselMeta, { color: t.fgMuted }]}>
         {isCaughtUp
-          ? show.firstAirDate?.slice(0, 4) ?? ""
+          ? (show.firstAirDate?.slice(0, 4) ?? "")
           : show.watchedEpisodes != null && show.totalEpisodes != null
             ? `${show.watchedEpisodes}/${show.totalEpisodes} eps`
-            : show.firstAirDate?.slice(0, 4) ?? ""}
+            : (show.firstAirDate?.slice(0, 4) ?? "")}
       </Text>
     </TouchableOpacity>
   )
@@ -282,9 +335,10 @@ export default function DashboardScreen() {
 
   const { data: stats } = useQuery<Stats>({ queryKey: ["/api/stats"] })
 
-  const { data: watching, isLoading: watchingLoading } = useQuery<ShowsResponse>({
-    queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
-  })
+  const { data: watching, isLoading: watchingLoading } =
+    useQuery<ShowsResponse>({
+      queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
+    })
   const { data: wantToWatch, isLoading: wtwLoading } = useQuery<ShowsResponse>({
     queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
   })
@@ -305,15 +359,24 @@ export default function DashboardScreen() {
       })
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/shows", String(featuredShow?.id)] })
-      qc.invalidateQueries({ queryKey: ["/api/shows", String(featuredShow?.id), "progress"] })
-      qc.invalidateQueries({ queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`] })
+      qc.invalidateQueries({
+        queryKey: ["/api/shows", String(featuredShow?.id)],
+      })
+      qc.invalidateQueries({
+        queryKey: ["/api/shows", String(featuredShow?.id), "progress"],
+      })
+      qc.invalidateQueries({
+        queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
+      })
       qc.invalidateQueries({ queryKey: ["/api/stats"] })
     },
   })
 
   return (
-    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: 32 }}>
+    <ScrollView
+      style={{ backgroundColor: t.bg }}
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
       {featuredShow ? (
         <HeroSection
           show={featuredShow}
@@ -321,7 +384,9 @@ export default function DashboardScreen() {
           isPending={markWatched.isPending}
         />
       ) : (
-        <View style={[styles.heroPlaceholder, { backgroundColor: t.surfaceAlt }]} />
+        <View
+          style={[styles.heroPlaceholder, { backgroundColor: t.surfaceAlt }]}
+        />
       )}
 
       {stats && <StatsRow stats={stats} />}
