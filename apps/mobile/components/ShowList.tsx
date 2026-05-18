@@ -46,9 +46,7 @@ export function ShowList({
     <FlatList
       data={shows}
       keyExtractor={(item) => String(item.id)}
-      renderItem={({ item }) => (
-        <ShowCard show={item} compact={horizontal} />
-      )}
+      renderItem={({ item }) => <ShowCard show={item} compact={horizontal} />}
       horizontal={horizontal}
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={

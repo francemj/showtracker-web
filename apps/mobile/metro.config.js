@@ -1,12 +1,12 @@
-const { getDefaultConfig } = require("expo/metro-config");
-const path = require("path");
+const { getDefaultConfig } = require("expo/metro-config")
+const path = require("path")
 
-const projectRoot = __dirname;
-const monorepoRoot = path.resolve(projectRoot, "../..");
+const projectRoot = __dirname
+const monorepoRoot = path.resolve(projectRoot, "../..")
 
-const config = getDefaultConfig(projectRoot);
+const config = getDefaultConfig(projectRoot)
 
-config.watchFolders = [monorepoRoot];
+config.watchFolders = [monorepoRoot]
 
 // Force react and react-native to always resolve from the mobile app's
 // node_modules. extraNodeModules is a fallback and loses to the natural
@@ -23,9 +23,9 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return {
       filePath: require.resolve(moduleName, { paths: [projectRoot] }),
       type: "sourceFile",
-    };
+    }
   }
-  return context.resolveRequest(context, moduleName, platform);
-};
+  return context.resolveRequest(context, moduleName, platform)
+}
 
-module.exports = config;
+module.exports = config
