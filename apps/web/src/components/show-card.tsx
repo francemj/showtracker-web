@@ -1,13 +1,12 @@
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
 import { ShowWithProgress } from "@shared/schema"
 import { Link } from "wouter"
-import { Star, Calendar, Check } from "lucide-react"
+import { Star, Check } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { apiRequest, queryClient } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
+import { StatusBadge } from "@/components/status-badge"
+import { statusPalette, type StatusKey } from "@/lib/status"
+import { useTheme } from "@/components/theme-provider"
 
 interface ShowCardProps {
   show: ShowWithProgress
@@ -16,6 +15,7 @@ interface ShowCardProps {
 
 export function ShowCard({ show, href }: ShowCardProps) {
   const { toast } = useToast()
+  const { theme } = useTheme()
   const posterUrl = show.posterPath
     ? `https://image.tmdb.org/t/p/w500${show.posterPath}`
     : "/placeholder-poster.png"
@@ -24,14 +24,17 @@ export function ShowCard({ show, href }: ShowCardProps) {
   const year = show.firstAirDate
     ? new Date(show.firstAirDate).getFullYear()
     : null
-  const isCompleted = show.userShow?.status === "completed"
   const isWatching = show.userShow?.status === "watching"
   const isCaughtUp = show.userShow?.status === "caught_up"
+  const userStatus = show.userShow?.status as StatusKey | undefined
+
+  const watchingPalette = statusPalette("watching", theme)
+
+  const displayStatusBadge = userStatus && (!isCaughtUp || !show.nextEpisode)
 
   const markEpisodeMutation = useMutation({
     mutationFn: async () => {
       if (!show.nextEpisode) return
-
       return apiRequest("POST", `/api/shows/${show.id}/progress`, {
         seasonNumber: show.nextEpisode.season,
         episodeNumber: show.nextEpisode.episode,
@@ -46,7 +49,6 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-
       toast({
         title: "Episode marked as watched",
         description: `S${show.nextEpisode?.season}E${show.nextEpisode?.episode}`,
@@ -67,162 +69,98 @@ export function ShowCard({ show, href }: ShowCardProps) {
     markEpisodeMutation.mutate()
   }
 
-  const displayStatusBadge =
-    show.userShow?.status && (!isCaughtUp || !show.nextEpisode)
-
   const content = (
-    <Card
-      className="overflow-hidden hover-elevate transition-all duration-200 group cursor-pointer md:flex-col flex"
-      data-testid={`card-show-${show.id}`}
-    >
-      <div className="relative w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3] overflow-hidden bg-muted">
+    <div className="group cursor-pointer" data-testid={`card-show-${show.id}`}>
+      {/* Poster */}
+      <div className="relative w-full aspect-[2/3] rounded-lg overflow-hidden bg-muted">
         <img
           src={posterUrl}
           alt={show.name}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="absolute bottom-0 left-0 right-0 p-4">
-            <p className="text-white text-xs line-clamp-3">{show.overview}</p>
-          </div>
-        </div>
+
+        {/* Rating badge */}
         {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
           <div className="absolute top-2 right-2">
-            <Badge className="bg-black/70 text-white border-0 backdrop-blur-sm">
-              <Star className="w-3 h-3 mr-1 fill-yellow-400 text-yellow-400" />
+            <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-medium px-1.5 py-0.5 rounded-md">
+              <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               {parseFloat(show.voteAverage).toFixed(1)}
-            </Badge>
-          </div>
-        )}
-      </div>
-
-      <div className="p-4 space-y-3 flex-1 min-w-0">
-        <div>
-          <h3
-            className="font-heading font-semibold text-base line-clamp-1"
-            data-testid={`text-show-title-${show.id}`}
-          >
-            {show.name}
-          </h3>
-          {year && (
-            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-              <Calendar className="w-3 h-3" />
-              <span>{year}</span>
-              {show.numberOfSeasons && (
-                <>
-                  <span>•</span>
-                  <span>
-                    {show.numberOfSeasons} Season
-                    {show.numberOfSeasons !== 1 ? "s" : ""}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {isWatching && show.nextEpisode && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Progress</span>
-              <span className="font-medium text-accent">
-                {Math.round(progress)}%
-              </span>
-            </div>
-            <Progress value={progress} className="h-2" />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex-1 min-w-0 overflow-hidden">
-                <p className="text-xs font-medium truncate">
-                  Next: S{show.nextEpisode.season}E{show.nextEpisode.episode}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={handleQuickWatch}
-                disabled={markEpisodeMutation.isPending}
-                className="shrink-0"
-                data-testid={`button-quick-watch-${show.id}`}
-              >
-                <Check className="w-3 h-3" />
-              </Button>
-            </div>
+            </span>
           </div>
         )}
 
-        {isWatching && !show.nextEpisode && progress > 0 && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Progress</span>
-              <span className="font-medium text-accent">
-                {Math.round(progress)}%
-              </span>
-            </div>
-            <Progress value={progress} className="h-2" />
-            {show.watchedEpisodes !== undefined &&
-              show.totalEpisodes !== undefined && (
-                <p className="text-xs text-muted-foreground">
-                  {show.watchedEpisodes} / {show.totalEpisodes} episodes
-                </p>
-              )}
-          </div>
-        )}
-
+        {/* Caught-up: next episode air date badge */}
         {isCaughtUp && show.nextEpisode && show.nextEpisode.daysUntil >= 0 && (
-          <div className="space-y-2">
-            <Badge
-              variant="outline"
-              className="text-xs bg-teal-600/10 border-teal-600/20 text-teal-700 dark:text-teal-400"
-            >
+          <div className="absolute top-2 left-2">
+            <span className="inline-block bg-black/65 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
               S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
               {show.nextEpisode.daysUntil === 0
                 ? "today"
-                : `in ${show.nextEpisode.daysUntil} ${show.nextEpisode.daysUntil === 1 ? "day" : "days"}`}
-            </Badge>
+                : `in ${show.nextEpisode.daysUntil}d`}
+            </span>
           </div>
         )}
 
-        {!isCompleted && !isWatching && !isCaughtUp && progress > 0 && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Progress</span>
-              <span className="font-medium text-accent">
-                {Math.round(progress)}%
-              </span>
+        {/* Progress bar on poster bottom */}
+        {isWatching && progress > 0 && (
+          <div className="absolute bottom-0 left-0 right-0">
+            <div
+              className="relative h-[2.5px] w-full"
+              style={{ background: "rgba(255,255,255,0.28)" }}
+            >
+              <div
+                className="absolute inset-y-0 left-0"
+                style={{
+                  width: `${progress}%`,
+                  background: watchingPalette.solid,
+                }}
+              />
             </div>
-            <Progress value={progress} className="h-2" />
-            {show.watchedEpisodes !== undefined &&
-              show.totalEpisodes !== undefined && (
-                <p className="text-xs text-muted-foreground">
-                  {show.watchedEpisodes} / {show.totalEpisodes} episodes
-                </p>
-              )}
           </div>
         )}
 
-        {show.userShow && displayStatusBadge && (
-          <Badge
-            variant={
-              show.userShow.status === "watching"
-                ? "default"
-                : show.userShow.status === "caught_up"
-                  ? "default"
-                  : show.userShow.status === "completed"
-                    ? "secondary"
-                    : "outline"
-            }
-            className={`text-xs ${show.userShow.status === "caught_up" ? "bg-teal-600 hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-800" : ""}`}
-            data-testid={`badge-status-${show.id}`}
+        {/* Quick-watch button */}
+        {isWatching && show.nextEpisode && (
+          <button
+            className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-md"
+            onClick={handleQuickWatch}
+            disabled={markEpisodeMutation.isPending}
+            data-testid={`button-quick-watch-${show.id}`}
           >
-            {show.userShow.status === "want_to_watch" && "Want to Watch"}
-            {show.userShow.status === "watching" && "Watching"}
-            {show.userShow.status === "caught_up" && "Caught Up"}
-            {show.userShow.status === "completed" && "Completed"}
-          </Badge>
+            <Check className="w-4 h-4" strokeWidth={3} />
+          </button>
         )}
       </div>
-    </Card>
+
+      {/* Below poster */}
+      <div className="mt-2.5">
+        <h3
+          className="font-sans font-semibold text-[14px] leading-snug truncate text-foreground"
+          data-testid={`text-show-title-${show.id}`}
+        >
+          {show.name}
+        </h3>
+        <div className="flex items-center justify-between mt-1">
+          <span className="font-mono text-[11.5px] text-muted-foreground font-medium">
+            {year}
+            {show.watchedEpisodes !== undefined &&
+            show.totalEpisodes !== undefined &&
+            isWatching
+              ? ` · ${show.watchedEpisodes}/${show.totalEpisodes}`
+              : show.numberOfSeasons
+                ? ` · ${show.numberOfSeasons}s`
+                : ""}
+          </span>
+          {displayStatusBadge && userStatus && (
+            <StatusBadge
+              status={userStatus}
+              data-testid={`badge-status-${show.id}`}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   )
 
   if (href) {

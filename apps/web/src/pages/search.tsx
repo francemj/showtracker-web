@@ -1,25 +1,16 @@
 import { useState, useMemo } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
 import { AddToCollectionButton } from "@/components/add-to-collection-button"
-import { Search as SearchIcon, Check, Star, Calendar } from "lucide-react"
+import { statusPalette, type StatusKey } from "@/lib/status"
+import { useTheme } from "@/components/theme-provider"
+import { Search as SearchIcon, Check, Star } from "lucide-react"
 import { TMDBShow, UserShow } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Link } from "wouter"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
-import { useBreakpoint } from "@/hooks/use-breakpoint"
-import { gridColumns } from "@/components/show-grid"
 
 interface SearchResponse {
   results: TMDBShow[]
@@ -32,7 +23,8 @@ export default function Search() {
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const { toast } = useToast()
-  const breakpoint = useBreakpoint()
+  const { theme } = useTheme()
+
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery<SearchResponse>({
       queryKey: ["/api/search/shows", debouncedSearch],
@@ -43,18 +35,17 @@ export default function Search() {
         )
         return res.json()
       },
-      getNextPageParam: (lastPage) => {
-        return lastPage.page < lastPage.totalPages
-          ? lastPage.page + 1
-          : undefined
-      },
+      getNextPageParam: (lastPage) =>
+        lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
       enabled: debouncedSearch.length >= 2,
       initialPageParam: 1,
     })
 
-  const searchResults = useMemo(() => {
-    return data?.pages.flatMap((page) => page.results) || []
-  }, [data])
+  const searchResults = useMemo(
+    () => data?.pages.flatMap((page) => page.results) || [],
+    [data]
+  )
+  const totalResults = data?.pages[0]?.totalResults ?? 0
 
   const observerTarget = useInfiniteScroll(
     () => fetchNextPage(),
@@ -89,182 +80,223 @@ export default function Search() {
           : variables.initialStatus === "caught_up"
             ? "Caught Up"
             : "Want to Watch"
-      toast({
-        title: "Show Added",
-        description: `The show has been added to your collection as "${statusLabel}".`,
-      })
+      toast({ title: "Show Added", description: `Added as "${statusLabel}".` })
     },
-    onError: () => {
+    onError: () =>
       toast({
         title: "Error",
-        description: "Failed to add show. Please try again.",
+        description: "Failed to add show.",
         variant: "destructive",
-      })
-    },
+      }),
   })
 
-  const findUserShow = (showId: number): UserShow | undefined => {
-    return userShows?.find((us) => us.showId === showId)
-  }
-
-  const handleAddShow = (showId: number, initialStatus?: string) => {
+  const findUserShow = (showId: number): UserShow | undefined =>
+    userShows?.find((us) => us.showId === showId)
+  const handleAddShow = (showId: number, initialStatus?: string) =>
     addShowMutation.mutate({ showId, initialStatus })
-  }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-heading font-bold text-foreground mb-2">
-          Search TV Shows
+    <div>
+      {/* Header */}
+      <div className="pb-6">
+        <div className="font-mono text-[11px] text-muted-foreground uppercase tracking-[0.14em] font-semibold mb-2">
+          {debouncedSearch && !isLoading
+            ? `${totalResults.toLocaleString()} results`
+            : "Search"}
+        </div>
+        <h1 className="font-serif font-normal text-[56px] leading-none tracking-[-0.025em] text-foreground">
+          Search
         </h1>
-        <p className="text-muted-foreground">
-          Find and add shows to your collection
-        </p>
       </div>
 
-      <div className="relative max-w-lg">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder="Search for TV shows..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10 h-12 w-full text-base"
-          data-testid="input-search-shows"
-        />
+      {/* Search input */}
+      <div className="sticky top-0 z-10 bg-background pb-4 pt-1">
+        <div className="flex items-center gap-3 px-4 py-3.5 rounded-[14px] border border-border bg-card max-w-2xl">
+          <SearchIcon className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+          <input
+            type="search"
+            placeholder="Search for TV shows…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent text-[16px] text-foreground placeholder:text-muted-foreground outline-none"
+            data-testid="input-search-shows"
+          />
+          {searchQuery && (
+            <span className="font-mono text-[11px] text-muted-foreground/60">
+              esc
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Loading skeletons */}
       {isLoading && debouncedSearch && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[...Array(gridColumns[breakpoint])].map((_, i) => (
-            <Skeleton
-              key={i}
-              className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
-            />
+        <div className="space-y-0 mt-2 max-w-[920px]">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex gap-5 py-5 border-b border-border">
+              <Skeleton className="w-[100px] h-[150px] rounded-lg shrink-0" />
+              <div className="flex-1 space-y-3 py-2">
+                <Skeleton className="h-7 w-2/3" />
+                <Skeleton className="h-4 w-1/4" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {!isLoading && searchResults && searchResults.length > 0 && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {searchResults.map((show) => {
-              const posterUrl = show.poster_path
-                ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
-                : "/placeholder-poster.png"
-              const year = show.first_air_date
-                ? new Date(show.first_air_date).getFullYear()
-                : null
-              const userShow = findUserShow(show.id)
+      {/* Results */}
+      {!isLoading && searchResults.length > 0 && (
+        <div className="max-w-[920px]">
+          {searchResults.map((show) => {
+            const posterUrl = show.poster_path
+              ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
+              : "/placeholder-poster.png"
+            const year = show.first_air_date
+              ? new Date(show.first_air_date).getFullYear()
+              : null
+            const userShow = findUserShow(show.id)
+            const userStatus = userShow?.status as StatusKey | undefined
+            const sp = userStatus ? statusPalette(userStatus, theme) : null
 
-              return (
-                <Link href={`/show/${show.id}`} key={show.id}>
-                  <Card
-                    className="hover-elevate transition-all overflow-hidden"
-                    data-testid={`card-search-result-${show.id}`}
-                  >
-                    <div className="relative aspect-[2/3] bg-muted">
-                      <img
-                        src={posterUrl}
-                        alt={show.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
+            return (
+              <div
+                key={show.id}
+                className="flex gap-5 py-5 border-b border-border items-start"
+                data-testid={`card-search-result-${show.id}`}
+              >
+                {/* Poster */}
+                <div className="relative shrink-0">
+                  <Link href={`/show/${show.id}`}>
+                    <img
+                      src={posterUrl}
+                      alt={show.name}
+                      className="w-[100px] h-[150px] object-cover rounded-lg bg-muted"
+                      loading="lazy"
+                    />
+                  </Link>
+                  {/* In-collection disc badge */}
+                  {userShow && sp && (
+                    <div
+                      className="absolute -top-1.5 -right-1.5 w-[26px] h-[26px] rounded-full flex items-center justify-center border-2 border-background shadow-md"
+                      style={{ background: sp.solid }}
+                    >
+                      <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <Link href={`/show/${show.id}`}>
+                    <h3
+                      className="font-serif text-[28px] font-normal leading-[1.1] tracking-[-0.015em] text-foreground hover:opacity-80 transition-opacity"
+                      data-testid={`text-result-title-${show.id}`}
+                    >
+                      {show.name}
+                    </h3>
+                  </Link>
+                  <div className="flex items-center gap-3 mt-1.5 font-mono text-[12px] text-muted-foreground font-medium">
+                    {year && <span>{year}</span>}
+                    {show.vote_average > 0 && (
+                      <>
+                        {year && (
+                          <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                        )}
+                        <span className="inline-flex items-center gap-1">
+                          <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                          {show.vote_average.toFixed(1)}
+                        </span>
+                      </>
+                    )}
+                    {userShow && sp && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                        <span style={{ color: sp.fg, fontWeight: 600 }}>
+                          In{" "}
+                          {userShow.status === "want_to_watch"
+                            ? "Want to Watch"
+                            : userShow.status === "caught_up"
+                              ? "Caught Up"
+                              : userShow.status.charAt(0).toUpperCase() +
+                                userShow.status.slice(1)}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {show.overview && (
+                    <p className="text-[13.5px] text-muted-foreground mt-2.5 leading-relaxed line-clamp-2 max-w-2xl">
+                      {show.overview}
+                    </p>
+                  )}
+                  {!userShow && (
+                    <div className="flex gap-2 mt-3.5">
+                      <AddToCollectionButton
+                        showId={show.id}
+                        status={show.status}
+                        onAdd={handleAddShow}
+                        isPending={addShowMutation.isPending}
+                        userShow={userShow}
+                        size="sm"
+                        dataTestId={`button-add-show-${show.id}`}
                       />
+                      <Link href={`/show/${show.id}`}>
+                        <button className="px-3.5 py-2 rounded-full text-foreground text-[12.5px] font-semibold border border-border bg-transparent hover:bg-muted transition-colors">
+                          Details
+                        </button>
+                      </Link>
                     </div>
-                    <div className="p-4 space-y-3">
-                      <div>
-                        <h3
-                          className="font-heading font-semibold text-base line-clamp-1 mb-2"
-                          data-testid={`text-result-title-${show.id}`}
-                        >
-                          {show.name}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          {year && (
-                            <Badge variant="outline" className="text-xs">
-                              <Calendar className="w-3 h-3 mr-1" />
-                              {year}
-                            </Badge>
-                          )}
-                          {show.vote_average > 0 && (
-                            <Badge variant="outline" className="text-xs">
-                              <Star className="w-3 h-3 mr-1 fill-yellow-400 text-yellow-400" />
-                              {show.vote_average.toFixed(1)}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {show.overview}
-                        </p>
-                      </div>
-                      {userShow ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="w-full"
-                          disabled
-                          data-testid={`button-in-collection-${show.id}`}
-                        >
-                          <Check className="w-4 h-4 mr-1" />
-                          In Collection
-                        </Button>
-                      ) : (
-                        <AddToCollectionButton
-                          showId={show.id}
-                          status={show.status}
-                          onAdd={handleAddShow}
-                          isPending={addShowMutation.isPending}
-                          userShow={userShow}
-                          size="sm"
-                          className="w-full"
-                          dataTestId={`button-add-show-${show.id}`}
-                        />
-                      )}
+                  )}
+                  {userShow && (
+                    <div className="mt-3.5">
+                      <button
+                        className="px-3.5 py-2 rounded-full text-[12.5px] font-semibold border border-border text-muted-foreground bg-transparent opacity-60 cursor-default inline-flex items-center gap-1.5"
+                        disabled
+                        data-testid={`button-in-collection-${show.id}`}
+                      >
+                        <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        In Collection
+                      </button>
                     </div>
-                  </Card>
-                </Link>
-              )
-            })}
-          </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
           {hasNextPage && (
             <div ref={observerTarget} className="py-8">
               {isFetchingNextPage && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {[...Array(8)].map((_, i) => (
-                    <Skeleton
+                <div className="space-y-0">
+                  {[...Array(3)].map((_, i) => (
+                    <div
                       key={i}
-                      className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
-                    />
+                      className="flex gap-5 py-5 border-b border-border"
+                    >
+                      <Skeleton className="w-[100px] h-[150px] rounded-lg shrink-0" />
+                      <div className="flex-1 space-y-3 py-2">
+                        <Skeleton className="h-7 w-2/3" />
+                        <Skeleton className="h-4 w-1/4" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
-      {!isLoading && debouncedSearch && searchResults?.length === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading">No Results</CardTitle>
-            <CardDescription>
-              No shows found for "{debouncedSearch}". Try a different search
-              term.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      {/* Empty states */}
+      {!isLoading && debouncedSearch && searchResults.length === 0 && (
+        <p className="text-muted-foreground font-sans mt-4">
+          No shows found for "{debouncedSearch}". Try a different search term.
+        </p>
       )}
-
       {!debouncedSearch && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-heading">Start Searching</CardTitle>
-            <CardDescription>
-              Enter a TV show name to search the database and add shows to your
-              collection.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <p className="text-muted-foreground font-sans mt-2">
+          Enter a show name to search the database.
+        </p>
       )}
     </div>
   )

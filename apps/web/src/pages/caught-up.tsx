@@ -1,17 +1,9 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { ShowWithProgress } from "@shared/schema"
-import { Zap } from "lucide-react"
-import { ShowGrid } from "@/components/show-grid"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
 import { apiRequest } from "@/lib/queryClient"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useMemo } from "react"
+import { LibraryView } from "./library-view"
 
 interface PaginatedResponse {
   shows: ShowWithProgress[]
@@ -31,18 +23,13 @@ export default function CaughtUp() {
         )
         return res.json()
       },
-      getNextPageParam: (lastPage) => {
-        return lastPage.page < lastPage.totalPages
-          ? lastPage.page + 1
-          : undefined
-      },
+      getNextPageParam: (lastPage) =>
+        lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
       initialPageParam: 1,
     })
 
-  const shows = useMemo(() => {
-    return data?.pages.flatMap((page) => page.shows) || []
-  }, [data])
-
+  const shows = useMemo(() => data?.pages.flatMap((p) => p.shows) || [], [data])
+  const total = data?.pages[0]?.total ?? 0
   const observerTarget = useInfiniteScroll(
     () => fetchNextPage(),
     hasNextPage ?? false,
@@ -50,50 +37,19 @@ export default function CaughtUp() {
   )
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center justify-center w-12 h-12 bg-teal-600/10 rounded-lg">
-          <Zap className="w-6 h-6 text-teal-600" />
-        </div>
-        <div>
-          <h1 className="text-4xl font-heading font-bold text-foreground">
-            Caught Up
-          </h1>
-          <p className="text-muted-foreground">
-            Shows where you've watched all available episodes
-          </p>
-        </div>
-      </div>
-
-      <ShowGrid
-        shows={shows}
-        isLoading={isLoading}
-        emptyMessage={
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading">No Shows</CardTitle>
-              <CardDescription>
-                You've not caught up with any shows yet. Keep watching to add
-                shows to this list!
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        }
-      />
-      {hasNextPage && (
-        <div ref={observerTarget} className="py-8">
-          {isFetchingNextPage && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <Skeleton
-                  key={i}
-                  className="w-32 shrink-0 md:w-full md:aspect-[2/3] aspect-[2/3]"
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+    <LibraryView
+      activeTab="caught_up"
+      shows={shows}
+      isLoading={isLoading}
+      total={total}
+      hasNextPage={hasNextPage ?? false}
+      isFetchingNextPage={isFetchingNextPage}
+      observerTarget={observerTarget}
+      emptyMessage={
+        <p className="text-muted-foreground col-span-full py-8">
+          No shows yet. Keep watching to catch up!
+        </p>
+      }
+    />
   )
 }

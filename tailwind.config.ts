@@ -6,7 +6,7 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        lg: ".5625rem" /* 9px */,
+        lg: "0.625rem" /* 10px */,
         md: ".375rem" /* 6px */,
         sm: ".1875rem" /* 3px */,
       },
@@ -76,10 +76,10 @@ export default {
           border: "var(--sidebar-accent-border)",
         },
         status: {
-          online: "rgb(34 197 94)",
-          away: "rgb(245 158 11)",
-          busy: "rgb(239 68 68)",
-          offline: "rgb(156 163 175)",
+          watching:   "oklch(0.55 0.16 155)",
+          want:       "oklch(0.62 0.14 60)",
+          caught_up:  "oklch(0.55 0.16 235)",
+          completed:  "oklch(0.55 0.16 305)",
         },
       },
       fontFamily: {
