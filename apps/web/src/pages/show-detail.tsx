@@ -1,20 +1,9 @@
 import { useEffect, useState } from "react"
 import { useQuery, useMutation } from "@tanstack/react-query"
-import { useParams } from "wouter"
+import { useParams, useLocation } from "wouter"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
-import { Checkbox } from "@/components/ui/checkbox"
-
-import { Separator } from "@/components/ui/separator"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +15,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { AddToCollectionButton } from "@/components/add-to-collection-button"
-import { Star, Calendar, Clock, Tv, CheckCircle2 } from "lucide-react"
+import { StatusBadge } from "@/components/status-badge"
+import { statusPalette, type StatusKey } from "@/lib/status"
+import { useTheme } from "@/components/theme-provider"
+import { Star, Check, ChevronLeft } from "lucide-react"
 import { ShowWithProgress, TMDBSeason } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -35,11 +27,13 @@ import {
   invalidateStatusRelatedQueries,
 } from "@/components/status-validation-trigger"
 
-const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000 // 10 minutes
+const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
+  const [, setLocation] = useLocation()
   const { toast } = useToast()
+  const { theme } = useTheme()
   const [pendingEpisode, setPendingEpisode] = useState<{
     seasonNumber: number
     episodeNumber: number
@@ -49,20 +43,17 @@ export default function ShowDetail() {
     episodeNumber: number
   } | null>(null)
   const [removeShowDialogOpen, setRemoveShowDialogOpen] = useState(false)
+  const [activeSeason, setActiveSeason] = useState<number | null>(null)
 
   useEffect(() => {
     if (!id || typeof sessionStorage === "undefined") return
-
     const parsedShowId = parseInt(id, 10)
     if (Number.isNaN(parsedShowId)) return
-
     const storageKey = `statusValidationShow:${parsedShowId}`
     const raw = sessionStorage.getItem(storageKey)
     const last = raw ? parseInt(raw, 10) : 0
-    if (last && Date.now() - last < SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS) {
+    if (last && Date.now() - last < SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS)
       return
-    }
-
     apiRequest("POST", "/api/user/shows/validate-status", {
       showId: parsedShowId,
     })
@@ -100,6 +91,16 @@ export default function ShowDetail() {
     enabled: !!id,
   })
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
+    queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+  }
+
   const toggleEpisodeMutation = useMutation({
     mutationFn: async ({
       seasonNumber,
@@ -116,17 +117,7 @@ export default function ShowDetail() {
         watched,
       })
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows", id, "progress"],
-      })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-    },
+    onSuccess: invalidateAll,
   })
 
   const addShowMutation = useMutation({
@@ -153,24 +144,18 @@ export default function ShowDetail() {
           : variables.initialStatus === "caught_up"
             ? "Caught Up"
             : "Want to Watch"
-      toast({
-        title: "Show Added",
-        description: `The show has been added to your collection as "${statusLabel}".`,
-      })
+      toast({ title: "Show Added", description: `Added as "${statusLabel}".` })
     },
-    onError: () => {
+    onError: () =>
       toast({
         title: "Error",
-        description: "Failed to add show. Please try again.",
+        description: "Failed to add show.",
         variant: "destructive",
-      })
-    },
+      }),
   })
 
   const removeShowMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("DELETE", `/api/user/shows/${id}`)
-    },
+    mutationFn: async () => apiRequest("DELETE", `/api/user/shows/${id}`),
     onSuccess: () => {
       setRemoveShowDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
@@ -183,18 +168,14 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      toast({
-        title: "Removed from collection",
-        description: "The show has been removed from your list.",
-      })
+      toast({ title: "Removed from collection" })
     },
-    onError: () => {
+    onError: () =>
       toast({
         title: "Error",
-        description: "Failed to remove show. Please try again.",
+        description: "Failed to remove show.",
         variant: "destructive",
-      })
-    },
+      }),
   })
 
   const markSeasonWatchedMutation = useMutation({
@@ -212,30 +193,18 @@ export default function ShowDetail() {
       )
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/shows", id, "progress"],
-      })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
-      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      toast({
-        title: "Season Updated",
-        description: "All episodes in season have been updated.",
-      })
+      invalidateAll()
+      toast({ title: "Season Updated" })
     },
   })
 
-  const isEpisodeWatched = (seasonNumber: number, episodeNumber: number) => {
-    return watchProgress?.some(
+  const isEpisodeWatched = (seasonNumber: number, episodeNumber: number) =>
+    watchProgress?.some(
       (wp) =>
         wp.seasonNumber === seasonNumber &&
         wp.episodeNumber === episodeNumber &&
         wp.watched
     )
-  }
 
   const hasEpisodeAired = (airDate: string | null) => {
     if (!airDate) return false
@@ -246,8 +215,6 @@ export default function ShowDetail() {
     const season = seasons?.find((s) => s.season_number === seasonNumber)
     if (!season || !season.episodes)
       return { watched: 0, total: 0, percentage: 0 }
-
-    // Only count aired episodes
     const airedEpisodes = season.episodes.filter((ep) =>
       hasEpisodeAired(ep.air_date)
     )
@@ -255,9 +222,11 @@ export default function ShowDetail() {
       isEpisodeWatched(seasonNumber, ep.episode_number)
     ).length
     const total = airedEpisodes.length
-    const percentage = total > 0 ? (watched / total) * 100 : 0
-
-    return { watched, total, percentage }
+    return {
+      watched,
+      total,
+      percentage: total > 0 ? (watched / total) * 100 : 0,
+    }
   }
 
   const markPreviousEpisodes = async (
@@ -265,64 +234,42 @@ export default function ShowDetail() {
     targetEpisode: number
   ) => {
     if (!seasons) return
-
     const episodesToMark: Array<{
       seasonNumber: number
       episodeNumber: number
       watched: boolean
     }> = []
-
     for (const season of seasons) {
       if (season.season_number > targetSeason) continue
-
       if (season.episodes) {
         for (const episode of season.episodes) {
-          // Only mark aired episodes
           if (!hasEpisodeAired(episode.air_date)) continue
-
           if (season.season_number < targetSeason) {
-            if (
-              !isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToMark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
                 watched: true,
               })
-            }
           } else if (
             season.season_number === targetSeason &&
             episode.episode_number <= targetEpisode
           ) {
-            if (
-              !isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToMark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
                 watched: true,
               })
-            }
           }
         }
       }
     }
-
     if (episodesToMark.length === 0) return
-
-    // Use bulk endpoint to mark all episodes at once
     await apiRequest("POST", `/api/shows/${id}/progress/bulk`, {
       episodes: episodesToMark,
     })
-
-    queryClient.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-    queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-
+    invalidateAll()
     toast({
       title: "Episodes Marked",
       description: `Marked ${episodesToMark.length} episode${episodesToMark.length !== 1 ? "s" : ""} as watched`,
@@ -334,64 +281,42 @@ export default function ShowDetail() {
     targetEpisode: number
   ) => {
     if (!seasons) return
-
     const episodesToUnmark: Array<{
       seasonNumber: number
       episodeNumber: number
       watched: boolean
     }> = []
-
     for (const season of seasons) {
       if (season.season_number < targetSeason) continue
-
       if (season.episodes) {
         for (const episode of season.episodes) {
-          // Only unmark aired episodes that are currently watched
           if (!hasEpisodeAired(episode.air_date)) continue
-
           if (season.season_number > targetSeason) {
-            if (
-              isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToUnmark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
                 watched: false,
               })
-            }
           } else if (
             season.season_number === targetSeason &&
             episode.episode_number >= targetEpisode
           ) {
-            if (
-              isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToUnmark.push({
                 seasonNumber: season.season_number,
                 episodeNumber: episode.episode_number,
                 watched: false,
               })
-            }
           }
         }
       }
     }
-
     if (episodesToUnmark.length === 0) return
-
-    // Use bulk endpoint to unmark all episodes at once
     await apiRequest("POST", `/api/shows/${id}/progress/bulk`, {
       episodes: episodesToUnmark,
     })
-
-    queryClient.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-    queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
-    queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-
+    invalidateAll()
     toast({
       title: "Episodes Unmarked",
       description: `Unmarked ${episodesToUnmark.length} episode${episodesToUnmark.length !== 1 ? "s" : ""} as unwatched`,
@@ -403,34 +328,24 @@ export default function ShowDetail() {
     targetEpisode: number
   ): boolean => {
     if (!seasons) return false
-
     for (const season of seasons) {
       if (season.season_number > targetSeason) break
-
       if (season.episodes) {
         for (const episode of season.episodes) {
           if (!hasEpisodeAired(episode.air_date)) continue
-
           if (season.season_number < targetSeason) {
-            if (
-              !isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number))
               return true
-            }
           } else if (
             season.season_number === targetSeason &&
             episode.episode_number < targetEpisode
           ) {
-            if (
-              !isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (!isEpisodeWatched(season.season_number, episode.episode_number))
               return true
-            }
           }
         }
       }
     }
-
     return false
   }
 
@@ -439,34 +354,24 @@ export default function ShowDetail() {
     targetEpisode: number
   ): boolean => {
     if (!seasons) return false
-
     for (const season of seasons) {
       if (season.season_number < targetSeason) continue
-
       if (season.episodes) {
         for (const episode of season.episodes) {
           if (!hasEpisodeAired(episode.air_date)) continue
-
           if (season.season_number > targetSeason) {
-            if (
-              isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number))
               return true
-            }
           } else if (
             season.season_number === targetSeason &&
             episode.episode_number > targetEpisode
           ) {
-            if (
-              isEpisodeWatched(season.season_number, episode.episode_number)
-            ) {
+            if (isEpisodeWatched(season.season_number, episode.episode_number))
               return true
-            }
           }
         }
       }
     }
-
     return false
   }
 
@@ -476,9 +381,7 @@ export default function ShowDetail() {
     checked: boolean
   ) => {
     const isAlreadyWatched = isEpisodeWatched(seasonNumber, episodeNumber)
-
     if (checked && !isAlreadyWatched) {
-      // Marking as watched - check if there are unwatched episodes before
       if (hasUnwatchedEpisodesBefore(seasonNumber, episodeNumber)) {
         setPendingEpisode({ seasonNumber, episodeNumber })
       } else {
@@ -489,7 +392,6 @@ export default function ShowDetail() {
         })
       }
     } else if (!checked && isAlreadyWatched) {
-      // Unmarking as watched - check if there are watched episodes after
       if (hasWatchedEpisodesAfter(seasonNumber, episodeNumber)) {
         setPendingUnwatchEpisode({ seasonNumber, episodeNumber })
       } else {
@@ -510,7 +412,6 @@ export default function ShowDetail() {
 
   const handleConfirmMarkAll = async () => {
     if (!pendingEpisode) return
-
     await markPreviousEpisodes(
       pendingEpisode.seasonNumber,
       pendingEpisode.episodeNumber
@@ -520,7 +421,6 @@ export default function ShowDetail() {
 
   const handleMarkJustOne = () => {
     if (!pendingEpisode) return
-
     toggleEpisodeMutation.mutate({
       seasonNumber: pendingEpisode.seasonNumber,
       episodeNumber: pendingEpisode.episodeNumber,
@@ -531,7 +431,6 @@ export default function ShowDetail() {
 
   const handleConfirmUnmarkAll = async () => {
     if (!pendingUnwatchEpisode) return
-
     await markSucceedingEpisodesUnwatched(
       pendingUnwatchEpisode.seasonNumber,
       pendingUnwatchEpisode.episodeNumber
@@ -541,7 +440,6 @@ export default function ShowDetail() {
 
   const handleUnmarkJustOne = () => {
     if (!pendingUnwatchEpisode) return
-
     toggleEpisodeMutation.mutate({
       seasonNumber: pendingUnwatchEpisode.seasonNumber,
       episodeNumber: pendingUnwatchEpisode.episodeNumber,
@@ -550,16 +448,18 @@ export default function ShowDetail() {
     setPendingUnwatchEpisode(null)
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   if (showLoading) {
     return (
-      <div className="space-y-8">
-        <Skeleton className="h-12 w-64" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <Skeleton className="aspect-[2/3]" />
+      <div>
+        <Skeleton className="w-full h-[540px] -mx-8 -mt-8 rounded-none" />
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-16 w-3/4" />
+            <Skeleton className="h-24 w-full" />
           </div>
+          <Skeleton className="h-48 w-full" />
         </div>
       </div>
     )
@@ -569,136 +469,143 @@ export default function ShowDetail() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading">Show Not Found</CardTitle>
+          <CardTitle className="font-serif">Show Not Found</CardTitle>
         </CardHeader>
       </Card>
     )
   }
 
-  const posterUrl = show.posterPath
-    ? `https://image.tmdb.org/t/p/w500${show.posterPath}`
-    : "/placeholder-poster.png"
-
   const backdropUrl = show.backdropPath
-    ? `https://image.tmdb.org/t/p/original${show.backdropPath}`
-    : null
+    ? `https://image.tmdb.org/t/p/w1280${show.backdropPath}`
+    : show.posterPath
+      ? `https://image.tmdb.org/t/p/w500${show.posterPath}`
+      : null
+
+  const userStatus = show.userShow?.status as StatusKey | undefined
+  const sp = userStatus
+    ? statusPalette(userStatus, theme)
+    : statusPalette("watching", theme)
+  const progress = show.progress || 0
+  const realSeasons = seasons?.filter((s) => s.season_number > 0) ?? []
+  const effectiveActiveSeason =
+    activeSeason ?? realSeasons[0]?.season_number ?? 1
+  const activeSeasonData = realSeasons.find(
+    (s) => s.season_number === effectiveActiveSeason
+  )
+  const activeSeasonProgress = getSeasonProgress(effectiveActiveSeason)
 
   return (
-    <div className="space-y-8">
-      {backdropUrl && (
-        <div className="relative -mt-8 -mx-8 h-64 md:h-80 overflow-hidden">
+    <div>
+      {/* Backdrop */}
+      <div className="relative h-[540px] overflow-hidden -mx-8 -mt-8">
+        {backdropUrl ? (
           <img
             src={backdropUrl}
             alt={show.name}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+        ) : (
+          <div className="absolute inset-0 bg-muted" />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 30%, transparent 40%, hsl(var(--background)) 100%)",
+          }}
+        />
+
+        {/* Back button */}
+        <div className="absolute top-6 left-8">
+          <button
+            onClick={() => setLocation("/watching")}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-white text-[12.5px] font-semibold border border-white/22"
+            style={{
+              background: "rgba(255,255,255,0.15)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            Library
+          </button>
         </div>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="space-y-6">
-          <Card className="overflow-hidden">
-            <div className="relative aspect-[2/3]">
-              <img
-                src={posterUrl}
-                alt={show.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-2 space-y-6">
-          <div>
-            <h1
-              className="text-4xl font-heading font-bold text-foreground mb-4"
-              data-testid="text-show-title"
-            >
-              {show.name}
-            </h1>
-
-            <div className="flex flex-wrap items-center gap-3 mb-6">
-              {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
-                <Badge variant="outline" className="text-sm">
-                  <Star className="w-4 h-4 mr-1 fill-yellow-400 text-yellow-400" />
-                  {parseFloat(show.voteAverage).toFixed(1)}
-                </Badge>
-              )}
-              {show.firstAirDate && (
-                <Badge variant="outline" className="text-sm">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  {new Date(show.firstAirDate).getFullYear()}
-                </Badge>
-              )}
-              {show.numberOfSeasons && (
-                <Badge variant="outline" className="text-sm">
-                  <Tv className="w-4 h-4 mr-1" />
-                  {show.numberOfSeasons} Season
-                  {show.numberOfSeasons !== 1 ? "s" : ""}
-                </Badge>
-              )}
-              {show.status && (
-                <Badge
-                  variant={show.status === "Ended" ? "secondary" : "default"}
-                >
-                  {show.status}
-                </Badge>
-              )}
-            </div>
-
-            {show.genres && show.genres.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                {show.genres.map((genre, idx) => (
-                  <Badge key={idx} variant="outline">
-                    {genre}
-                  </Badge>
-                ))}
-              </div>
+      {/* Pulled-up content — overlaps backdrop bottom */}
+      <div className="relative -mt-44 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-10 px-0">
+        {/* Left: show info */}
+        <div>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {userStatus && <StatusBadge status={userStatus} />}
+            {show.firstAirDate && (
+              <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-medium px-2 py-1 rounded-md">
+                {new Date(show.firstAirDate).getFullYear()}
+              </span>
             )}
-
-            {show.overview && (
-              <p className="text-base text-foreground leading-relaxed">
-                {show.overview}
-              </p>
+            {show.numberOfSeasons && (
+              <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-medium px-2 py-1 rounded-md">
+                {show.numberOfSeasons}s
+              </span>
+            )}
+            {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
+              <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-medium px-2 py-1 rounded-md">
+                <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                {parseFloat(show.voteAverage).toFixed(1)}
+              </span>
             )}
           </div>
+          <h1
+            className="font-serif font-normal text-[72px] text-white leading-none tracking-[-0.025em] mb-2"
+            style={{ textShadow: "0 2px 14px rgba(0,0,0,0.45)" }}
+            data-testid="text-show-title"
+          >
+            {show.name}
+          </h1>
+          {show.genres && show.genres.length > 0 && (
+            <p className="text-white/80 text-[14px] mb-6">
+              {show.genres.join(" · ")}
+            </p>
+          )}
+          {show.overview && (
+            <p className="text-muted-foreground text-[15px] leading-relaxed max-w-2xl mt-8">
+              {show.overview}
+            </p>
+          )}
 
-          <Separator />
-
-          <div className="mb-6 flex flex-wrap items-center gap-4">
+          {/* Collection actions */}
+          <div className="flex flex-wrap items-center gap-3 mt-6">
             <AddToCollectionButton
               showId={show.id}
               status={show.status}
-              onAdd={(id, s) =>
-                addShowMutation.mutate({ showId: id, initialStatus: s })
+              onAdd={(showId, s) =>
+                addShowMutation.mutate({ showId, initialStatus: s })
               }
               onMarkAll={() => {
                 if (seasons && seasons.length > 0) {
-                  // Mark all episodes as watched
-                  // find the last aired episode
-                  const lastAiredSeason = seasons?.reduce((max, season) => {
-                    return Math.max(
-                      max,
-                      season.episodes?.reduce((max, episode) => {
-                        if (hasEpisodeAired(episode.air_date)) {
-                          return Math.max(max, episode.episode_number)
-                        }
-                        return max
-                      }, 0) ?? 0
-                    )
-                  }, 0)
+                  const lastAiredSeason = seasons.reduce(
+                    (max, season) =>
+                      Math.max(
+                        max,
+                        season.episodes?.reduce(
+                          (m, ep) =>
+                            hasEpisodeAired(ep.air_date)
+                              ? Math.max(m, ep.episode_number)
+                              : m,
+                          0
+                        ) ?? 0
+                      ),
+                    0
+                  )
                   const lastAiredEpisode =
                     seasons
-                      ?.find(
-                        (season) => season.season_number === lastAiredSeason
-                      )
-                      ?.episodes?.reduce((max, episode) => {
-                        if (hasEpisodeAired(episode.air_date)) {
-                          return Math.max(max, episode.episode_number)
-                        }
-                        return max
-                      }, 0) ?? 0
+                      .find((s) => s.season_number === lastAiredSeason)
+                      ?.episodes?.reduce(
+                        (m, ep) =>
+                          hasEpisodeAired(ep.air_date)
+                            ? Math.max(m, ep.episode_number)
+                            : m,
+                        0
+                      ) ?? 0
                   handleEpisodeToggle(lastAiredSeason, lastAiredEpisode, true)
                 }
               }}
@@ -729,170 +636,197 @@ export default function ShowDetail() {
               </p>
             )}
           </div>
+        </div>
 
-          <div>
-            <h2 className="text-2xl font-heading font-bold text-foreground mb-4">
-              Seasons & Episodes
-            </h2>
-
-            {seasonsLoading ? (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full" />
-                ))}
+        {/* Right: Progress card */}
+        {show.userShow && (
+          <div className="bg-card border border-border rounded-[14px] p-5 self-start mt-12">
+            <div className="font-mono text-[10.5px] text-muted-foreground uppercase tracking-[0.14em] font-semibold mb-3">
+              Your progress
+            </div>
+            <div className="flex items-baseline justify-between mb-3">
+              <div className="font-serif text-[40px] font-normal leading-none tracking-[-0.02em] text-foreground">
+                {Math.round(progress)}
+                <span className="text-[22px] text-muted-foreground">%</span>
               </div>
-            ) : seasons && seasons.length > 0 ? (
-              <Accordion type="multiple" className="space-y-4">
-                {seasons
-                  .filter((season) => season.season_number > 0)
-                  .map((season) => {
-                    const progress = getSeasonProgress(season.season_number)
-                    const allWatched =
-                      progress.watched === progress.total && progress.total > 0
+              <div className="font-mono text-[13px] text-muted-foreground font-medium">
+                {show.watchedEpisodes ?? 0}/{show.totalEpisodes ?? "?"}
+              </div>
+            </div>
+            <div className="relative h-[5px] w-full rounded-full overflow-hidden bg-muted mb-4">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{ width: `${progress}%`, background: sp.solid }}
+              />
+            </div>
+            {show.nextEpisode && (
+              <button
+                onClick={() =>
+                  handleEpisodeToggle(
+                    show.nextEpisode!.seasonNumber,
+                    show.nextEpisode!.episodeNumber,
+                    true
+                  )
+                }
+                disabled={toggleEpisodeMutation.isPending}
+                className="w-full py-3 rounded-[10px] text-white text-[13.5px] font-bold inline-flex items-center justify-center gap-2 mb-3"
+                style={{ background: sp.solid }}
+              >
+                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                Mark S{show.nextEpisode.seasonNumber}·E
+                {show.nextEpisode.episodeNumber} watched
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
-                    return (
-                      <AccordionItem
-                        key={season.id}
-                        value={`season-${season.season_number}`}
-                        className="border rounded-lg px-4"
-                      >
-                        <AccordionTrigger
-                          className="hover:no-underline"
-                          data-testid={`accordion-season-${season.season_number}`}
-                        >
-                          <div className="flex items-center justify-between w-full pr-4">
-                            <div className="flex items-center gap-3">
-                              <div className="text-left">
-                                <h3 className="font-heading font-semibold">
-                                  Season {season.season_number}
-                                </h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {season.episode_count} Episode
-                                  {season.episode_count !== 1 ? "s" : ""}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                              <div className="text-right">
-                                <p className="text-sm font-medium text-accent">
-                                  {progress.watched} / {progress.total}
-                                </p>
-                                <Progress
-                                  value={progress.percentage}
-                                  className="w-24 h-1.5"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-4">
-                          <div className="space-y-4">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                markSeasonWatchedMutation.mutate({
-                                  seasonNumber: season.season_number,
-                                  watched: !allWatched,
-                                })
-                              }
-                              disabled={markSeasonWatchedMutation.isPending}
-                              data-testid={`button-mark-season-${season.season_number}`}
-                            >
-                              <CheckCircle2 className="w-4 h-4 mr-2" />
-                              {allWatched
-                                ? "Mark All Unwatched"
-                                : "Mark All Watched"}
-                            </Button>
-
-                            <div className="space-y-2">
-                              {season.episodes?.map((episode) => {
-                                const watched = isEpisodeWatched(
-                                  season.season_number,
-                                  episode.episode_number
-                                )
-                                const hasAired = hasEpisodeAired(
-                                  episode.air_date
-                                )
-                                const stillUrl = episode.still_path
-                                  ? `https://image.tmdb.org/t/p/w300${episode.still_path}`
-                                  : null
-
-                                return (
-                                  <div
-                                    key={episode.id}
-                                    className={`flex items-start gap-3 p-3 rounded-lg hover-elevate transition-all ${!hasAired ? "opacity-50" : ""}`}
-                                    data-testid={`episode-${season.season_number}-${episode.episode_number}`}
-                                  >
-                                    <Checkbox
-                                      checked={watched}
-                                      disabled={!hasAired}
-                                      onCheckedChange={(checked) =>
-                                        handleEpisodeToggle(
-                                          season.season_number,
-                                          episode.episode_number,
-                                          !!checked
-                                        )
-                                      }
-                                      data-testid={`checkbox-episode-${season.season_number}-${episode.episode_number}`}
-                                    />
-                                    {stillUrl && (
-                                      <div className="w-32 h-18 flex-shrink-0 rounded-md overflow-hidden bg-muted">
-                                        <img
-                                          src={stillUrl}
-                                          alt={episode.name}
-                                          className="w-full h-full object-cover"
-                                          loading="lazy"
-                                        />
-                                      </div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <h4 className="font-medium text-sm mb-1">
-                                        {episode.episode_number}. {episode.name}
-                                      </h4>
-                                      {episode.air_date && (
-                                        <p className="text-xs text-muted-foreground mb-1">
-                                          <Calendar className="w-3 h-3 inline mr-1" />
-                                          {new Date(
-                                            episode.air_date
-                                          ).toLocaleDateString()}
-                                        </p>
-                                      )}
-                                      {episode.overview && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                          {episode.overview}
-                                        </p>
-                                      )}
-                                      {episode.runtime && (
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                          <Clock className="w-3 h-3 inline mr-1" />
-                                          {episode.runtime} min
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    )
-                  })}
-              </Accordion>
+      {/* Episodes section */}
+      <div className="mt-12 pb-16">
+        <div className="flex items-baseline justify-between mb-5">
+          <h2 className="font-serif font-normal text-[36px] leading-none tracking-[-0.02em] text-foreground">
+            Episodes
+          </h2>
+          {/* Season pill switcher */}
+          <div className="flex gap-2 flex-wrap">
+            {seasonsLoading ? (
+              <Skeleton className="h-8 w-48" />
             ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading text-base">
-                    No Season Information
-                  </CardTitle>
-                </CardHeader>
-              </Card>
+              realSeasons.map((season) => {
+                const isActive = season.season_number === effectiveActiveSeason
+                return (
+                  <button
+                    key={season.season_number}
+                    onClick={() => setActiveSeason(season.season_number)}
+                    className="px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors"
+                    style={{
+                      background: isActive
+                        ? "hsl(var(--foreground))"
+                        : "transparent",
+                      color: isActive
+                        ? "hsl(var(--background))"
+                        : "hsl(var(--muted-foreground))",
+                      borderColor: isActive
+                        ? "hsl(var(--foreground))"
+                        : "hsl(var(--border))",
+                    }}
+                    data-testid={`button-season-${season.season_number}`}
+                  >
+                    Season {season.season_number}
+                  </button>
+                )
+              })
             )}
           </div>
         </div>
+
+        {/* Season-level controls */}
+        {activeSeasonData && (
+          <div className="flex items-center gap-4 mb-4">
+            <div className="font-mono text-[12px] text-muted-foreground">
+              {activeSeasonProgress.watched}/{activeSeasonProgress.total}{" "}
+              watched
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                markSeasonWatchedMutation.mutate({
+                  seasonNumber: effectiveActiveSeason,
+                  watched: !(
+                    activeSeasonProgress.watched ===
+                      activeSeasonProgress.total &&
+                    activeSeasonProgress.total > 0
+                  ),
+                })
+              }
+              disabled={markSeasonWatchedMutation.isPending}
+              data-testid={`button-mark-season-${effectiveActiveSeason}`}
+            >
+              {activeSeasonProgress.watched === activeSeasonProgress.total &&
+              activeSeasonProgress.total > 0
+                ? "Mark All Unwatched"
+                : "Mark All Watched"}
+            </Button>
+          </div>
+        )}
+
+        {/* Episode 2-col grid */}
+        {seasonsLoading ? (
+          <div className="space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : activeSeasonData?.episodes ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-14">
+            {activeSeasonData.episodes.map((episode) => {
+              const watched = isEpisodeWatched(
+                effectiveActiveSeason,
+                episode.episode_number
+              )
+              const hasAired = hasEpisodeAired(episode.air_date)
+              return (
+                <div
+                  key={episode.id}
+                  className={`flex items-center gap-3.5 py-3.5 border-b border-border ${!hasAired ? "opacity-40" : ""}`}
+                  data-testid={`episode-${effectiveActiveSeason}-${episode.episode_number}`}
+                >
+                  <button
+                    onClick={() =>
+                      hasAired &&
+                      handleEpisodeToggle(
+                        effectiveActiveSeason,
+                        episode.episode_number,
+                        !watched
+                      )
+                    }
+                    disabled={!hasAired}
+                    className="w-[30px] h-[30px] rounded-full flex items-center justify-center shrink-0 transition-colors"
+                    style={{
+                      background: watched ? sp.solid : "transparent",
+                      border: watched
+                        ? "none"
+                        : `1.5px solid hsl(var(--border))`,
+                    }}
+                    data-testid={`checkbox-episode-${effectiveActiveSeason}-${episode.episode_number}`}
+                  >
+                    {watched ? (
+                      <Check
+                        className="w-3.5 h-3.5 text-white"
+                        strokeWidth={3}
+                      />
+                    ) : (
+                      <span className="font-mono text-[11.5px] text-muted-foreground font-semibold">
+                        {episode.episode_number}
+                      </span>
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-[15px] font-medium leading-snug truncate ${watched ? "text-muted-foreground" : "text-foreground"}`}
+                    >
+                      {episode.name}
+                    </p>
+                    <p className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
+                      S{effectiveActiveSeason}·E{episode.episode_number}
+                      {episode.air_date &&
+                        ` · ${new Date(episode.air_date).toLocaleDateString()}`}
+                      {episode.runtime && ` · ${episode.runtime}m`}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">
+            No episode information available.
+          </p>
+        )}
       </div>
 
+      {/* Dialogs — all preserved */}
       <AlertDialog
         open={pendingEpisode !== null}
         onOpenChange={(open) => !open && setPendingEpisode(null)}
@@ -901,9 +835,9 @@ export default function ShowDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Mark Previous Episodes?</AlertDialogTitle>
             <AlertDialogDescription>
-              Would you like to mark all previous episodes as watched as well?
-              This will mark all episodes before S{pendingEpisode?.seasonNumber}
-              E{pendingEpisode?.episodeNumber} as watched.
+              Would you like to mark all previous episodes as watched? This will
+              mark all episodes before S{pendingEpisode?.seasonNumber}E
+              {pendingEpisode?.episodeNumber} as watched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -931,10 +865,9 @@ export default function ShowDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Unmark Succeeding Episodes?</AlertDialogTitle>
             <AlertDialogDescription>
-              Would you like to unmark all succeeding episodes as unwatched as
-              well? This will unmark all episodes from S
-              {pendingUnwatchEpisode?.seasonNumber}E
-              {pendingUnwatchEpisode?.episodeNumber} onwards as unwatched.
+              Would you like to unmark all succeeding episodes? This will unmark
+              all episodes from S{pendingUnwatchEpisode?.seasonNumber}E
+              {pendingUnwatchEpisode?.episodeNumber} onwards.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

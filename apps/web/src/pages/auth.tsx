@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { TrendingUp } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AuthPage() {
@@ -53,11 +52,27 @@ export default function AuthPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex items-center justify-center w-14 h-14 bg-primary rounded-xl">
-              <TrendingUp className="w-8 h-8 text-primary-foreground" />
+            <div
+              className="flex items-center justify-center w-12 h-12 rounded-xl"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.55 0.16 155) 0%, oklch(0.55 0.16 305) 100%)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'Instrument Serif', serif",
+                  fontStyle: "italic",
+                  color: "#fff",
+                  fontSize: 28,
+                  lineHeight: 1,
+                }}
+              >
+                S
+              </span>
             </div>
-            <h1 className="text-4xl font-heading font-bold text-foreground">
-              TV Tracker
+            <h1 className="text-4xl font-serif italic text-foreground">
+              Showtracker
             </h1>
           </div>
           <p className="text-muted-foreground">
@@ -67,7 +82,7 @@ export default function AuthPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-heading">Welcome</CardTitle>
+            <CardTitle className="font-serif">Welcome</CardTitle>
             <CardDescription>
               Sign in or create an account to get started
             </CardDescription>

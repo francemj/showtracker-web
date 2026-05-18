@@ -1208,11 +1208,18 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
           for (const episode of seasonData.episodes) {
             const key = `${seasonNum}-${episode.episode_number}`
             if (!watchedSet.has(key)) {
+              const airDate = episode.air_date as string | null
+              const daysUntil = airDate
+                ? Math.ceil(
+                    (new Date(airDate).getTime() - Date.now()) / 86400000
+                  )
+                : null
               return {
                 seasonNumber: seasonNum,
                 episodeNumber: episode.episode_number,
                 name: episode.name,
-                airDate: episode.air_date,
+                airDate,
+                daysUntil,
               }
             }
           }
