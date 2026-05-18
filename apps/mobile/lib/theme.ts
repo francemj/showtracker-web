@@ -38,31 +38,39 @@ export type AppTheme = typeof light
 
 export const COLORS = { light, dark }
 
-export type StatusKey = "watching" | "want_to_watch" | "caught_up" | "completed" | "stopped"
+export type StatusKey =
+  | "watching"
+  | "want_to_watch"
+  | "caught_up"
+  | "completed"
+  | "stopped"
 
 export const STATUS_COLORS: Record<
   StatusKey,
-  { light: { solid: string; bg: string; fg: string }; dark: { solid: string; bg: string; fg: string } }
+  {
+    light: { solid: string; bg: string; fg: string }
+    dark: { solid: string; bg: string; fg: string }
+  }
 > = {
   watching: {
     light: { solid: "#1a9268", bg: "#e6f7f1", fg: "#0d5c41" },
-    dark:  { solid: "#36c98a", bg: "#0d3d28", fg: "#6de0b0" },
+    dark: { solid: "#36c98a", bg: "#0d3d28", fg: "#6de0b0" },
   },
   want_to_watch: {
     light: { solid: "#8b7200", bg: "#fef9c3", fg: "#5a4a00" },
-    dark:  { solid: "#c9a030", bg: "#2e2200", fg: "#e0c060" },
+    dark: { solid: "#c9a030", bg: "#2e2200", fg: "#e0c060" },
   },
   caught_up: {
     light: { solid: "#3a5ec0", bg: "#e8eef9", fg: "#1e3a80" },
-    dark:  { solid: "#6890e0", bg: "#0e1e40", fg: "#90b0f0" },
+    dark: { solid: "#6890e0", bg: "#0e1e40", fg: "#90b0f0" },
   },
   completed: {
     light: { solid: "#8830b8", bg: "#f5e8fd", fg: "#5a1a80" },
-    dark:  { solid: "#b868e0", bg: "#280a40", fg: "#d090f0" },
+    dark: { solid: "#b868e0", bg: "#280a40", fg: "#d090f0" },
   },
   stopped: {
     light: { solid: "#c03030", bg: "#fde8e8", fg: "#801a1a" },
-    dark:  { solid: "#e06060", bg: "#400a0a", fg: "#f09090" },
+    dark: { solid: "#e06060", bg: "#400a0a", fg: "#f09090" },
   },
 }
 

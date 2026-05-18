@@ -9,7 +9,13 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "apps", "web", "src"),
       "@shared": path.resolve(import.meta.dirname, "packages", "shared"),
-      "@showtracker/api-client": path.resolve(import.meta.dirname, "packages", "api-client", "src", "index.ts"),
+      "@showtracker/api-client": path.resolve(
+        import.meta.dirname,
+        "packages",
+        "api-client",
+        "src",
+        "index.ts"
+      ),
     },
   },
   root: path.resolve(import.meta.dirname, "apps", "web"),

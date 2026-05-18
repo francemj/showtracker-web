@@ -16,13 +16,15 @@ export function StatusBadge({ status, variant = "card" }: Props) {
 
   return (
     <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-      <Text style={[
-        styles.label,
-        {
-          color: colors.fg,
-          fontSize: variant === "detail" ? 13 : 11,
-        },
-      ]}>
+      <Text
+        style={[
+          styles.label,
+          {
+            color: colors.fg,
+            fontSize: variant === "detail" ? 13 : 11,
+          },
+        ]}
+      >
         {label}
       </Text>
     </View>

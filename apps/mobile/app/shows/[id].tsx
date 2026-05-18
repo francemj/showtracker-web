@@ -19,7 +19,6 @@ import {
   StatusKey,
   STATUS_LABELS,
   SERIF,
-  SERIF_ITALIC,
   SANS,
   SANS_600,
   SANS_700,
@@ -36,10 +35,10 @@ type ProgressEntry = {
 
 const STATUSES: { value: StatusKey; label: string }[] = [
   { value: "want_to_watch", label: "Want to Watch" },
-  { value: "watching",      label: "Watching" },
-  { value: "caught_up",     label: "Caught Up" },
-  { value: "completed",     label: "Completed" },
-  { value: "stopped",       label: "Stopped" },
+  { value: "watching", label: "Watching" },
+  { value: "caught_up", label: "Caught Up" },
+  { value: "completed", label: "Completed" },
+  { value: "stopped", label: "Stopped" },
 ]
 
 export default function ShowDetailScreen() {
@@ -67,7 +66,10 @@ export default function ShowDetailScreen() {
     enabled: !!id,
   })
 
-  const activeSeason = selectedSeason ?? (seasons?.filter(s => s.season_number > 0).at(-1)?.season_number ?? 1)
+  const activeSeason =
+    selectedSeason ??
+    seasons?.filter((s) => s.season_number > 0).at(-1)?.season_number ??
+    1
 
   const invalidateShow = () => {
     qc.invalidateQueries({ queryKey: ["/api/shows", id] })
@@ -76,14 +78,34 @@ export default function ShowDetailScreen() {
   }
 
   const toggleEpisode = useMutation({
-    mutationFn: ({ seasonNumber, episodeNumber, watched }: { seasonNumber: number; episodeNumber: number; watched: boolean }) =>
-      apiRequest("POST", `/api/shows/${id}/progress`, { seasonNumber, episodeNumber, watched }),
+    mutationFn: ({
+      seasonNumber,
+      episodeNumber,
+      watched,
+    }: {
+      seasonNumber: number
+      episodeNumber: number
+      watched: boolean
+    }) =>
+      apiRequest("POST", `/api/shows/${id}/progress`, {
+        seasonNumber,
+        episodeNumber,
+        watched,
+      }),
     onSuccess: invalidateShow,
   })
 
   const markAllSeason = useMutation({
-    mutationFn: ({ seasonNumber, watched }: { seasonNumber: number; watched: boolean }) =>
-      apiRequest("POST", `/api/shows/${id}/season/${seasonNumber}/mark-all`, { watched }),
+    mutationFn: ({
+      seasonNumber,
+      watched,
+    }: {
+      seasonNumber: number
+      watched: boolean
+    }) =>
+      apiRequest("POST", `/api/shows/${id}/season/${seasonNumber}/mark-all`, {
+        watched,
+      }),
     onSuccess: invalidateShow,
   })
 
@@ -122,9 +144,16 @@ export default function ShowDetailScreen() {
   if (!show) {
     return (
       <View style={[styles.center, { backgroundColor: t.bg }]}>
-        <Text style={{ color: t.fg, fontFamily: SERIF, fontSize: 20 }}>Show not found.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backFallback}>
-          <Text style={{ color: t.accent, fontFamily: SANS_600 }}>← Go back</Text>
+        <Text style={{ color: t.fg, fontFamily: SERIF, fontSize: 20 }}>
+          Show not found.
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backFallback}
+        >
+          <Text style={{ color: t.accent, fontFamily: SANS_600 }}>
+            ← Go back
+          </Text>
         </TouchableOpacity>
       </View>
     )
@@ -138,28 +167,43 @@ export default function ShowDetailScreen() {
 
   const isInCollection = !!show.userShow
   const currentStatus = show.userShow?.status as StatusKey | undefined
-  const sp = currentStatus ? STATUS_COLORS[currentStatus] : STATUS_COLORS.want_to_watch
+  const sp = currentStatus
+    ? STATUS_COLORS[currentStatus]
+    : STATUS_COLORS.want_to_watch
 
   const watchedSet = new Set(
-    (progress ?? []).filter((p) => p.watched).map((p) => `${p.seasonNumber}x${p.episodeNumber}`)
+    (progress ?? [])
+      .filter((p) => p.watched)
+      .map((p) => `${p.seasonNumber}x${p.episodeNumber}`)
   )
 
   const regularSeasons = seasons?.filter((s) => s.season_number > 0) ?? []
-  const activeSeasonData = regularSeasons.find((s) => s.season_number === activeSeason)
+  const activeSeasonData = regularSeasons.find(
+    (s) => s.season_number === activeSeason
+  )
 
   const progressPct =
-    show.watchedEpisodes != null && show.totalEpisodes != null && show.totalEpisodes > 0
+    show.watchedEpisodes != null &&
+    show.totalEpisodes != null &&
+    show.totalEpisodes > 0
       ? show.watchedEpisodes / show.totalEpisodes
       : 0
 
   const nextEp = show.nextEpisode
 
   return (
-    <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ paddingBottom: 48 }}>
+    <ScrollView
+      style={{ backgroundColor: t.bg }}
+      contentContainerStyle={{ paddingBottom: 48 }}
+    >
       {/* Cinematic backdrop */}
       <View style={styles.backdropContainer}>
         {backdropUri ? (
-          <ImageBackground source={{ uri: backdropUri }} style={styles.backdrop} resizeMode="cover">
+          <ImageBackground
+            source={{ uri: backdropUri }}
+            style={styles.backdrop}
+            resizeMode="cover"
+          >
             <LinearGradient
               colors={["rgba(0,0,0,0.4)", "transparent", "transparent", t.bg]}
               locations={[0, 0.3, 0.5, 1]}
@@ -172,8 +216,14 @@ export default function ShowDetailScreen() {
               onDismissMore={() => setMoreMenuVisible(false)}
               insets={insets}
               isInCollection={isInCollection}
-              onRemove={() => { removeShow.mutate(); setMoreMenuVisible(false) }}
-              onStatusChange={(s) => { updateStatus.mutate(s); setMoreMenuVisible(false) }}
+              onRemove={() => {
+                removeShow.mutate()
+                setMoreMenuVisible(false)
+              }}
+              onStatusChange={(s) => {
+                updateStatus.mutate(s)
+                setMoreMenuVisible(false)
+              }}
             />
           </ImageBackground>
         ) : (
@@ -185,8 +235,14 @@ export default function ShowDetailScreen() {
               onDismissMore={() => setMoreMenuVisible(false)}
               insets={insets}
               isInCollection={isInCollection}
-              onRemove={() => { removeShow.mutate(); setMoreMenuVisible(false) }}
-              onStatusChange={(s) => { updateStatus.mutate(s); setMoreMenuVisible(false) }}
+              onRemove={() => {
+                removeShow.mutate()
+                setMoreMenuVisible(false)
+              }}
+              onStatusChange={(s) => {
+                updateStatus.mutate(s)
+                setMoreMenuVisible(false)
+              }}
             />
           </View>
         )}
@@ -196,27 +252,37 @@ export default function ShowDetailScreen() {
       <View style={[styles.infoBlock, { marginTop: -100 }]}>
         <View style={styles.chips}>
           {currentStatus && (
-            <View style={[styles.statusChip, { backgroundColor: sp.light.solid }]}>
-              <Text style={styles.statusChipText}>{STATUS_LABELS[currentStatus].toUpperCase()}</Text>
+            <View
+              style={[styles.statusChip, { backgroundColor: sp.light.solid }]}
+            >
+              <Text style={styles.statusChipText}>
+                {STATUS_LABELS[currentStatus].toUpperCase()}
+              </Text>
             </View>
           )}
           {show.firstAirDate && (
             <View style={[styles.darkChip]}>
-              <Text style={styles.darkChipText}>{show.firstAirDate.slice(0, 4)}</Text>
+              <Text style={styles.darkChipText}>
+                {show.firstAirDate.slice(0, 4)}
+              </Text>
             </View>
           )}
         </View>
         <Text style={styles.showTitle}>{show.name}</Text>
         <Text style={styles.showMeta}>
           {show.genres?.join(" · ")}
-          {regularSeasons.length > 0 ? ` · ${regularSeasons.length} season${regularSeasons.length !== 1 ? "s" : ""}` : ""}
+          {regularSeasons.length > 0
+            ? ` · ${regularSeasons.length} season${regularSeasons.length !== 1 ? "s" : ""}`
+            : ""}
         </Text>
       </View>
 
       {/* Overview */}
       {show.overview && (
         <View style={styles.overviewBlock}>
-          <Text style={[styles.overview, { color: t.fgMuted }]}>{show.overview}</Text>
+          <Text style={[styles.overview, { color: t.fgMuted }]}>
+            {show.overview}
+          </Text>
         </View>
       )}
 
@@ -238,73 +304,90 @@ export default function ShowDetailScreen() {
       )}
 
       {/* Progress */}
-      {isInCollection && show.watchedEpisodes != null && show.totalEpisodes != null && (
-        <View style={styles.progressBlock}>
-          <View style={styles.progressHeader}>
-            <Text style={[styles.sectionTitle, { color: t.fg }]}>Progress</Text>
-            <Text style={[styles.progressCount, { color: t.fg }]}>
-              {show.watchedEpisodes}/{show.totalEpisodes} · {Math.round(progressPct * 100)}%
-            </Text>
-          </View>
-          <View style={[styles.progressTrack, { backgroundColor: t.surfaceAlt }]}>
-            <View
-              style={[styles.progressFill, { width: `${progressPct * 100}%` as any, backgroundColor: sp.light.solid }]}
-            />
-          </View>
-          <View style={styles.progressActions}>
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: sp.light.solid }]}
-              onPress={() => {
-                if (nextEp) {
-                  toggleEpisode.mutate({
-                    seasonNumber: nextEp.season,
-                    episodeNumber: nextEp.episode,
-                    watched: true,
-                  })
-                }
-              }}
-              disabled={!nextEp || toggleEpisode.isPending}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.nextBtnText}>
-                {nextEp ? `Next: S${nextEp.season} E${nextEp.episode}` : "Up to date"}
+      {isInCollection &&
+        show.watchedEpisodes != null &&
+        show.totalEpisodes != null && (
+          <View style={styles.progressBlock}>
+            <View style={styles.progressHeader}>
+              <Text style={[styles.sectionTitle, { color: t.fg }]}>
+                Progress
               </Text>
-            </TouchableOpacity>
-            <Menu
-              visible={statusMenuVisible}
-              onDismiss={() => setStatusMenuVisible(false)}
-              anchor={
-                <TouchableOpacity
-                  style={[styles.moreBtn, { borderColor: t.border }]}
-                  onPress={() => setStatusMenuVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.moreBtnText, { color: t.fg }]}>···</Text>
-                </TouchableOpacity>
-              }
+              <Text style={[styles.progressCount, { color: t.fg }]}>
+                {show.watchedEpisodes}/{show.totalEpisodes} ·{" "}
+                {Math.round(progressPct * 100)}%
+              </Text>
+            </View>
+            <View
+              style={[styles.progressTrack, { backgroundColor: t.surfaceAlt }]}
             >
-              {STATUSES.map((s) => (
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: `${progressPct * 100}%` as any,
+                    backgroundColor: sp.light.solid,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.progressActions}>
+              <TouchableOpacity
+                style={[styles.nextBtn, { backgroundColor: sp.light.solid }]}
+                onPress={() => {
+                  if (nextEp) {
+                    toggleEpisode.mutate({
+                      seasonNumber: nextEp.season,
+                      episodeNumber: nextEp.episode,
+                      watched: true,
+                    })
+                  }
+                }}
+                disabled={!nextEp || toggleEpisode.isPending}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.nextBtnText}>
+                  {nextEp
+                    ? `Next: S${nextEp.season} E${nextEp.episode}`
+                    : "Up to date"}
+                </Text>
+              </TouchableOpacity>
+              <Menu
+                visible={statusMenuVisible}
+                onDismiss={() => setStatusMenuVisible(false)}
+                anchor={
+                  <TouchableOpacity
+                    style={[styles.moreBtn, { borderColor: t.border }]}
+                    onPress={() => setStatusMenuVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.moreBtnText, { color: t.fg }]}>
+                      ···
+                    </Text>
+                  </TouchableOpacity>
+                }
+              >
+                {STATUSES.map((s) => (
+                  <Menu.Item
+                    key={s.value}
+                    title={s.label}
+                    onPress={() => {
+                      updateStatus.mutate(s.value)
+                      setStatusMenuVisible(false)
+                    }}
+                  />
+                ))}
                 <Menu.Item
-                  key={s.value}
-                  title={s.label}
+                  title="Remove from collection"
+                  titleStyle={{ color: "#c03030" }}
                   onPress={() => {
-                    updateStatus.mutate(s.value)
+                    removeShow.mutate()
                     setStatusMenuVisible(false)
                   }}
                 />
-              ))}
-              <Menu.Item
-                title="Remove from collection"
-                titleStyle={{ color: "#c03030" }}
-                onPress={() => {
-                  removeShow.mutate()
-                  setStatusMenuVisible(false)
-                }}
-              />
-            </Menu>
+              </Menu>
+            </View>
           </View>
-        </View>
-      )}
+        )}
 
       {/* Episodes */}
       {regularSeasons.length > 0 && (
@@ -312,7 +395,11 @@ export default function ShowDetailScreen() {
           <Text style={[styles.sectionTitle, { color: t.fg }]}>Episodes</Text>
 
           {/* Season pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.seasonPills}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.seasonPills}
+          >
             {regularSeasons.map((s) => {
               const isActive = s.season_number === activeSeason
               return (
@@ -328,7 +415,12 @@ export default function ShowDetailScreen() {
                   onPress={() => setSelectedSeason(s.season_number)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.seasonPillText, { color: isActive ? t.bg : t.fgMuted }]}>
+                  <Text
+                    style={[
+                      styles.seasonPillText,
+                      { color: isActive ? t.bg : t.fgMuted },
+                    ]}
+                  >
                     Season {s.season_number}
                   </Text>
                 </TouchableOpacity>
@@ -344,10 +436,14 @@ export default function ShowDetailScreen() {
               </Text>
               <TouchableOpacity
                 onPress={() => {
-                  const isFullyWatched = activeSeasonData.episodes?.every((ep) =>
-                    watchedSet.has(`${ep.season_number}x${ep.episode_number}`)
+                  const isFullyWatched = activeSeasonData.episodes?.every(
+                    (ep) =>
+                      watchedSet.has(`${ep.season_number}x${ep.episode_number}`)
                   )
-                  markAllSeason.mutate({ seasonNumber: activeSeason, watched: !isFullyWatched })
+                  markAllSeason.mutate({
+                    seasonNumber: activeSeason,
+                    watched: !isFullyWatched,
+                  })
                 }}
                 disabled={markAllSeason.isPending}
               >
@@ -360,8 +456,12 @@ export default function ShowDetailScreen() {
 
           {/* Episode rows */}
           {activeSeasonData?.episodes?.map((ep) => {
-            const watched = watchedSet.has(`${ep.season_number}x${ep.episode_number}`)
-            const isCurrentSp = currentStatus ? STATUS_COLORS[currentStatus] : STATUS_COLORS.watching
+            const watched = watchedSet.has(
+              `${ep.season_number}x${ep.episode_number}`
+            )
+            const isCurrentSp = currentStatus
+              ? STATUS_COLORS[currentStatus]
+              : STATUS_COLORS.watching
             return (
               <TouchableOpacity
                 key={`${ep.season_number}x${ep.episode_number}`}
@@ -380,15 +480,21 @@ export default function ShowDetailScreen() {
                   style={[
                     styles.episodeToggle,
                     {
-                      backgroundColor: watched ? isCurrentSp.light.solid : "transparent",
-                      borderColor: watched ? isCurrentSp.light.solid : t.borderStrong,
+                      backgroundColor: watched
+                        ? isCurrentSp.light.solid
+                        : "transparent",
+                      borderColor: watched
+                        ? isCurrentSp.light.solid
+                        : t.borderStrong,
                     },
                   ]}
                 >
                   {watched ? (
                     <Text style={styles.episodeCheck}>✓</Text>
                   ) : (
-                    <Text style={[styles.episodeNum, { color: t.fgMuted }]}>{ep.episode_number}</Text>
+                    <Text style={[styles.episodeNum, { color: t.fgMuted }]}>
+                      {ep.episode_number}
+                    </Text>
                   )}
                 </View>
                 <View style={styles.episodeInfo}>
@@ -436,14 +542,22 @@ function BackdropChrome({
 }) {
   return (
     <View style={[styles.backdropNav, { paddingTop: insets.top + 12 }]}>
-      <TouchableOpacity style={styles.glassBtn} onPress={onBack} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.glassBtn}
+        onPress={onBack}
+        activeOpacity={0.8}
+      >
         <Text style={styles.glassBtnText}>‹</Text>
       </TouchableOpacity>
       <Menu
         visible={moreMenuVisible}
         onDismiss={onDismissMore}
         anchor={
-          <TouchableOpacity style={styles.glassBtn} onPress={onMore} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.glassBtn}
+            onPress={onMore}
+            activeOpacity={0.8}
+          >
             <Text style={styles.glassBtnText}>⋮</Text>
           </TouchableOpacity>
         }
