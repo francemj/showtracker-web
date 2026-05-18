@@ -36,8 +36,8 @@ export function ShowCard({ show, href }: ShowCardProps) {
     mutationFn: async () => {
       if (!show.nextEpisode) return
       return apiRequest("POST", `/api/shows/${show.id}/progress`, {
-        seasonNumber: show.nextEpisode.season,
-        episodeNumber: show.nextEpisode.episode,
+        seasonNumber: show.nextEpisode.seasonNumber,
+        episodeNumber: show.nextEpisode.episodeNumber,
         watched: true,
       })
     },
@@ -51,7 +51,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
       toast({
         title: "Episode marked as watched",
-        description: `S${show.nextEpisode?.season}E${show.nextEpisode?.episode}`,
+        description: `S${show.nextEpisode?.seasonNumber}E${show.nextEpisode?.episodeNumber}`,
       })
     },
     onError: () => {
@@ -91,13 +91,16 @@ export function ShowCard({ show, href }: ShowCardProps) {
         )}
 
         {/* Caught-up: next episode air date badge */}
-        {isCaughtUp && show.nextEpisode && show.nextEpisode.daysUntil >= 0 && (
+        {isCaughtUp && show.nextEpisode && (
           <div className="absolute top-2 left-2">
             <span className="inline-block bg-black/65 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
-              S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
-              {show.nextEpisode.daysUntil === 0
+              S{show.nextEpisode.seasonNumber}E{show.nextEpisode.episodeNumber}{" "}
+              {show.nextEpisode.daysUntil != null &&
+              show.nextEpisode.daysUntil <= 0
                 ? "today"
-                : `in ${show.nextEpisode.daysUntil}d`}
+                : show.nextEpisode.daysUntil != null
+                  ? `in ${show.nextEpisode.daysUntil}d`
+                  : ""}
             </span>
           </div>
         )}

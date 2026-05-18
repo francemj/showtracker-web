@@ -663,8 +663,8 @@ export default function ShowDetail() {
               <button
                 onClick={() =>
                   handleEpisodeToggle(
-                    show.nextEpisode!.season,
-                    show.nextEpisode!.episode,
+                    show.nextEpisode!.seasonNumber,
+                    show.nextEpisode!.episodeNumber,
                     true
                   )
                 }
@@ -673,8 +673,8 @@ export default function ShowDetail() {
                 style={{ background: sp.solid }}
               >
                 <Check className="w-3.5 h-3.5" strokeWidth={3} />
-                Mark S{show.nextEpisode.season}·E{show.nextEpisode.episode}{" "}
-                watched
+                Mark S{show.nextEpisode.seasonNumber}·E
+                {show.nextEpisode.episodeNumber} watched
               </button>
             )}
           </div>
