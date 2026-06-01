@@ -1,6 +1,6 @@
-# Showtracker Web
+# Showtracker
 
-Web app for searching TV shows (via [The Movie Database](https://www.themoviedb.org/)), adding them to your collection, and tracking watch progress by season and episode.
+Monorepo for a TV show tracker — search shows via [The Movie Database](https://www.themoviedb.org/), add them to your collection, and track watch progress by season and episode. Available as a web app and a React Native mobile app.
 
 ## What it does
 
@@ -9,6 +9,8 @@ Web app for searching TV shows (via [The Movie Database](https://www.themoviedb.
 - **Progress**: Mark episodes watched, with logic for bulk watch/unwatch, status ↔ progress sync, and air-date–aware status for ongoing shows.
 
 ## Tech stack
+
+### Web (`apps/web`)
 
 | Layer | Choice |
 |--------|--------|
@@ -20,15 +22,35 @@ Web app for searching TV shows (via [The Movie Database](https://www.themoviedb.
 | Auth validation | Auth0 `/userinfo`; token → `sub` cache in [Upstash Redis](https://upstash.com/) (`server/lib/auth0.ts`) |
 | External API | TMDB for show metadata |
 
-Shared TypeScript types and Zod helpers live under `shared/` (including Drizzle-style table definitions used with `drizzle-zod` for validation shapes).
+### Mobile (`apps/mobile`)
+
+| Layer | Choice |
+|--------|--------|
+| Framework | [Expo](https://expo.dev/) ~54, React Native 0.81, [Expo Router](https://expo.github.io/router/) v6 |
+| UI | React Native Paper, Expo Linear Gradient, custom cinematic dark theme |
+| Data fetching | TanStack Query with AsyncStorage persistence |
+| Auth | Auth0 via `react-native-auth0`, tokens stored in Expo SecureStore |
+| Notifications | Expo Notifications |
+| Distribution | [EAS Build](https://expo.dev/eas) (`eas.json`), bundle IDs `dev.matt.showtracker` |
+
+The mobile app connects to the same hosted API (`https://showtracker-web.vercel.app`).
+
+### Shared packages (`packages/`)
+
+- **`api-client`** — typed fetch wrappers shared between web and mobile
+- **`shared`** — TypeScript types and Zod schemas (including Drizzle-style table definitions used with `drizzle-zod`)
 
 ## Repository layout
 
 ```
+apps/
+  web/                # Vite React web app
+  mobile/             # Expo React Native app
+packages/
+  api-client/         # Shared typed API client
+  shared/             # Shared schemas and types
 api/index.ts          # Express app + Vercel serverless handler
-client/               # Vite React app (root for Vite)
 server/               # API routes, Supabase/TMDB/Auth0 helpers
-shared/               # Shared schemas and types
 database-schema.sql   # Postgres schema for Supabase
 ```
 
@@ -60,6 +82,8 @@ On [Vercel](https://vercel.com/), `VERCEL` is set automatically; the app exports
 
 ## Scripts
 
+### Web / API (root)
+
 ```bash
 npm install
 npm run dev      # Development: Express + Vite (default port 3000)
@@ -68,6 +92,18 @@ npm run start    # Production: Express + static assets (NODE_ENV=production)
 npm run check    # TypeScript check
 npm run lint     # ESLint
 ```
+
+### Mobile (`apps/mobile`)
+
+```bash
+cd apps/mobile
+npx expo start          # Start Expo dev server
+npx expo run:ios        # Run on iOS simulator
+npx expo run:android    # Run on Android emulator
+npx tsc --noEmit        # TypeScript check
+```
+
+EAS builds are configured in [`apps/mobile/eas.json`](./apps/mobile/eas.json). Run `eas build` to produce a production build via Expo Application Services.
 
 ## Documentation in this repo
 
