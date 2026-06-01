@@ -8,38 +8,39 @@ import {
 
 type Theme = "dark" | "light"
 
-type ThemeProviderProps = {
-  children: ReactNode
-  defaultTheme?: Theme
-}
-
 type ThemeProviderState = {
   theme: Theme
-  setTheme: (theme: Theme) => void
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
   undefined
 )
 
-export function ThemeProvider({
-  children,
-  defaultTheme = "light",
-}: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("theme")
-    return (stored as Theme) || defaultTheme
-  })
+function getSystemTheme(): Theme {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light"
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(getSystemTheme)
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    const handler = (e: MediaQueryListEvent) =>
+      setTheme(e.matches ? "dark" : "light")
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
 
   useEffect(() => {
     const root = document.documentElement
     root.classList.remove("light", "dark")
     root.classList.add(theme)
-    localStorage.setItem("theme", theme)
   }, [theme])
 
   return (
-    <ThemeProviderContext.Provider value={{ theme, setTheme }}>
+    <ThemeProviderContext.Provider value={{ theme }}>
       {children}
     </ThemeProviderContext.Provider>
   )
