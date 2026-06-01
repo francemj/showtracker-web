@@ -8,7 +8,7 @@ import { Search as SearchIcon, Check, Star } from "lucide-react"
 import { UserShow, SearchResponse } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
-import { useDebounce } from "@/hooks/use-debounce"
+import { useDebounce } from "@showtracker/api-client"
 import { Link } from "wouter"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
 
