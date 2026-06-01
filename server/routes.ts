@@ -287,6 +287,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             activeShows.filter(
               (s: { status: string }) => s.status === "completed"
             ).length || 0,
+          wantToWatchShows:
+            activeShows.filter(
+              (s: { status: string }) => s.status === "want_to_watch"
+            ).length || 0,
+          caughtUpShows:
+            activeShows.filter(
+              (s: { status: string }) => s.status === "caught_up"
+            ).length || 0,
           episodesWatched,
         }
 

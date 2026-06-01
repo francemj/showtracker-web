@@ -13,12 +13,12 @@ interface ShowGridProps {
 export const gridColumns = {
   base: 2,
   sm: 3,
-  md: 4,
+  md: 3,
   lg: 5,
   xl: 6,
   "2xl": 6,
 }
-export const showGridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-8`
+export const showGridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-8`
 
 export function ShowGrid({
   shows,
@@ -33,14 +33,13 @@ export function ShowGrid({
   )
 
   if (isLoading) {
+    const skeletonCount = gridColumns[breakpoint] * 3
     if (noContainer) {
-      return (
-        <>{[...Array(gridColumns[breakpoint])].map((_, i) => skeleton(i))}</>
-      )
+      return <>{[...Array(skeletonCount)].map((_, i) => skeleton(i))}</>
     }
     return (
       <div className={showGridClass}>
-        {[...Array(gridColumns[breakpoint])].map((_, i) => skeleton(i))}
+        {[...Array(skeletonCount)].map((_, i) => skeleton(i))}
       </div>
     )
   }
