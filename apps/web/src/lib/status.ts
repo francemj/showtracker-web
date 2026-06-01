@@ -1,11 +1,14 @@
-export const STATUS_HUE = {
+import type { StatusKey } from "@shared/schema"
+
+export type { StatusKey }
+
+export const STATUS_HUE: Record<StatusKey, number> = {
   watching: 155,
   want_to_watch: 60,
   caught_up: 235,
   completed: 305,
+  stopped: 0,
 } as const
-
-export type StatusKey = keyof typeof STATUS_HUE
 
 export function statusPalette(
   key: StatusKey,
@@ -34,4 +37,5 @@ export const STATUS_LABEL: Record<StatusKey, string> = {
   want_to_watch: "Want to Watch",
   caught_up: "Caught Up",
   completed: "Completed",
+  stopped: "Stopped",
 }

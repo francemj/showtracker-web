@@ -187,12 +187,46 @@ export type InsertImportHistory = z.infer<typeof insertImportHistorySchema>
 export type DeviceToken = typeof deviceTokens.$inferSelect
 
 // Additional types for frontend
+export type StatusKey =
+  | "watching"
+  | "want_to_watch"
+  | "caught_up"
+  | "completed"
+  | "stopped"
+
+export type PaginatedShowsResponse = {
+  shows: ShowWithProgress[]
+  total: number
+  page: number
+  totalPages: number
+}
+
+export type SearchResponse = {
+  results: TMDBShow[]
+  page: number
+  totalPages: number
+  totalResults: number
+}
+
 export type NextEpisode = {
-  seasonNumber: number
-  episodeNumber: number
+  season: number
+  episode: number
   name?: string
   airDate: string | null
   daysUntil: number | null
+}
+
+export type EpisodeProgress = {
+  season: number
+  episode: number
+  watched: boolean
+}
+
+export type ShowStats = {
+  totalShows: number
+  watchingShows: number
+  completedShows: number
+  episodesWatched: number
 }
 
 export type ShowWithProgress = Show & {

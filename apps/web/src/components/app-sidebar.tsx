@@ -69,6 +69,7 @@ export function AppSidebar() {
     completed: stats?.completedShows,
     want_to_watch: undefined,
     caught_up: undefined,
+    stopped: undefined,
   }
 
   return (

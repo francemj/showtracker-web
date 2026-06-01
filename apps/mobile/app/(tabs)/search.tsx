@@ -18,7 +18,7 @@ import {
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
-import type { TMDBShow, UserShow } from "@showtracker/shared"
+import type { TMDBShow, UserShow, SearchResponse } from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -34,12 +34,6 @@ import {
 
 const TMDB_W200 = "https://image.tmdb.org/t/p/w200"
 
-interface SearchResponse {
-  results: TMDBShow[]
-  page: number
-  totalPages: number
-  totalResults: number
-}
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)

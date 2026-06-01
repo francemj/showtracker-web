@@ -85,7 +85,7 @@ export default function ShowDetail() {
   })
 
   const { data: watchProgress } = useQuery<
-    Array<{ seasonNumber: number; episodeNumber: number; watched: boolean }>
+    Array<{ season: number; episode: number; watched: boolean }>
   >({
     queryKey: ["/api/shows", id, "progress"],
     enabled: !!id,
@@ -112,8 +112,8 @@ export default function ShowDetail() {
       watched: boolean
     }) => {
       return apiRequest("POST", `/api/shows/${id}/progress`, {
-        seasonNumber,
-        episodeNumber,
+        season: seasonNumber,
+        episode: episodeNumber,
         watched,
       })
     },
@@ -201,9 +201,7 @@ export default function ShowDetail() {
   const isEpisodeWatched = (seasonNumber: number, episodeNumber: number) =>
     watchProgress?.some(
       (wp) =>
-        wp.seasonNumber === seasonNumber &&
-        wp.episodeNumber === episodeNumber &&
-        wp.watched
+        wp.season === seasonNumber && wp.episode === episodeNumber && wp.watched
     )
 
   const hasEpisodeAired = (airDate: string | null) => {
@@ -235,8 +233,8 @@ export default function ShowDetail() {
   ) => {
     if (!seasons) return
     const episodesToMark: Array<{
-      seasonNumber: number
-      episodeNumber: number
+      season: number
+      episode: number
       watched: boolean
     }> = []
     for (const season of seasons) {
@@ -247,8 +245,8 @@ export default function ShowDetail() {
           if (season.season_number < targetSeason) {
             if (!isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToMark.push({
-                seasonNumber: season.season_number,
-                episodeNumber: episode.episode_number,
+                season: season.season_number,
+                episode: episode.episode_number,
                 watched: true,
               })
           } else if (
@@ -257,8 +255,8 @@ export default function ShowDetail() {
           ) {
             if (!isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToMark.push({
-                seasonNumber: season.season_number,
-                episodeNumber: episode.episode_number,
+                season: season.season_number,
+                episode: episode.episode_number,
                 watched: true,
               })
           }
@@ -282,8 +280,8 @@ export default function ShowDetail() {
   ) => {
     if (!seasons) return
     const episodesToUnmark: Array<{
-      seasonNumber: number
-      episodeNumber: number
+      season: number
+      episode: number
       watched: boolean
     }> = []
     for (const season of seasons) {
@@ -294,8 +292,8 @@ export default function ShowDetail() {
           if (season.season_number > targetSeason) {
             if (isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToUnmark.push({
-                seasonNumber: season.season_number,
-                episodeNumber: episode.episode_number,
+                season: season.season_number,
+                episode: episode.episode_number,
                 watched: false,
               })
           } else if (
@@ -304,8 +302,8 @@ export default function ShowDetail() {
           ) {
             if (isEpisodeWatched(season.season_number, episode.episode_number))
               episodesToUnmark.push({
-                seasonNumber: season.season_number,
-                episodeNumber: episode.episode_number,
+                season: season.season_number,
+                episode: episode.episode_number,
                 watched: false,
               })
           }
@@ -663,8 +661,8 @@ export default function ShowDetail() {
               <button
                 onClick={() =>
                   handleEpisodeToggle(
-                    show.nextEpisode!.seasonNumber,
-                    show.nextEpisode!.episodeNumber,
+                    show.nextEpisode!.season,
+                    show.nextEpisode!.episode,
                     true
                   )
                 }
@@ -673,8 +671,8 @@ export default function ShowDetail() {
                 style={{ background: sp.solid }}
               >
                 <Check className="w-3.5 h-3.5" strokeWidth={3} />
-                Mark S{show.nextEpisode.seasonNumber}·E
-                {show.nextEpisode.episodeNumber} watched
+                Mark S{show.nextEpisode.season}·E
+                {show.nextEpisode.episode} watched
               </button>
             )}
           </div>

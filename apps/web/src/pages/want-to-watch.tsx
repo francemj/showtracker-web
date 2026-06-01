@@ -1,20 +1,13 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
-import { ShowWithProgress } from "@shared/schema"
+import { PaginatedShowsResponse } from "@shared/schema"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
 import { apiRequest } from "@/lib/queryClient"
 import { useMemo } from "react"
 import { LibraryView } from "./library-view"
 
-interface PaginatedResponse {
-  shows: ShowWithProgress[]
-  total: number
-  page: number
-  totalPages: number
-}
-
 export default function WantToWatch() {
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery<PaginatedResponse>({
+    useInfiniteQuery<PaginatedShowsResponse>({
       queryKey: ["/api/shows/want-to-watch"],
       queryFn: async ({ pageParam = 1 }) => {
         const res = await apiRequest(

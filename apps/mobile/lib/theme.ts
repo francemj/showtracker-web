@@ -1,4 +1,7 @@
 import { useColorScheme } from "react-native"
+import type { StatusKey } from "@showtracker/shared"
+
+export type { StatusKey }
 
 export const SERIF = "InstrumentSerif_400Regular"
 export const SERIF_ITALIC = "InstrumentSerif_400Regular_Italic"
@@ -37,13 +40,6 @@ const dark = {
 export type AppTheme = typeof light
 
 export const COLORS = { light, dark }
-
-export type StatusKey =
-  | "watching"
-  | "want_to_watch"
-  | "caught_up"
-  | "completed"
-  | "stopped"
 
 export const STATUS_COLORS: Record<
   StatusKey,

@@ -84,8 +84,7 @@ function PosterRow({
                 {upcoming && show.nextEpisode && (
                   <div className="absolute top-2 left-2">
                     <span className="bg-black/70 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
-                      S{show.nextEpisode.seasonNumber}E
-                      {show.nextEpisode.episodeNumber}
+                      S{show.nextEpisode.season}E{show.nextEpisode.episode}
                       {show.nextEpisode.daysUntil != null &&
                         (show.nextEpisode.daysUntil <= 0
                           ? " today"
@@ -204,8 +203,8 @@ export default function Dashboard() {
     mutationFn: async () => {
       if (!featured?.nextEpisode) return
       return apiRequest("POST", `/api/shows/${featured.id}/progress`, {
-        seasonNumber: featured.nextEpisode.seasonNumber,
-        episodeNumber: featured.nextEpisode.episodeNumber,
+        season: featured.nextEpisode.season,
+        episode: featured.nextEpisode.episode,
         watched: true,
       })
     },
@@ -279,8 +278,8 @@ export default function Dashboard() {
                   className="font-serif italic text-[52px] text-white leading-[1.05] tracking-[-0.025em]"
                   style={{ textShadow: "0 2px 18px rgba(0,0,0,0.35)" }}
                 >
-                  S{featured.nextEpisode.seasonNumber} · E
-                  {featured.nextEpisode.episodeNumber}
+                  S{featured.nextEpisode.season} · E
+                  {featured.nextEpisode.episode}
                 </p>
                 <p className="font-mono text-[13px] text-white/85 mt-2.5 font-medium">
                   {featured.watchedEpisodes ?? 0}/

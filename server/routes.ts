@@ -720,8 +720,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Map snake_case to camelCase for frontend
         const mappedProgress = (progress || []).map((p: any) => ({
-          seasonNumber: p.season_number,
-          episodeNumber: p.episode_number,
+          season: p.season_number,
+          episode: p.episode_number,
           watched: p.watched,
         }))
 
@@ -740,15 +740,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params
-        const { seasonNumber, episodeNumber, watched } = req.body
+        const { season, episode, watched } = req.body
         const showId = parseInt(id)
 
         const { error } = await supabase.from("watch_progress").upsert(
           {
             user_id: req.userId,
             show_id: showId,
-            season_number: seasonNumber,
-            episode_number: episodeNumber,
+            season_number: season,
+            episode_number: episode,
             watched,
             watched_at: watched ? new Date().toISOString() : null,
           },
@@ -865,8 +865,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const progressRecords = episodes.map((ep: any) => ({
           user_id: req.userId,
           show_id: parseInt(id),
-          season_number: ep.seasonNumber,
-          episode_number: ep.episodeNumber,
+          season_number: ep.season,
+          episode_number: ep.episode,
           watched: ep.watched,
           watched_at: ep.watched ? new Date().toISOString() : null,
         }))
@@ -1215,8 +1215,8 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
                   )
                 : null
               return {
-                seasonNumber: seasonNum,
-                episodeNumber: episode.episode_number,
+                season: seasonNum,
+                episode: episode.episode_number,
                 name: episode.name,
                 airDate,
                 daysUntil,

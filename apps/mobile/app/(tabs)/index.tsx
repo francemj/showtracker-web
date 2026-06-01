@@ -13,7 +13,7 @@ import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "react-native"
 import { apiRequest } from "@showtracker/api-client"
-import type { ShowWithProgress } from "@showtracker/shared"
+import type { ShowWithProgress, ShowStats, PaginatedShowsResponse } from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -30,17 +30,6 @@ const TMDB_W300 = "https://image.tmdb.org/t/p/w300"
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
 const DASHBOARD_LIMIT = 6
 
-type Stats = {
-  totalShows: number
-  watchingShows: number
-  completedShows: number
-  episodesWatched: number
-}
-
-type ShowsResponse = {
-  shows: ShowWithProgress[]
-  total: number
-}
 
 function StatusDot({ color }: { color: string }) {
   return (
@@ -333,16 +322,16 @@ export default function DashboardScreen() {
   const t = useAppTheme()
   const qc = useQueryClient()
 
-  const { data: stats } = useQuery<Stats>({ queryKey: ["/api/stats"] })
+  const { data: stats } = useQuery<ShowStats>({ queryKey: ["/api/stats"] })
 
   const { data: watching, isLoading: watchingLoading } =
-    useQuery<ShowsResponse>({
+    useQuery<PaginatedShowsResponse>({
       queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
     })
-  const { data: wantToWatch, isLoading: wtwLoading } = useQuery<ShowsResponse>({
+  const { data: wantToWatch, isLoading: wtwLoading } = useQuery<PaginatedShowsResponse>({
     queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
   })
-  const { data: caughtUp, isLoading: cuLoading } = useQuery<ShowsResponse>({
+  const { data: caughtUp, isLoading: cuLoading } = useQuery<PaginatedShowsResponse>({
     queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
   })
 
@@ -353,8 +342,8 @@ export default function DashboardScreen() {
       const next = featuredShow?.nextEpisode
       if (!next || !featuredShow) throw new Error("No next episode")
       return apiRequest("POST", `/api/shows/${featuredShow.id}/progress`, {
-        seasonNumber: next.season,
-        episodeNumber: next.episode,
+        season: next.season,
+        episode: next.episode,
         watched: true,
       })
     },

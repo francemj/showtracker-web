@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
-import type { ShowWithProgress, TMDBSeason } from "@showtracker/shared"
+import type { ShowWithProgress, TMDBSeason, EpisodeProgress } from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -27,11 +27,6 @@ import {
 
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
 
-type ProgressEntry = {
-  seasonNumber: number
-  episodeNumber: number
-  watched: boolean
-}
 
 const STATUSES: { value: StatusKey; label: string }[] = [
   { value: "want_to_watch", label: "Want to Watch" },
@@ -61,7 +56,7 @@ export default function ShowDetailScreen() {
     enabled: !!id,
   })
 
-  const { data: progress } = useQuery<ProgressEntry[]>({
+  const { data: progress } = useQuery<EpisodeProgress[]>({
     queryKey: ["/api/shows", id, "progress"],
     enabled: !!id,
   })
@@ -88,8 +83,8 @@ export default function ShowDetailScreen() {
       watched: boolean
     }) =>
       apiRequest("POST", `/api/shows/${id}/progress`, {
-        seasonNumber,
-        episodeNumber,
+        season: seasonNumber,
+        episode: episodeNumber,
         watched,
       }),
     onSuccess: invalidateShow,
@@ -174,7 +169,7 @@ export default function ShowDetailScreen() {
   const watchedSet = new Set(
     (progress ?? [])
       .filter((p) => p.watched)
-      .map((p) => `${p.seasonNumber}x${p.episodeNumber}`)
+      .map((p) => `${p.season}x${p.episode}`)
   )
 
   const regularSeasons = seasons?.filter((s) => s.season_number > 0) ?? []

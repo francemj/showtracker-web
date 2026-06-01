@@ -5,19 +5,12 @@ import { AddToCollectionButton } from "@/components/add-to-collection-button"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Search as SearchIcon, Check, Star } from "lucide-react"
-import { TMDBShow, UserShow } from "@shared/schema"
+import { UserShow, SearchResponse } from "@shared/schema"
 import { useToast } from "@/hooks/use-toast"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Link } from "wouter"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
-
-interface SearchResponse {
-  results: TMDBShow[]
-  page: number
-  totalPages: number
-  totalResults: number
-}
 
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("")
