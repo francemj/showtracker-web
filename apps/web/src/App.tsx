@@ -4,9 +4,8 @@ import { queryClient } from "./lib/queryClient"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/toaster"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarProvider } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { AppSidebar } from "@/components/app-sidebar"
 import { StatusValidationTrigger } from "@/components/status-validation-trigger"
@@ -66,15 +65,9 @@ function AuthenticatedApp() {
       <StatusValidationTrigger />
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
-          </header>
-          <main className="flex-1 overflow-y-auto p-8">
-            <Router />
-          </main>
-        </div>
+        <main className="flex-1 overflow-y-auto p-8">
+          <Router />
+        </main>
       </div>
     </SidebarProvider>
   )
@@ -83,7 +76,7 @@ function AuthenticatedApp() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider>
         <TooltipProvider>
           <Auth0Provider
             domain={auth0Domain}

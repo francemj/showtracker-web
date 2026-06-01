@@ -484,10 +484,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 20
+        const search = (req.query.search as string) || undefined
         const result = await getShowsWithProgress(req.userId!, "watching", {
           page,
           limit,
           sortBy: "recent_watch",
+          search,
         })
         res.json(result)
       } catch (error) {
@@ -504,9 +506,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 20
+        const search = (req.query.search as string) || undefined
         const result = await getShowsWithProgress(req.userId!, "completed", {
           page,
           limit,
+          search,
         })
         res.json(result)
       } catch (error) {
@@ -523,10 +527,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 20
+        const search = (req.query.search as string) || undefined
         const result = await getShowsWithProgress(
           req.userId!,
           "want_to_watch",
-          { page, limit }
+          { page, limit, search }
         )
         res.json(result)
       } catch (error) {
@@ -543,10 +548,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const page = parseInt(req.query.page as string) || 1
         const limit = parseInt(req.query.limit as string) || 20
+        const search = (req.query.search as string) || undefined
         const result = await getShowsWithProgress(req.userId!, "caught_up", {
           page,
           limit,
           sortBy: "next_air_date",
+          search,
         })
         res.json(result)
       } catch (error) {
@@ -1033,6 +1040,7 @@ type GetShowsWithProgressOptions = {
   page?: number
   limit?: number
   sortBy?: "updated_at" | "recent_watch" | "next_air_date"
+  search?: string
 }
 
 async function getShowsWithProgress(
@@ -1043,6 +1051,7 @@ async function getShowsWithProgress(
   const page = options.page ?? 1
   const limit = options.limit ?? 20
   const sortBy = options.sortBy ?? "updated_at"
+  const search = options.search
   const offset = (page - 1) * limit
 
   type UserShowRow = {
@@ -1065,32 +1074,58 @@ async function getShowsWithProgress(
   let count: number | null
 
   if (sortBy === "updated_at") {
-    const { data, count: c } = await supabase
+    // Use !inner join when filtering so the ilike acts as a WHERE on the parent rows
+    const selectClause = search ? "*, shows!inner(*)" : "*, shows(*)"
+    let q = supabase
       .from("user_shows")
-      .select("*, shows(*)", { count: "exact" })
+      .select(selectClause, { count: "exact" })
       .eq("user_id", userId)
       .eq("status", status)
+    if (search) q = q.ilike("shows.name", `%${search}%`)
+    const { data, count: c } = await q
       .order("updated_at", { ascending: false })
       .range(offset, offset + limit - 1)
     userShows = data
     count = c
   } else if (sortBy === "recent_watch") {
-    const { data, count: c } = await supabase
+    let q = supabase
       .from("user_shows_with_last_watch")
       .select("*", { count: "exact" })
       .eq("user_id", userId)
       .eq("status", status)
+    if (search) {
+      const { data: matched } = await supabase
+        .from("user_shows")
+        .select("show_id, shows!inner(name)")
+        .eq("user_id", userId)
+        .eq("status", status)
+        .ilike("shows.name", `%${search}%`)
+      const ids = matched?.map((r) => r.show_id) ?? []
+      q = q.in("show_id", ids)
+    }
+    const { data, count: c } = await q
       .order("last_watch_at", { ascending: false, nullsFirst: false })
       .range(offset, offset + limit - 1)
     userShows = data
     count = c
   } else {
     // sortBy === "next_air_date"
-    const { data, count: c } = await supabase
+    let q = supabase
       .from("user_shows_with_next_air")
       .select("*", { count: "exact" })
       .eq("user_id", userId)
       .eq("status", status)
+    if (search) {
+      const { data: matched } = await supabase
+        .from("user_shows")
+        .select("show_id, shows!inner(name)")
+        .eq("user_id", userId)
+        .eq("status", status)
+        .ilike("shows.name", `%${search}%`)
+      const ids = matched?.map((r) => r.show_id) ?? []
+      q = q.in("show_id", ids)
+    }
+    const { data, count: c } = await q
       .order("next_air_date", { ascending: true, nullsFirst: false })
       .range(offset, offset + limit - 1)
     userShows = data

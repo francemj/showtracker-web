@@ -1,10 +1,11 @@
+import { useState } from "react"
 import { ShowWithProgress } from "@shared/schema"
 import { ShowGrid, showGridClass } from "@/components/show-grid"
 import { Skeleton } from "@/components/ui/skeleton"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Link } from "wouter"
-import { LayoutGrid, List } from "lucide-react"
+import { LayoutGrid, List, Star } from "lucide-react"
 
 interface TabConfig {
   id: StatusKey
@@ -27,6 +28,8 @@ interface LibraryViewProps {
   hasNextPage: boolean
   isFetchingNextPage: boolean
   observerTarget: React.RefObject<HTMLDivElement>
+  filterValue: string
+  onFilterChange: (value: string) => void
   emptyMessage?: React.ReactNode
 }
 
@@ -52,6 +55,87 @@ function StatusDot({
   )
 }
 
+interface ShowListViewProps {
+  shows?: ShowWithProgress[]
+  isLoading: boolean
+  emptyMessage?: React.ReactNode
+}
+
+function ShowListView({ shows, isLoading, emptyMessage }: ShowListViewProps) {
+  if (isLoading) {
+    return (
+      <div className="flex flex-col divide-y divide-border">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="flex items-center gap-4 py-3">
+            <Skeleton className="w-10 shrink-0 aspect-[2/3] rounded-md" />
+            <div className="flex-1 flex flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-48" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (!shows || shows.length === 0) {
+    return emptyMessage || null
+  }
+
+  return (
+    <div className="flex flex-col divide-y divide-border">
+      {shows.map((show) => {
+        const posterUrl = show.posterPath
+          ? `https://image.tmdb.org/t/p/w185${show.posterPath}`
+          : "/placeholder-poster.png"
+        const year = show.firstAirDate
+          ? new Date(show.firstAirDate).getFullYear()
+          : null
+        const isWatching = show.userShow?.status === "watching"
+        const meta = [
+          year,
+          isWatching &&
+          show.watchedEpisodes !== undefined &&
+          show.totalEpisodes !== undefined
+            ? `${show.watchedEpisodes}/${show.totalEpisodes} ep`
+            : show.numberOfSeasons
+              ? `${show.numberOfSeasons}s`
+              : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+
+        return (
+          <Link key={show.id} href={`/show/${show.id}`} className="block">
+            <div className="flex items-center gap-4 py-3 px-2 -mx-2 rounded-lg hover:bg-muted/40 transition-colors">
+              <img
+                src={posterUrl}
+                alt={show.name}
+                className="w-10 shrink-0 aspect-[2/3] rounded-md object-cover bg-muted"
+                loading="lazy"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-semibold text-foreground truncate">
+                  {show.name}
+                </p>
+                <p className="text-[12px] font-mono text-muted-foreground mt-0.5">
+                  {meta}
+                </p>
+              </div>
+              {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground shrink-0">
+                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                  {parseFloat(show.voteAverage).toFixed(1)}
+                </span>
+              )}
+            </div>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
 export function LibraryView({
   activeTab,
   shows,
@@ -60,9 +144,12 @@ export function LibraryView({
   hasNextPage,
   isFetchingNextPage,
   observerTarget,
+  filterValue,
+  onFilterChange,
   emptyMessage,
 }: LibraryViewProps) {
   const { theme } = useTheme()
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   return (
     <div>
@@ -89,16 +176,25 @@ export function LibraryView({
               <circle cx="11" cy="11" r="7" />
               <path d="M21 21l-4.3-4.3" strokeLinecap="round" />
             </svg>
-            <span className="flex-1">Filter library…</span>
-            <span className="font-mono text-[10.5px] text-muted-foreground/60">
-              ⌘K
-            </span>
+            <input
+              type="text"
+              value={filterValue}
+              onChange={(e) => onFilterChange(e.target.value)}
+              placeholder="Filter library…"
+              className="flex-1 bg-transparent outline-none text-[13px] text-foreground placeholder:text-muted-foreground"
+            />
           </div>
           <div className="flex bg-card border border-border rounded-lg p-0.5">
-            <button className="p-1.5 rounded-md bg-muted text-foreground">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded-md ${viewMode === "grid" ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+            >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
-            <button className="p-1.5 rounded-md text-muted-foreground">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded-md ${viewMode === "list" ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+            >
               <List className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -138,12 +234,20 @@ export function LibraryView({
         })}
       </div>
 
-      {/* Grid */}
-      <ShowGrid
-        shows={shows}
-        isLoading={isLoading}
-        emptyMessage={emptyMessage}
-      />
+      {/* Grid or List */}
+      {viewMode === "grid" ? (
+        <ShowGrid
+          shows={shows}
+          isLoading={isLoading}
+          emptyMessage={emptyMessage}
+        />
+      ) : (
+        <ShowListView
+          shows={shows}
+          isLoading={isLoading}
+          emptyMessage={emptyMessage}
+        />
+      )}
 
       {hasNextPage && (
         <div ref={observerTarget} className="py-8">
