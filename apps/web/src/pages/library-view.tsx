@@ -1,5 +1,5 @@
 import { ShowWithProgress } from "@shared/schema"
-import { ShowGrid } from "@/components/show-grid"
+import { ShowGrid, showGridClass } from "@/components/show-grid"
 import { Skeleton } from "@/components/ui/skeleton"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
@@ -148,7 +148,7 @@ export function LibraryView({
       {hasNextPage && (
         <div ref={observerTarget} className="py-8">
           {isFetchingNextPage && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-8 mt-4">
+            <div className={`${showGridClass} mt-4`}>
               {[...Array(6)].map((_, i) => (
                 <Skeleton key={i} className="w-full aspect-[2/3] rounded-lg" />
               ))}

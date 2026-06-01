@@ -61,14 +61,16 @@ export function AppSidebar() {
     totalShows: number
     watchingShows: number
     completedShows: number
+    wantToWatchShows: number
+    caughtUpShows: number
     episodesWatched: number
   }>({ queryKey: ["/api/stats"] })
 
   const libraryCounts: Record<StatusKey, number | undefined> = {
     watching: stats?.watchingShows,
     completed: stats?.completedShows,
-    want_to_watch: undefined,
-    caught_up: undefined,
+    want_to_watch: stats?.wantToWatchShows,
+    caught_up: stats?.caughtUpShows,
     stopped: undefined,
   }
 
