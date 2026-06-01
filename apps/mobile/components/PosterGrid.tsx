@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Dimensions,
   Text,
+  ActivityIndicator,
 } from "react-native"
 import { useRouter } from "expo-router"
 import type { ShowWithProgress } from "@showtracker/shared"
@@ -31,6 +32,7 @@ type Props = {
   status: StatusKey
   emptyMessage?: string
   onEndReached?: () => void
+  isFetchingNextPage?: boolean
 }
 
 function SkeletonCard() {
@@ -107,7 +109,7 @@ function EmptyState({
   )
 }
 
-export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
+export function PosterGrid({ shows, isLoading, status, onEndReached, isFetchingNextPage }: Props) {
   const t = useAppTheme()
   const router = useRouter()
 
@@ -132,8 +134,14 @@ export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
       numColumns={2}
       columnWrapperStyle={styles.row}
       contentContainerStyle={styles.listContent}
+      style={styles.list}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.3}
+      ListFooterComponent={
+        isFetchingNextPage ? (
+          <ActivityIndicator style={styles.footerLoader} color={t.fgMuted} />
+        ) : null
+      }
       renderItem={({ item: show }) => {
         const posterUri = show.posterPath
           ? `${TMDB_W342}${show.posterPath}`
@@ -208,6 +216,9 @@ export function PosterGrid({ shows, isLoading, status, onEndReached }: Props) {
 }
 
 const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -283,6 +294,9 @@ const styles = StyleSheet.create({
   metaText: {
     fontFamily: MONO,
     fontSize: 11,
+  },
+  footerLoader: {
+    marginVertical: 20,
   },
   // Skeleton
   posterSkeleton: {
