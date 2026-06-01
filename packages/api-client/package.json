@@ -6,6 +6,8 @@
     ".": "./src/index.ts"
   },
   "peerDependencies": {
-    "@tanstack/react-query": "^5"
+    "@showtracker/shared": "*",
+    "@tanstack/react-query": "^5",
+    "react": ">=18"
   }
 }
