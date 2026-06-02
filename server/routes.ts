@@ -1066,8 +1066,8 @@ async function batchShowProgress(
 ) {
   const showIds = userShows.map((us) => us.show_id)
 
-  const [{ data: watchProgressRows }, { data: episodeRows }] = await Promise.all(
-    [
+  const [{ data: watchProgressRows }, { data: episodeRows }] =
+    await Promise.all([
       supabase
         .from("watch_progress")
         .select("show_id, season_number, episode_number")
@@ -1081,8 +1081,7 @@ async function batchShowProgress(
         .order("show_id", { ascending: true })
         .order("season_number", { ascending: true })
         .order("episode_number", { ascending: true }),
-    ]
-  )
+    ])
 
   // Group watch progress by show_id
   const watchedByShow: Record<number, Set<string>> = {}
@@ -1104,7 +1103,13 @@ async function batchShowProgress(
   for (const ep of episodeRows ?? []) {
     const sid = ep.show_id as number
     if (!episodesByShow[sid]) episodesByShow[sid] = []
-    episodesByShow[sid].push(ep as { season_number: number; episode_number: number; air_date: string | null })
+    episodesByShow[sid].push(
+      ep as {
+        season_number: number
+        episode_number: number
+        air_date: string | null
+      }
+    )
   }
 
   return userShows.map((us) => {
@@ -1128,9 +1133,7 @@ async function batchShowProgress(
         if (!watched.has(key)) {
           const airDate = ep.air_date ?? null
           const daysUntil = airDate
-            ? Math.ceil(
-                (new Date(airDate).getTime() - Date.now()) / 86400000
-              )
+            ? Math.ceil((new Date(airDate).getTime() - Date.now()) / 86400000)
             : null
           nextEpisode = {
             season: ep.season_number,
