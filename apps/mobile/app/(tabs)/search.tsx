@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from "react"
+import { useDebounce } from "@showtracker/api-client"
 import {
   View,
   FlatList,
@@ -34,14 +35,6 @@ import {
 
 const TMDB_W200 = "https://image.tmdb.org/t/p/w200"
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value)
-  React.useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debounced
-}
 
 function CollectionBadge({ status }: { status: StatusKey }) {
   const sp = STATUS_COLORS[status]

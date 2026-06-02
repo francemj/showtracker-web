@@ -1,4 +1,10 @@
-import { QueryClient, type QueryFunction } from "@tanstack/react-query"
+import { useState, useEffect, useMemo } from "react"
+import {
+  QueryClient,
+  type QueryFunction,
+  useInfiniteQuery,
+} from "@tanstack/react-query"
+import type { PaginatedShowsResponse } from "@showtracker/shared"
 
 let getApiToken: () => Promise<string | null> = async () => null
 let apiBaseUrl = ""
@@ -64,6 +70,52 @@ export const getQueryFn: <T>(options: {
     await throwIfResNotOk(res)
     return await res.json()
   }
+
+export function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
+
+// Core library hook shared between web and mobile.
+// Returns fetchNextPage so each platform can wire up its own scroll trigger:
+//   web  → pass to useInfiniteScroll for an IntersectionObserver ref
+//   mobile → call inside FlatList's onEndReached
+export function useLibraryShows(endpoint: string) {
+  const [search, setSearch] = useState("")
+  const debouncedSearch = useDebounce(search, 350)
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery<PaginatedShowsResponse>({
+      queryKey: [endpoint, debouncedSearch],
+      queryFn: async ({ pageParam = 1 }) => {
+        const qs = new URLSearchParams({ page: String(pageParam), limit: "20" })
+        if (debouncedSearch) qs.set("search", debouncedSearch)
+        const res = await apiRequest("GET", `${endpoint}?${qs}`)
+        return res.json()
+      },
+      getNextPageParam: (last) =>
+        last.page < last.totalPages ? last.page + 1 : undefined,
+      initialPageParam: 1,
+    })
+
+  const shows = useMemo(() => data?.pages.flatMap((p) => p.shows) ?? [], [data])
+  const total = data?.pages[0]?.total ?? 0
+
+  return {
+    shows,
+    total,
+    isLoading,
+    hasNextPage: hasNextPage ?? false,
+    isFetchingNextPage,
+    fetchNextPage,
+    search,
+    setSearch,
+  }
+}
 
 export function makeQueryClient(): QueryClient {
   return new QueryClient({

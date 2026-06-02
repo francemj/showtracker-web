@@ -25,7 +25,7 @@ const TABS = [
   },
   {
     id: "want_to_watch",
-    label: "Want",
+    label: "Want to Watch",
     href: "/(tabs)/library/want-to-watch",
     segment: "want-to-watch",
     apiKey: "/api/shows/want-to-watch?page=1&limit=1",
