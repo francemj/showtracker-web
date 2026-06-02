@@ -34,7 +34,6 @@ import {
 
 const TMDB_W200 = "https://image.tmdb.org/t/p/w200"
 
-
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
   React.useEffect(() => {

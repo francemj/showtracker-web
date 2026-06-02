@@ -13,7 +13,11 @@ import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { Image } from "react-native"
 import { apiRequest } from "@showtracker/api-client"
-import type { ShowWithProgress, ShowStats, PaginatedShowsResponse } from "@showtracker/shared"
+import type {
+  ShowWithProgress,
+  ShowStats,
+  PaginatedShowsResponse,
+} from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -29,7 +33,6 @@ import {
 const TMDB_W300 = "https://image.tmdb.org/t/p/w300"
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
 const DASHBOARD_LIMIT = 6
-
 
 function StatusDot({ color }: { color: string }) {
   return (
@@ -328,12 +331,14 @@ export default function DashboardScreen() {
     useQuery<PaginatedShowsResponse>({
       queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
     })
-  const { data: wantToWatch, isLoading: wtwLoading } = useQuery<PaginatedShowsResponse>({
-    queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
-  })
-  const { data: caughtUp, isLoading: cuLoading } = useQuery<PaginatedShowsResponse>({
-    queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
-  })
+  const { data: wantToWatch, isLoading: wtwLoading } =
+    useQuery<PaginatedShowsResponse>({
+      queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
+    })
+  const { data: caughtUp, isLoading: cuLoading } =
+    useQuery<PaginatedShowsResponse>({
+      queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
+    })
 
   const featuredShow = watching?.shows?.[0]
 
