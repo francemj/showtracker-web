@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -47,21 +47,23 @@ jobs:
       startsWith(github.ref, 'refs/tags/mobile/v') ||
       startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
       - name: Cache Gradle
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.gradle/caches
@@ -105,16 +107,12 @@ jobs:
       - name: Find APK
         id: apk
         run: |
-          path=$(find apps/mobile/android/app/build/outputs/apk/release -name "*.apk" | head -1)
-          echo "path=$path" >> $GITHUB_OUTPUT
-          echo "name=ShowTracker-${{ github.ref_name }}.apk" >> $GITHUB_OUTPUT
+          src=$(find apps/mobile/android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          dest="$(dirname "$src")/ShowTracker-${{ github.ref_name }}.apk"
+          mv "$src" "$dest"
+          echo "path=$dest" >> $GITHUB_OUTPUT
 
       - name: Upload APK to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ steps.apk.outputs.path }}
-          asset_name: ${{ steps.apk.outputs.name }}
-          asset_content_type: application/vnd.android.package-archive
+          files: ${{ steps.apk.outputs.path }}
