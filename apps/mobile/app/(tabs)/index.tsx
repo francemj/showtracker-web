@@ -169,7 +169,7 @@ function HeroContent({
   )
 }
 
-function StatsRow({ stats }: { stats: Stats }) {
+function StatsRow({ stats }: { stats: ShowStats }) {
   const t = useAppTheme()
   const items = [
     { v: stats.totalShows, l: "Shows" },
