@@ -117,9 +117,25 @@ export default [
 
   // Override for specific files
   {
-    files: ["**/index.ts", "**/src/lib/queryClient.ts", "**/server/**"],
+    files: [
+      "**/index.ts",
+      "**/src/lib/queryClient.ts",
+      "**/server/**",
+      "**/lib/auth.tsx",
+    ],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+
+  // CommonJS Node config files
+  {
+    files: ["**/metro.config.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        ...globals.node,
+      },
     },
   },
 ]
