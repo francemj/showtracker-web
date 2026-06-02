@@ -1043,6 +1043,110 @@ type GetShowsWithProgressOptions = {
   search?: string
 }
 
+type UserShowRow = {
+  id: string
+  user_id: string
+  show_id: number
+  status: string
+  rating: number | null
+  notes: string | null
+  added_at: string
+  updated_at: string
+  shows?: Record<string, unknown> | null
+  last_watch_at?: string | null
+  next_air_date?: string | null
+  next_season_number?: number | null
+  next_episode_number?: number | null
+}
+
+async function batchShowProgress(
+  userId: string,
+  userShows: UserShowRow[],
+  showsById: Record<number, Record<string, unknown>>
+) {
+  const showIds = userShows.map((us) => us.show_id)
+
+  const [{ data: watchProgressRows }, { data: episodeRows }] = await Promise.all(
+    [
+      supabase
+        .from("watch_progress")
+        .select("show_id, season_number, episode_number")
+        .eq("user_id", userId)
+        .in("show_id", showIds)
+        .eq("watched", true),
+      supabase
+        .from("episodes")
+        .select("show_id, season_number, episode_number, air_date")
+        .in("show_id", showIds)
+        .order("show_id", { ascending: true })
+        .order("season_number", { ascending: true })
+        .order("episode_number", { ascending: true }),
+    ]
+  )
+
+  // Group watch progress by show_id
+  const watchedByShow: Record<number, Set<string>> = {}
+  for (const row of watchProgressRows ?? []) {
+    const sid = row.show_id as number
+    if (!watchedByShow[sid]) watchedByShow[sid] = new Set()
+    watchedByShow[sid].add(`${row.season_number}-${row.episode_number}`)
+  }
+
+  // Group episodes by show_id (already ordered asc)
+  const episodesByShow: Record<
+    number,
+    Array<{
+      season_number: number
+      episode_number: number
+      air_date: string | null
+    }>
+  > = {}
+  for (const ep of episodeRows ?? []) {
+    const sid = ep.show_id as number
+    if (!episodesByShow[sid]) episodesByShow[sid] = []
+    episodesByShow[sid].push(ep as { season_number: number; episode_number: number; air_date: string | null })
+  }
+
+  return userShows.map((us) => {
+    const show = us.shows ?? showsById[us.show_id] ?? {}
+    const watched = watchedByShow[us.show_id] ?? new Set()
+    const watchedEpisodes = watched.size
+    const totalEpisodes = (show.number_of_episodes as number) || 1
+    const progress = (watchedEpisodes / totalEpisodes) * 100
+
+    const episodes = episodesByShow[us.show_id]
+    let nextEpisode: {
+      season: number
+      episode: number
+      airDate: string | null
+      daysUntil: number | null
+    } | null = null
+
+    if (episodes) {
+      for (const ep of episodes) {
+        const key = `${ep.season_number}-${ep.episode_number}`
+        if (!watched.has(key)) {
+          const airDate = ep.air_date ?? null
+          const daysUntil = airDate
+            ? Math.ceil(
+                (new Date(airDate).getTime() - Date.now()) / 86400000
+              )
+            : null
+          nextEpisode = {
+            season: ep.season_number,
+            episode: ep.episode_number,
+            airDate,
+            daysUntil,
+          }
+          break
+        }
+      }
+    }
+
+    return { watchedEpisodes, totalEpisodes, progress, nextEpisode }
+  })
+}
+
 async function getShowsWithProgress(
   userId: string,
   status: string,
@@ -1053,22 +1157,6 @@ async function getShowsWithProgress(
   const sortBy = options.sortBy ?? "updated_at"
   const search = options.search
   const offset = (page - 1) * limit
-
-  type UserShowRow = {
-    id: string
-    user_id: string
-    show_id: number
-    status: string
-    rating: number | null
-    notes: string | null
-    added_at: string
-    updated_at: string
-    shows?: Record<string, unknown> | null
-    last_watch_at?: string | null
-    next_air_date?: string | null
-    next_season_number?: number | null
-    next_episode_number?: number | null
-  }
 
   let userShows: UserShowRow[] | null
   let count: number | null
@@ -1153,65 +1241,43 @@ async function getShowsWithProgress(
 
   const totalPages = Math.ceil((count ?? 0) / limit)
 
-  const shows = await Promise.all(
-    userShows.map(async (us: UserShowRow) => {
-      const show = us.shows ?? showsById[us.show_id] ?? {}
-      const progress = await calculateShowProgress(userId, us.show_id)
+  const progressResults = await batchShowProgress(userId, userShows, showsById)
 
-      const airDate = us.next_air_date
-      let nextEpisode: {
-        season: number
-        episode: number
-        airDate: string
-        daysUntil: number
-      } | null = null
-      if (
-        airDate != null &&
-        us.next_season_number != null &&
-        us.next_episode_number != null
-      ) {
-        const airDateObj = new Date(airDate)
-        const nowDate = new Date()
-        const diffDays = Math.ceil(
-          (airDateObj.getTime() - nowDate.getTime()) / (1000 * 60 * 60 * 24)
-        )
-        nextEpisode = {
-          season: us.next_season_number,
-          episode: us.next_episode_number,
-          airDate,
-          daysUntil: diffDays,
-        }
-      }
+  const shows = userShows.map((us: UserShowRow, i: number) => {
+    const show = us.shows ?? showsById[us.show_id] ?? {}
+    const { watchedEpisodes, totalEpisodes, progress, nextEpisode } =
+      progressResults[i]
 
-      return {
-        id: show.id,
-        name: show.name,
-        overview: show.overview,
-        posterPath: show.poster_path,
-        backdropPath: show.backdrop_path,
-        firstAirDate: show.first_air_date,
-        voteAverage: show.vote_average,
-        numberOfSeasons: show.number_of_seasons,
-        numberOfEpisodes: show.number_of_episodes,
-        status: show.status,
-        genres: show.genres,
-        tmdbData: show.tmdb_data,
-        lastUpdated: show.last_updated,
-        userShow: {
-          id: us.id,
-          userId: us.user_id,
-          showId: us.show_id,
-          status: us.status,
-          rating: us.rating,
-          notes: us.notes,
-          addedAt: us.added_at,
-          updatedAt: us.updated_at,
-        },
-        ...progress,
-        ...(nextEpisode ? { nextEpisode } : {}),
-      }
-    })
-  )
+    return {
+      id: show.id,
+      name: show.name,
+      overview: show.overview,
+      posterPath: show.poster_path,
+      backdropPath: show.backdrop_path,
+      firstAirDate: show.first_air_date,
+      voteAverage: show.vote_average,
+      numberOfSeasons: show.number_of_seasons,
+      numberOfEpisodes: show.number_of_episodes,
+      status: show.status,
+      genres: show.genres,
+      tmdbData: show.tmdb_data,
+      lastUpdated: show.last_updated,
+      userShow: {
+        id: us.id,
+        userId: us.user_id,
+        showId: us.show_id,
+        status: us.status,
+        rating: us.rating,
+        notes: us.notes,
+        addedAt: us.added_at,
+        updatedAt: us.updated_at,
+      },
+      watchedEpisodes,
+      totalEpisodes,
+      progress,
+      ...(nextEpisode ? { nextEpisode } : {}),
+    }
+  })
 
   return { shows, total: count ?? 0, page, totalPages }
 }
