@@ -76,10 +76,10 @@ export default {
           border: "var(--sidebar-accent-border)",
         },
         status: {
-          watching:   "oklch(0.55 0.16 155)",
-          want:       "oklch(0.62 0.14 60)",
-          caught_up:  "oklch(0.55 0.16 235)",
-          completed:  "oklch(0.55 0.16 305)",
+          watching: "oklch(0.55 0.16 155)",
+          want: "oklch(0.62 0.14 60)",
+          caught_up: "oklch(0.55 0.16 235)",
+          completed: "oklch(0.55 0.16 305)",
         },
       },
       fontFamily: {

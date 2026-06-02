@@ -12,7 +12,11 @@ import { useLocalSearchParams, useRouter } from "expo-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
-import type { ShowWithProgress, TMDBSeason, EpisodeProgress } from "@showtracker/shared"
+import type {
+  ShowWithProgress,
+  TMDBSeason,
+  EpisodeProgress,
+} from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -26,7 +30,6 @@ import {
 } from "../../lib/theme"
 
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
-
 
 const STATUSES: { value: StatusKey; label: string }[] = [
   { value: "want_to_watch", label: "Want to Watch" },

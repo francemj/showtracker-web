@@ -1,0 +1,82 @@
+name: Release Mobile (Android APK)
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    if: startsWith(github.ref, 'refs/tags/mobile/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('apps/mobile/**/*.gradle*', 'apps/mobile/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - run: npm ci
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/mobile/showtracker.keystore
+
+      - name: Expo prebuild (Android)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean
+
+      - name: Configure Gradle signing
+        working-directory: apps/mobile/android
+        run: |
+          cat >> gradle.properties << 'EOF'
+          MYAPP_UPLOAD_STORE_FILE=../../showtracker.keystore
+          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
+          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Patch release signing config
+        working-directory: apps/mobile/android/app
+        run: |
+          # expo prebuild leaves release builds pointing to signingConfigs.debug as a placeholder;
+          # redirect to the release config and inject keystore properties.
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' build.gradle
+          sed -i '/signingConfigs {/a\        release {\n            if (project.hasProperty("MYAPP_UPLOAD_STORE_FILE")) {\n                storeFile file(MYAPP_UPLOAD_STORE_FILE)\n                storePassword MYAPP_UPLOAD_STORE_PASSWORD\n                keyAlias MYAPP_UPLOAD_KEY_ALIAS\n                keyPassword MYAPP_UPLOAD_KEY_PASSWORD\n            }\n        }' build.gradle
+
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+
+      - name: Find APK
+        id: apk
+        run: |
+          path=$(find apps/mobile/android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "path=$path" >> $GITHUB_OUTPUT
+          echo "name=ShowTracker-${{ github.ref_name }}.apk" >> $GITHUB_OUTPUT
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ steps.apk.outputs.path }}
+          asset_name: ${{ steps.apk.outputs.name }}
+          asset_content_type: application/vnd.android.package-archive
