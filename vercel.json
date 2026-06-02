@@ -1,6 +1,7 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
+  "ignoreCommand": "[ \"$VERCEL_ENV\" = \"production\" ] && exit 0 || exit 1",
   "outputDirectory": "dist/public",
   "functions": {
     "api/index.ts": {
