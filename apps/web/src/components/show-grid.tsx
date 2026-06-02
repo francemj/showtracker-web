@@ -6,6 +6,7 @@ import { useBreakpoint } from "@/hooks/use-breakpoint"
 interface ShowGridProps {
   shows?: ShowWithProgress[]
   isLoading: boolean
+  isFetchingNextPage?: boolean
   emptyMessage?: React.ReactNode
   noContainer?: boolean
 }
@@ -23,6 +24,7 @@ export const showGridClass = `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:
 export function ShowGrid({
   shows,
   isLoading,
+  isFetchingNextPage,
   emptyMessage,
   noContainer,
 }: ShowGridProps) {
@@ -45,12 +47,20 @@ export function ShowGrid({
   }
 
   if (shows && shows.length > 0) {
+    const columns = gridColumns[breakpoint]
+    const remainder = shows.length % columns
+    const fillCount =
+      isFetchingNextPage && remainder > 0 ? columns - remainder : 0
+    const tailSkeletonCount = isFetchingNextPage ? fillCount + columns : 0
+
     if (noContainer) {
       return (
         <>
           {shows.map((show) => (
             <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
           ))}
+          {isFetchingNextPage &&
+            [...Array(tailSkeletonCount)].map((_, i) => skeleton(i))}
         </>
       )
     }
@@ -59,6 +69,8 @@ export function ShowGrid({
         {shows.map((show) => (
           <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
         ))}
+        {isFetchingNextPage &&
+          [...Array(tailSkeletonCount)].map((_, i) => skeleton(i))}
       </div>
     )
   }

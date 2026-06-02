@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ShowWithProgress } from "@shared/schema"
-import { ShowGrid, showGridClass } from "@/components/show-grid"
+import { ShowGrid } from "@/components/show-grid"
 import { Skeleton } from "@/components/ui/skeleton"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
@@ -239,6 +239,7 @@ export function LibraryView({
         <ShowGrid
           shows={shows}
           isLoading={isLoading}
+          isFetchingNextPage={isFetchingNextPage}
           emptyMessage={emptyMessage}
         />
       ) : (
@@ -249,17 +250,7 @@ export function LibraryView({
         />
       )}
 
-      {hasNextPage && (
-        <div ref={observerTarget} className="py-8">
-          {isFetchingNextPage && (
-            <div className={`${showGridClass} mt-4`}>
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="w-full aspect-[2/3] rounded-lg" />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {hasNextPage && <div ref={observerTarget} className="py-4" />}
     </div>
   )
 }
