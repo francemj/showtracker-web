@@ -17,7 +17,7 @@ const compat = new FlatCompat({
 export default [
   // Global ignores
   {
-    ignores: ["node_modules/**", "dist/**"],
+    ignores: ["node_modules/**", "dist/**", ".vercel/**"],
   },
 
   // Base ESLint recommended config

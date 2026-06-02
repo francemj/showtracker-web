@@ -109,7 +109,13 @@ function EmptyState({
   )
 }
 
-export function PosterGrid({ shows, isLoading, status, onEndReached, isFetchingNextPage }: Props) {
+export function PosterGrid({
+  shows,
+  isLoading,
+  status,
+  onEndReached,
+  isFetchingNextPage,
+}: Props) {
   const t = useAppTheme()
   const router = useRouter()
 

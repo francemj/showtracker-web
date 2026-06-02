@@ -35,7 +35,6 @@ import {
 
 const TMDB_W200 = "https://image.tmdb.org/t/p/w200"
 
-
 function CollectionBadge({ status }: { status: StatusKey }) {
   const sp = STATUS_COLORS[status]
   return (
