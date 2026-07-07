@@ -699,12 +699,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .eq("id", parseInt(id))
           .single()
 
-        if (!show || !show.number_of_seasons) {
+        let numberOfSeasons = show?.number_of_seasons
+        if (!numberOfSeasons) {
+          // Show hasn't been cached locally yet (e.g. viewed before being
+          // added to a collection) — fall back to TMDB, same as /api/shows/:id
+          const tmdbShow = await getTVShowDetails(parseInt(id))
+          numberOfSeasons = tmdbShow.number_of_seasons
+        }
+
+        if (!numberOfSeasons) {
           return res.json([])
         }
 
         const seasonNums = Array.from(
-          { length: show.number_of_seasons },
+          { length: numberOfSeasons },
           (_, i) => i + 1
         )
 
