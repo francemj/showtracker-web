@@ -202,7 +202,12 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border">
         {open ? (
           <>
-            <div className="flex items-center gap-3 mb-3">
+            <Link
+              href="/profile"
+              onClick={closeSidebar}
+              className="flex items-center gap-3 mb-3 rounded-md hover-elevate p-1 -m-1"
+              data-testid="link-profile"
+            >
               <Avatar className="w-8 h-8">
                 <AvatarImage src={user?.picture} alt={user?.name} />
                 <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
@@ -219,7 +224,7 @@ export function AppSidebar() {
                   {user?.email}
                 </p>
               </div>
-            </div>
+            </Link>
             <Button
               variant="outline"
               onClick={logout}
@@ -232,14 +237,16 @@ export function AppSidebar() {
           </>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <Avatar className="w-8 h-8">
-              <AvatarImage src={user?.picture} alt={user?.name} />
-              <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
-                {user?.name?.charAt(0).toUpperCase() || (
-                  <User className="w-4 h-4" />
-                )}
-              </AvatarFallback>
-            </Avatar>
+            <Link href="/profile" data-testid="link-profile">
+              <Avatar className="w-8 h-8">
+                <AvatarImage src={user?.picture} alt={user?.name} />
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
+                  {user?.name?.charAt(0).toUpperCase() || (
+                    <User className="w-4 h-4" />
+                  )}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
             <Button
               variant="ghost"
               size="icon"

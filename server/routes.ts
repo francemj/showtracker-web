@@ -187,6 +187,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Logged out" })
   })
 
+  // Update profile details (name, avatar)
+  app.patch(
+    "/api/user/profile",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { name, picture } = req.body as {
+          name?: string
+          picture?: string
+        }
+
+        const updates: Record<string, string> = {}
+        if (name !== undefined) {
+          if (typeof name !== "string" || !name.trim()) {
+            return res.status(400).json({ message: "Invalid name" })
+          }
+          updates.name = name.trim()
+        }
+        if (picture !== undefined) {
+          if (typeof picture !== "string" || !picture.trim()) {
+            return res.status(400).json({ message: "Invalid picture" })
+          }
+          updates.picture = picture.trim()
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No fields to update" })
+        }
+
+        const { data: user, error } = await supabase
+          .from("users")
+          .update(updates)
+          .eq("id", req.userId)
+          .select()
+          .single()
+
+        if (error || !user) {
+          return res.status(500).json({ message: "Failed to update profile" })
+        }
+
+        res.json({ user })
+      } catch (error) {
+        console.error("Update profile error:", error)
+        res.status(500).json({ message: "Failed to update profile" })
+      }
+    }
+  )
+
+  // Delete account (cascades to user_shows, watch_progress, device_tokens, user_credentials)
+  app.delete(
+    "/api/user",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { error } = await supabase
+          .from("users")
+          .delete()
+          .eq("id", req.userId)
+
+        if (error) {
+          return res.status(500).json({ message: "Failed to delete account" })
+        }
+
+        res.json({ message: "Account deleted" })
+      } catch (error) {
+        console.error("Delete account error:", error)
+        res.status(500).json({ message: "Failed to delete account" })
+      }
+    }
+  )
+
   // Register mobile push notification token
   app.post(
     "/api/devices/register",

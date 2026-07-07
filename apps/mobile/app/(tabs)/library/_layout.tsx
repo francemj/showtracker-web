@@ -2,6 +2,7 @@ import React from "react"
 import { View, ScrollView, TouchableOpacity, StyleSheet } from "react-native"
 import { Text } from "react-native-paper"
 import { Slot, useRouter, usePathname } from "expo-router"
+import { Ionicons } from "@expo/vector-icons"
 import { useQuery } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import {
@@ -95,10 +96,25 @@ export default function LibraryLayout() {
     <View style={[styles.container, { backgroundColor: t.bg }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
-        <Text style={[styles.eyebrow, { color: t.fgFaint }]}>
-          {activeCount != null ? `${activeCount} SHOWS` : ""}
-        </Text>
-        <Text style={[styles.title, { color: t.fg }]}>Library</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={[styles.eyebrow, { color: t.fgFaint }]}>
+              {activeCount != null ? `${activeCount} SHOWS` : ""}
+            </Text>
+            <Text style={[styles.title, { color: t.fg }]}>Library</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/profile")}
+            style={styles.profileBtn}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="person-circle-outline"
+              size={28}
+              color={t.fgMuted}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Underline tabs */}
@@ -165,6 +181,14 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 22,
     paddingBottom: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  profileBtn: {
+    marginBottom: 6,
   },
   eyebrow: {
     fontFamily: SANS,
