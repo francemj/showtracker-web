@@ -268,13 +268,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let episodesWatched = 0
         if (activeShowIds.length > 0) {
-          const { count } = await supabase
+          const { data: watchedRows } = await supabase
             .from("watch_progress")
-            .select("*", { count: "exact", head: true })
+            .select("show_id, season_number, episode_number")
             .eq("user_id", req.userId)
             .eq("watched", true)
             .in("show_id", activeShowIds)
-          episodesWatched = count || 0
+
+          if (watchedRows && watchedRows.length > 0) {
+            const now = new Date().toISOString()
+            const { data: airedEpisodes } = await supabase
+              .from("episodes")
+              .select("show_id, season_number, episode_number")
+              .in("show_id", activeShowIds)
+              .lte("air_date", now)
+              .not("air_date", "is", null)
+
+            const airedKeys = new Set(
+              (airedEpisodes || []).map(
+                (e) => `${e.show_id}-${e.season_number}-${e.episode_number}`
+              )
+            )
+            episodesWatched = watchedRows.filter((w) =>
+              airedKeys.has(
+                `${w.show_id}-${w.season_number}-${w.episode_number}`
+              )
+            ).length
+          }
         }
 
         const stats = {
@@ -1402,16 +1422,23 @@ async function markShowEpisodesWatched(
     const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> =
       []
 
+    const now = new Date()
     for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
-          seasonData.episodes.forEach((episode: any) => {
-            allEpisodes.push({
-              seasonNumber: seasonNum,
-              episodeNumber: episode.episode_number,
+          // Only mark aired episodes
+          seasonData.episodes
+            .filter(
+              (episode: any) =>
+                episode.air_date && new Date(episode.air_date) <= now
+            )
+            .forEach((episode: any) => {
+              allEpisodes.push({
+                seasonNumber: seasonNum,
+                episodeNumber: episode.episode_number,
+              })
             })
-          })
         }
       } catch (error) {
         console.error(
