@@ -1211,14 +1211,34 @@ async function batchShowProgress(
     )
   }
 
+  const now = new Date().toISOString()
+
   return userShows.map((us) => {
     const show = us.shows ?? showsById[us.show_id] ?? {}
     const watched = watchedByShow[us.show_id] ?? new Set()
-    const watchedEpisodes = watched.size
-    const totalEpisodes = (show.number_of_episodes as number) || 1
-    const progress = (watchedEpisodes / totalEpisodes) * 100
 
     const episodes = episodesByShow[us.show_id]
+    const airedKeys = episodes
+      ? new Set(
+          episodes
+            .filter(
+              (ep) =>
+                ep.season_number !== 0 && ep.air_date && ep.air_date <= now
+            )
+            .map((ep) => `${ep.season_number}-${ep.episode_number}`)
+        )
+      : null
+
+    // Fall back to the unfiltered TMDB episode count if we don't have
+    // cached episodes yet, so we don't regress to "0/1" for such shows.
+    const watchedEpisodes = airedKeys
+      ? Array.from(watched).filter((key) => airedKeys.has(key)).length
+      : watched.size
+    const totalEpisodes = airedKeys
+      ? airedKeys.size || 1
+      : (show.number_of_episodes as number) || 1
+    const progress = (watchedEpisodes / totalEpisodes) * 100
+
     let nextEpisode: {
       season: number
       episode: number
@@ -1451,21 +1471,37 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
 }
 
 async function calculateShowProgress(userId: string, showId: number) {
-  const { data: show } = await supabase
-    .from("shows")
-    .select("number_of_episodes")
-    .eq("id", showId)
-    .single()
+  const now = new Date().toISOString()
+  const fetchAiredEpisodes = () =>
+    supabase
+      .from("episodes")
+      .select("season_number, episode_number")
+      .eq("show_id", showId)
+      .neq("season_number", 0)
+      .lte("air_date", now)
+      .not("air_date", "is", null)
+
+  let { data: airedEpisodes } = await fetchAiredEpisodes()
+  if (!airedEpisodes || airedEpisodes.length === 0) {
+    await ensureEpisodesCached(showId)
+    const r = await fetchAiredEpisodes()
+    airedEpisodes = r.data
+  }
 
   const { data: progress } = await supabase
     .from("watch_progress")
-    .select("*")
+    .select("season_number, episode_number")
     .eq("user_id", userId)
     .eq("show_id", showId)
     .eq("watched", true)
 
-  const watchedEpisodes = progress?.length || 0
-  const totalEpisodes = show?.number_of_episodes || 1
+  const airedKeys = new Set(
+    (airedEpisodes || []).map((e) => `${e.season_number}-${e.episode_number}`)
+  )
+  const watchedEpisodes = (progress || []).filter((p) =>
+    airedKeys.has(`${p.season_number}-${p.episode_number}`)
+  ).length
+  const totalEpisodes = airedKeys.size || 1
   const progressPercent = (watchedEpisodes / totalEpisodes) * 100
 
   // Find next unwatched episode
