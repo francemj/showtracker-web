@@ -105,6 +105,16 @@ npx tsc --noEmit        # TypeScript check
 
 EAS builds are configured in [`apps/mobile/eas.json`](./apps/mobile/eas.json). Run `eas build` to produce a production build via Expo Application Services.
 
+#### Native dev client vs. Metro-only, especially when using git worktrees
+
+This app uses native modules (`react-native-auth0`, `expo-notifications`), so it needs a compiled **dev client** on the simulator/device — Expo Go alone won't work (`TurboModuleRegistry.getEnforcing(...): 'A0Auth0' could not be found` means you're on Expo Go or a stale dev client).
+
+`ios/` and `android/` are gitignored and regenerated on demand by `expo prebuild` (which `expo run:ios`/`run:android` call automatically). That means:
+
+- **Only rebuild the native shell (`npx expo run:ios` / `run:android`) when native dependencies or `app.json` config/plugins actually change.** A full rebuild takes several minutes and, per checkout, regenerates multi-GB `ios/`/`android/`/Pods/DerivedData directories.
+- **For everyday JS/TS-only changes, don't rebuild** — run `npx expo start --dev-client` and the already-installed dev client on the simulator will reconnect and load the new bundle in seconds.
+- **In a git worktree specifically**: `ios/`/`android/` won't exist there (gitignored, so a fresh worktree has none), so rebuilding native from inside a worktree means a full prebuild + Xcode/Gradle build every time, and a separate multi-GB native project per worktree. Prefer building the dev client once from a single canonical checkout (e.g. your main clone), installing it on the simulator, and then just pointing `expo start --dev-client` at it from whichever worktree you're actively editing — the dev client doesn't care which directory served its JS bundle.
+
 ## Documentation in this repo
 
 - [DATABASE_SETUP.md](./DATABASE_SETUP.md) — apply `database-schema.sql` in Supabase
