@@ -187,6 +187,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Logged out" })
   })
 
+  // Update profile details (name, avatar)
+  app.patch(
+    "/api/user/profile",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { name, picture } = req.body as {
+          name?: string
+          picture?: string
+        }
+
+        const updates: Record<string, string> = {}
+        if (name !== undefined) {
+          if (typeof name !== "string" || !name.trim()) {
+            return res.status(400).json({ message: "Invalid name" })
+          }
+          updates.name = name.trim()
+        }
+        if (picture !== undefined) {
+          if (typeof picture !== "string" || !picture.trim()) {
+            return res.status(400).json({ message: "Invalid picture" })
+          }
+          updates.picture = picture.trim()
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No fields to update" })
+        }
+
+        const { data: user, error } = await supabase
+          .from("users")
+          .update(updates)
+          .eq("id", req.userId)
+          .select()
+          .single()
+
+        if (error || !user) {
+          return res.status(500).json({ message: "Failed to update profile" })
+        }
+
+        res.json({ user })
+      } catch (error) {
+        console.error("Update profile error:", error)
+        res.status(500).json({ message: "Failed to update profile" })
+      }
+    }
+  )
+
+  // Delete account (cascades to user_shows, watch_progress, device_tokens, user_credentials)
+  app.delete(
+    "/api/user",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const { error } = await supabase
+          .from("users")
+          .delete()
+          .eq("id", req.userId)
+
+        if (error) {
+          return res.status(500).json({ message: "Failed to delete account" })
+        }
+
+        res.json({ message: "Account deleted" })
+      } catch (error) {
+        console.error("Delete account error:", error)
+        res.status(500).json({ message: "Failed to delete account" })
+      }
+    }
+  )
+
   // Register mobile push notification token
   app.post(
     "/api/devices/register",
@@ -268,13 +339,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let episodesWatched = 0
         if (activeShowIds.length > 0) {
-          const { count } = await supabase
+          const { data: watchedRows } = await supabase
             .from("watch_progress")
-            .select("*", { count: "exact", head: true })
+            .select("show_id, season_number, episode_number")
             .eq("user_id", req.userId)
             .eq("watched", true)
             .in("show_id", activeShowIds)
-          episodesWatched = count || 0
+
+          if (watchedRows && watchedRows.length > 0) {
+            const now = new Date().toISOString()
+            const { data: airedEpisodes } = await supabase
+              .from("episodes")
+              .select("show_id, season_number, episode_number")
+              .in("show_id", activeShowIds)
+              .lte("air_date", now)
+              .not("air_date", "is", null)
+
+            const airedKeys = new Set(
+              (airedEpisodes || []).map(
+                (e) => `${e.show_id}-${e.season_number}-${e.episode_number}`
+              )
+            )
+            episodesWatched = watchedRows.filter((w) =>
+              airedKeys.has(
+                `${w.show_id}-${w.season_number}-${w.episode_number}`
+              )
+            ).length
+          }
         }
 
         const stats = {
@@ -679,12 +770,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .eq("id", parseInt(id))
           .single()
 
-        if (!show || !show.number_of_seasons) {
+        let numberOfSeasons = show?.number_of_seasons
+        if (!numberOfSeasons) {
+          // Show hasn't been cached locally yet (e.g. viewed before being
+          // added to a collection) — fall back to TMDB, same as /api/shows/:id
+          const tmdbShow = await getTVShowDetails(parseInt(id))
+          numberOfSeasons = tmdbShow.number_of_seasons
+        }
+
+        if (!numberOfSeasons) {
           return res.json([])
         }
 
         const seasonNums = Array.from(
-          { length: show.number_of_seasons },
+          { length: numberOfSeasons },
           (_, i) => i + 1
         )
 
@@ -1112,14 +1211,34 @@ async function batchShowProgress(
     )
   }
 
+  const now = new Date().toISOString()
+
   return userShows.map((us) => {
     const show = us.shows ?? showsById[us.show_id] ?? {}
     const watched = watchedByShow[us.show_id] ?? new Set()
-    const watchedEpisodes = watched.size
-    const totalEpisodes = (show.number_of_episodes as number) || 1
-    const progress = (watchedEpisodes / totalEpisodes) * 100
 
     const episodes = episodesByShow[us.show_id]
+    const airedKeys = episodes
+      ? new Set(
+          episodes
+            .filter(
+              (ep) =>
+                ep.season_number !== 0 && ep.air_date && ep.air_date <= now
+            )
+            .map((ep) => `${ep.season_number}-${ep.episode_number}`)
+        )
+      : null
+
+    // Fall back to the unfiltered TMDB episode count if we don't have
+    // cached episodes yet, so we don't regress to "0/1" for such shows.
+    const watchedEpisodes = airedKeys
+      ? Array.from(watched).filter((key) => airedKeys.has(key)).length
+      : watched.size
+    const totalEpisodes = airedKeys
+      ? airedKeys.size || 1
+      : (show.number_of_episodes as number) || 1
+    const progress = (watchedEpisodes / totalEpisodes) * 100
+
     let nextEpisode: {
       season: number
       episode: number
@@ -1352,21 +1471,37 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
 }
 
 async function calculateShowProgress(userId: string, showId: number) {
-  const { data: show } = await supabase
-    .from("shows")
-    .select("number_of_episodes")
-    .eq("id", showId)
-    .single()
+  const now = new Date().toISOString()
+  const fetchAiredEpisodes = () =>
+    supabase
+      .from("episodes")
+      .select("season_number, episode_number")
+      .eq("show_id", showId)
+      .neq("season_number", 0)
+      .lte("air_date", now)
+      .not("air_date", "is", null)
+
+  let { data: airedEpisodes } = await fetchAiredEpisodes()
+  if (!airedEpisodes || airedEpisodes.length === 0) {
+    await ensureEpisodesCached(showId)
+    const r = await fetchAiredEpisodes()
+    airedEpisodes = r.data
+  }
 
   const { data: progress } = await supabase
     .from("watch_progress")
-    .select("*")
+    .select("season_number, episode_number")
     .eq("user_id", userId)
     .eq("show_id", showId)
     .eq("watched", true)
 
-  const watchedEpisodes = progress?.length || 0
-  const totalEpisodes = show?.number_of_episodes || 1
+  const airedKeys = new Set(
+    (airedEpisodes || []).map((e) => `${e.season_number}-${e.episode_number}`)
+  )
+  const watchedEpisodes = (progress || []).filter((p) =>
+    airedKeys.has(`${p.season_number}-${p.episode_number}`)
+  ).length
+  const totalEpisodes = airedKeys.size || 1
   const progressPercent = (watchedEpisodes / totalEpisodes) * 100
 
   // Find next unwatched episode
@@ -1402,16 +1537,23 @@ async function markShowEpisodesWatched(
     const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> =
       []
 
+    const now = new Date()
     for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
-          seasonData.episodes.forEach((episode: any) => {
-            allEpisodes.push({
-              seasonNumber: seasonNum,
-              episodeNumber: episode.episode_number,
+          // Only mark aired episodes
+          seasonData.episodes
+            .filter(
+              (episode: any) =>
+                episode.air_date && new Date(episode.air_date) <= now
+            )
+            .forEach((episode: any) => {
+              allEpisodes.push({
+                seasonNumber: seasonNum,
+                episodeNumber: episode.episode_number,
+              })
             })
-          })
         }
       } catch (error) {
         console.error(

@@ -24,6 +24,7 @@ type AuthContextValue = {
   isLoading: boolean
   login: () => Promise<void>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -110,7 +111,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, logout, refreshUser: syncUser }}
+    >
       {children}
     </AuthContext.Provider>
   )

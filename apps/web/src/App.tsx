@@ -17,6 +17,7 @@ import Watching from "@/pages/watching"
 import CaughtUp from "@/pages/caught-up"
 import Completed from "@/pages/completed"
 import ShowDetail from "@/pages/show-detail"
+import Profile from "@/pages/profile"
 import NotFound from "@/pages/not-found"
 
 const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN as string
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/caught-up" component={CaughtUp} />
       <Route path="/completed" component={Completed} />
       <Route path="/show/:id" component={ShowDetail} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   )

@@ -19,6 +19,7 @@ import {
   SANS_600,
   SANS_700,
   MONO,
+  MONO_500,
 } from "../lib/theme"
 
 const TMDB_W342 = "https://image.tmdb.org/t/p/w342"
@@ -152,6 +153,7 @@ export function PosterGrid({
         const posterUri = show.posterPath
           ? `${TMDB_W342}${show.posterPath}`
           : null
+        const isCaughtUp = status === "caught_up"
         const progress =
           show.watchedEpisodes != null &&
           show.totalEpisodes != null &&
@@ -179,7 +181,17 @@ export function PosterGrid({
                   style={[styles.poster, { backgroundColor: t.surfaceAlt }]}
                 />
               )}
-              {hasProgress && progress != null && (
+              {isCaughtUp && show.nextEpisode && (
+                <View style={styles.upcomingBadge}>
+                  <Text style={styles.upcomingBadgeText}>
+                    S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
+                    {show.nextEpisode.daysUntil === 0
+                      ? "today"
+                      : `in ${show.nextEpisode.daysUntil}d`}
+                  </Text>
+                </View>
+              )}
+              {!isCaughtUp && hasProgress && progress != null && (
                 <View style={styles.progressOverlay}>
                   <View style={styles.progressTrack}>
                     <View
@@ -191,7 +203,7 @@ export function PosterGrid({
                   </View>
                 </View>
               )}
-              {!hasProgress && show.totalEpisodes != null && (
+              {!isCaughtUp && !hasProgress && show.totalEpisodes != null && (
                 <View style={styles.epsBadge}>
                   <Text style={styles.epsBadgeText}>
                     {show.totalEpisodes} eps
@@ -284,6 +296,21 @@ const styles = StyleSheet.create({
     fontFamily: MONO,
     fontSize: 10,
     color: "#fff",
+  },
+  upcomingBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  upcomingBadgeText: {
+    fontFamily: MONO_500,
+    fontSize: 9.5,
+    color: "#fff",
+    letterSpacing: 0.2,
   },
   title: {
     fontFamily: SANS_600,
