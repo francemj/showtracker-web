@@ -8,6 +8,7 @@ import {
   Dimensions,
   Text,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native"
 import { useRouter } from "expo-router"
 import type { ShowWithProgress } from "@showtracker/shared"
@@ -34,6 +35,8 @@ type Props = {
   emptyMessage?: string
   onEndReached?: () => void
   isFetchingNextPage?: boolean
+  onRefresh?: () => void
+  refreshing?: boolean
 }
 
 function SkeletonCard() {
@@ -116,6 +119,8 @@ export function PosterGrid({
   status,
   onEndReached,
   isFetchingNextPage,
+  onRefresh,
+  refreshing,
 }: Props) {
   const t = useAppTheme()
   const router = useRouter()
@@ -144,6 +149,16 @@ export function PosterGrid({
       style={styles.list}
       onEndReached={onEndReached}
       onEndReachedThreshold={0.3}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.fg}
+            colors={[t.fg]}
+          />
+        ) : undefined
+      }
       ListFooterComponent={
         isFetchingNextPage ? (
           <ActivityIndicator style={styles.footerLoader} color={t.fgMuted} />

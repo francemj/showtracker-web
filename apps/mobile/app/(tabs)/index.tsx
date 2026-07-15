@@ -1,10 +1,11 @@
-import React from "react"
+import React, { useState } from "react"
 import {
   ScrollView,
   View,
   StyleSheet,
   ImageBackground,
   TouchableOpacity,
+  RefreshControl,
 } from "react-native"
 import { Text, ActivityIndicator } from "react-native-paper"
 import { LinearGradient } from "expo-linear-gradient"
@@ -325,20 +326,44 @@ export default function DashboardScreen() {
   const t = useAppTheme()
   const qc = useQueryClient()
 
-  const { data: stats } = useQuery<ShowStats>({ queryKey: ["/api/stats"] })
+  const [refreshing, setRefreshing] = useState(false)
 
-  const { data: watching, isLoading: watchingLoading } =
-    useQuery<PaginatedShowsResponse>({
-      queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
-    })
-  const { data: wantToWatch, isLoading: wtwLoading } =
-    useQuery<PaginatedShowsResponse>({
-      queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
-    })
-  const { data: caughtUp, isLoading: cuLoading } =
-    useQuery<PaginatedShowsResponse>({
-      queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
-    })
+  const { data: stats, refetch: refetchStats } = useQuery<ShowStats>({
+    queryKey: ["/api/stats"],
+  })
+
+  const {
+    data: watching,
+    isLoading: watchingLoading,
+    refetch: refetchWatching,
+  } = useQuery<PaginatedShowsResponse>({
+    queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
+  })
+  const {
+    data: wantToWatch,
+    isLoading: wtwLoading,
+    refetch: refetchWantToWatch,
+  } = useQuery<PaginatedShowsResponse>({
+    queryKey: [`/api/shows/want-to-watch?page=1&limit=${DASHBOARD_LIMIT}`],
+  })
+  const {
+    data: caughtUp,
+    isLoading: cuLoading,
+    refetch: refetchCaughtUp,
+  } = useQuery<PaginatedShowsResponse>({
+    queryKey: [`/api/shows/caught-up?page=1&limit=${DASHBOARD_LIMIT}`],
+  })
+
+  const onRefresh = async () => {
+    setRefreshing(true)
+    await Promise.all([
+      refetchStats(),
+      refetchWatching(),
+      refetchWantToWatch(),
+      refetchCaughtUp(),
+    ])
+    setRefreshing(false)
+  }
 
   const featuredShow = watching?.shows?.[0]
 
@@ -370,6 +395,14 @@ export default function DashboardScreen() {
     <ScrollView
       style={{ backgroundColor: t.bg }}
       contentContainerStyle={{ paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={t.fg}
+          colors={[t.fg]}
+        />
+      }
     >
       {featuredShow ? (
         <HeroSection
