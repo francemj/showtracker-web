@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react"
+import React, { useState, useMemo, useRef, useEffect } from "react"
 import { useDebounce } from "@showtracker/api-client"
 import {
   View,
@@ -16,7 +16,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import { useRouter } from "expo-router"
+import { useRouter, useNavigation } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
 import type { TMDBShow, UserShow, SearchResponse } from "@showtracker/shared"
@@ -202,6 +202,16 @@ export default function SearchScreen() {
   const qc = useQueryClient()
   const insets = useSafeAreaInsets()
   const inputRef = useRef<TextInput>(null)
+  const navigation = useNavigation()
+
+  useEffect(() => {
+    return (navigation as any).addListener("tabPress", () => {
+      if (navigation.isFocused()) {
+        setQuery("")
+        inputRef.current?.blur()
+      }
+    })
+  }, [navigation])
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useInfiniteQuery<SearchResponse>({

@@ -53,6 +53,8 @@ export function LibraryScreen({ endpoint, status }: Props) {
         status={status}
         onEndReached={lib.onEndReached}
         isFetchingNextPage={lib.isFetchingNextPage}
+        onRefresh={lib.refetch}
+        refreshing={lib.isRefetching}
       />
     </View>
   )
