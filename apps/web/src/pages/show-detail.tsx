@@ -99,6 +99,7 @@ export default function ShowDetail() {
     queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
     queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+    queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
   }
 
   const toggleEpisodeMutation = useMutation({
@@ -138,6 +139,7 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
       const statusLabel =
         variables.initialStatus === "completed"
           ? "Completed"
@@ -168,12 +170,13 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-      toast({ title: "Removed from collection" })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
+      toast({ title: "Marked as stopped" })
     },
     onError: () =>
       toast({
         title: "Error",
-        description: "Failed to remove show.",
+        description: "Failed to mark show as stopped.",
         variant: "destructive",
       }),
   })
@@ -619,9 +622,9 @@ export default function ShowDetail() {
                 className="text-muted-foreground hover:text-destructive"
                 disabled={removeShowMutation.isPending}
                 onClick={() => setRemoveShowDialogOpen(true)}
-                data-testid="button-remove-from-collection"
+                data-testid="button-mark-as-stopped"
               >
-                Remove from collection
+                Mark as Stopped
               </Button>
             )}
             {show.userShow?.status === "stopped" && (
@@ -891,9 +894,9 @@ export default function ShowDetail() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from collection?</AlertDialogTitle>
+            <AlertDialogTitle>Mark as stopped?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the show from your list. Your watch progress is
+              This moves the show to your Stopped list. Your watch progress is
               kept; mark an episode as watched to start tracking again.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -903,9 +906,9 @@ export default function ShowDetail() {
               onClick={() => removeShowMutation.mutate()}
               disabled={removeShowMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-remove-from-collection"
+              data-testid="button-confirm-mark-as-stopped"
             >
-              Remove
+              Mark as Stopped
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

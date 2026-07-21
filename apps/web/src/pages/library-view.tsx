@@ -18,6 +18,7 @@ const TABS: TabConfig[] = [
   { id: "want_to_watch", label: "Want to Watch", href: "/want-to-watch" },
   { id: "caught_up", label: "Caught Up", href: "/caught-up" },
   { id: "completed", label: "Completed", href: "/completed" },
+  { id: "stopped", label: "Stopped", href: "/stopped" },
 ]
 
 interface LibraryViewProps {

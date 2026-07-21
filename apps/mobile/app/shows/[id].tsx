@@ -45,6 +45,14 @@ const STATUSES: { value: StatusKey; label: string }[] = [
   { value: "stopped", label: "Stopped" },
 ]
 
+const LIBRARY_ENDPOINTS = [
+  "/api/shows/watching",
+  "/api/shows/want-to-watch",
+  "/api/shows/caught-up",
+  "/api/shows/completed",
+  "/api/shows/stopped",
+]
+
 export default function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
@@ -79,6 +87,10 @@ export default function ShowDetailScreen() {
     qc.invalidateQueries({ queryKey: ["/api/shows", id] })
     qc.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
     qc.invalidateQueries({ queryKey: ["/api/stats"] })
+    for (const endpoint of LIBRARY_ENDPOINTS) {
+      qc.invalidateQueries({ queryKey: [endpoint] })
+      qc.invalidateQueries({ queryKey: [`${endpoint}?page=1&limit=1`] })
+    }
   }
 
   useEffect(() => {
@@ -170,7 +182,7 @@ export default function ShowDetailScreen() {
 
   const updateStatus = useMutation({
     mutationFn: (status: string) =>
-      apiRequest("POST", "/api/user/shows", { showId: Number(id), status }),
+      apiRequest("PATCH", `/api/user/shows/${id}`, { status }),
     onSuccess: invalidateShow,
   })
 
@@ -341,6 +353,16 @@ export default function ShowDetailScreen() {
               <Text style={styles.addBtnText}>Add to Collection</Text>
             )}
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Stopped explanation */}
+      {isInCollection && currentStatus === "stopped" && (
+        <View style={styles.actionBlock}>
+          <Text style={{ color: t.fgMuted, fontFamily: SANS, fontSize: 13.5 }}>
+            You've stopped tracking this show. Your progress is saved. Mark an
+            episode as watched below to start tracking again.
+          </Text>
         </View>
       )}
 

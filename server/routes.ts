@@ -386,6 +386,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             activeShows.filter(
               (s: { status: string }) => s.status === "caught_up"
             ).length || 0,
+          stoppedShows:
+            (userShows || []).filter(
+              (s: { status: string }) => s.status === "stopped"
+            ).length || 0,
           episodesWatched,
         }
 
@@ -537,6 +541,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
+  // Explicitly set a show's status (e.g. mark as stopped, resume watching)
+  app.patch(
+    "/api/user/shows/:showId",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const showId = parseInt(req.params.showId, 10)
+        if (Number.isNaN(showId)) {
+          return res.status(400).json({ message: "Invalid show ID" })
+        }
+
+        const validStatuses = [
+          "want_to_watch",
+          "watching",
+          "caught_up",
+          "completed",
+          "stopped",
+        ]
+        const { status } = req.body
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({ message: "Invalid status" })
+        }
+
+        const { data, error } = await supabase
+          .from("user_shows")
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq("user_id", req.userId!)
+          .eq("show_id", showId)
+          .select()
+          .single()
+
+        if (error) {
+          console.error("Update show status error:", error)
+          return res.status(500).json({ message: "Failed to update status" })
+        }
+
+        res.json(data)
+      } catch (error) {
+        console.error("Update show status error:", error)
+        res.status(500).json({ message: "Failed to update status" })
+      }
+    }
+  )
+
   // Remove show from user collection (soft delete: set status to "stopped")
   app.delete(
     "/api/user/shows/:showId",
@@ -627,6 +675,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(result)
       } catch (error) {
         console.error("Get want to watch shows error:", error)
+        res.status(500).json({ message: "Failed to get shows" })
+      }
+    }
+  )
+
+  app.get(
+    "/api/shows/stopped",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const page = parseInt(req.query.page as string) || 1
+        const limit = parseInt(req.query.limit as string) || 20
+        const search = (req.query.search as string) || undefined
+        const result = await getShowsWithProgress(req.userId!, "stopped", {
+          page,
+          limit,
+          search,
+        })
+        res.json(result)
+      } catch (error) {
+        console.error("Get stopped shows error:", error)
         res.status(500).json({ message: "Failed to get shows" })
       }
     }
