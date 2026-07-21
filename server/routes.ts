@@ -428,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       const scope = req.body?.scope ?? "all"
-      const validScopes = new Set(["all", "caught_up_only"])
+      const validScopes = new Set(["all", "caught_up_only", "completed_recheck"])
       if (!validScopes.has(scope)) {
         return res.status(400).json({ message: "Invalid scope" })
       }
@@ -1022,24 +1022,32 @@ async function runValidateStatusJob({
 }: {
   runId: string
   userId: string
-  scope: "all" | "caught_up_only"
+  scope: "all" | "caught_up_only" | "completed_recheck"
   targetShowId?: number
 }) {
   const runStartMs = Date.now()
   try {
     console.log(`[validate-status:${runId}] run started`)
 
+    const isTargetedShow = targetShowId !== undefined
+
     let query = supabase
       .from("user_shows")
       .select("show_id")
       .eq("user_id", userId)
-      .neq("status", "completed")
       .neq("status", "stopped")
 
     if (scope === "caught_up_only") {
       query = query.eq("status", "caught_up")
+    } else if (scope === "completed_recheck") {
+      query = query.eq("status", "completed")
+    } else if (!isTargetedShow) {
+      // Bulk "all" sweeps skip completed shows (they rarely change); a
+      // targeted single-show check (e.g. from the show detail page) still
+      // re-validates a completed show in case it was renewed.
+      query = query.neq("status", "completed")
     }
-    if (targetShowId !== undefined) {
+    if (isTargetedShow) {
       query = query.eq("show_id", targetShowId)
     }
 
