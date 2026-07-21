@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ImageBackground,
+  Alert,
 } from "react-native"
 import { Text, Menu, ActivityIndicator } from "react-native-paper"
 import { LinearGradient } from "expo-linear-gradient"
@@ -18,6 +19,7 @@ import type {
   TMDBSeason,
   EpisodeProgress,
 } from "@showtracker/shared"
+import { isEpisodeAired } from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -146,6 +148,7 @@ export default function ShowDetailScreen() {
         watched,
       }),
     onSuccess: invalidateShow,
+    onError: () => Alert.alert("Error", "This episode hasn't aired yet."),
   })
 
   const markAllSeason = useMutation({
@@ -522,13 +525,18 @@ export default function ShowDetailScreen() {
             const watched = watchedSet.has(
               `${ep.season_number}x${ep.episode_number}`
             )
+            const hasAired = isEpisodeAired(ep.air_date)
             const isCurrentSp = currentStatus
               ? STATUS_COLORS[currentStatus]
               : STATUS_COLORS.watching
             return (
               <TouchableOpacity
                 key={`${ep.season_number}x${ep.episode_number}`}
-                style={[styles.episodeRow, { borderBottomColor: t.border }]}
+                style={[
+                  styles.episodeRow,
+                  { borderBottomColor: t.border },
+                  !watched && !hasAired && { opacity: 0.4 },
+                ]}
                 onPress={() =>
                   toggleEpisode.mutate({
                     seasonNumber: ep.season_number,
@@ -536,7 +544,7 @@ export default function ShowDetailScreen() {
                     watched: !watched,
                   })
                 }
-                disabled={toggleEpisode.isPending}
+                disabled={toggleEpisode.isPending || (!watched && !hasAired)}
                 activeOpacity={0.7}
               >
                 <View

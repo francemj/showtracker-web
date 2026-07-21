@@ -10,6 +10,8 @@ import {
 import { createInsertSchema } from "drizzle-zod"
 import { z } from "zod"
 
+export * from "./episode-utils"
+
 // Users table
 export const users = pgTable("users", {
   id: text("id")

@@ -5,6 +5,7 @@ import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
+import { isEpisodeAired } from "../packages/shared/episode-utils"
 
 interface AuthRequest extends Request {
   userId?: string
@@ -339,33 +340,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let episodesWatched = 0
         if (activeShowIds.length > 0) {
-          const { data: watchedRows } = await supabase
-            .from("watch_progress")
-            .select("show_id, season_number, episode_number")
-            .eq("user_id", req.userId)
-            .eq("watched", true)
-            .in("show_id", activeShowIds)
-
-          if (watchedRows && watchedRows.length > 0) {
-            const now = new Date().toISOString()
-            const { data: airedEpisodes } = await supabase
-              .from("episodes")
-              .select("show_id, season_number, episode_number")
-              .in("show_id", activeShowIds)
-              .lte("air_date", now)
-              .not("air_date", "is", null)
-
-            const airedKeys = new Set(
-              (airedEpisodes || []).map(
-                (e) => `${e.show_id}-${e.season_number}-${e.episode_number}`
-              )
-            )
-            episodesWatched = watchedRows.filter((w) =>
-              airedKeys.has(
-                `${w.show_id}-${w.season_number}-${w.episode_number}`
-              )
-            ).length
-          }
+          const { data: count } = await supabase.rpc(
+            "count_aired_watched_episodes",
+            {
+              p_user_id: req.userId,
+              p_show_ids: activeShowIds,
+              p_now: new Date().toISOString(),
+            }
+          )
+          episodesWatched = count || 0
         }
 
         const stats = {
@@ -926,6 +909,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { season, episode, watched } = req.body
         const showId = parseInt(id)
 
+        if (watched) {
+          const airDate = await getEpisodeAirDate(showId, season, episode)
+          if (!isEpisodeAired(airDate)) {
+            return res
+              .status(400)
+              .json({ message: "This episode hasn't aired yet." })
+          }
+        }
+
         const { error } = await supabase.from("watch_progress").upsert(
           {
             user_id: req.userId,
@@ -1039,39 +1031,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { id } = req.params
         const { episodes } = req.body
+        const showId = parseInt(id)
 
         if (!Array.isArray(episodes) || episodes.length === 0) {
           return res.status(400).json({ message: "Episodes array is required" })
         }
 
-        // Create progress records for all episodes
-        const progressRecords = episodes.map((ep: any) => ({
+        // Drop watched=true entries for episodes that haven't aired; unwatching
+        // is always allowed. Only fetch air dates for the entries that need one.
+        const validEpisodes = await Promise.all(
+          episodes.map(async (ep: any) => {
+            if (!ep.watched) return ep
+            const airDate = await getEpisodeAirDate(
+              showId,
+              ep.season,
+              ep.episode
+            )
+            return isEpisodeAired(airDate) ? ep : null
+          })
+        ).then((results) => results.filter((ep): ep is any => ep !== null))
+
+        // Create progress records for the valid episodes
+        const progressRecords = validEpisodes.map((ep: any) => ({
           user_id: req.userId,
-          show_id: parseInt(id),
+          show_id: showId,
           season_number: ep.season,
           episode_number: ep.episode,
           watched: ep.watched,
           watched_at: ep.watched ? new Date().toISOString() : null,
         }))
 
-        // Batch upsert all episodes (specify composite key for conflict resolution)
-        const { error } = await supabase
-          .from("watch_progress")
-          .upsert(progressRecords, {
-            onConflict: "user_id,show_id,season_number,episode_number",
-          })
+        if (progressRecords.length > 0) {
+          // Batch upsert all episodes (specify composite key for conflict resolution)
+          const { error } = await supabase
+            .from("watch_progress")
+            .upsert(progressRecords, {
+              onConflict: "user_id,show_id,season_number,episode_number",
+            })
 
-        if (error) {
-          console.error("Bulk progress update error:", error)
-          return res.status(500).json({ message: "Failed to update progress" })
+          if (error) {
+            console.error("Bulk progress update error:", error)
+            return res
+              .status(500)
+              .json({ message: "Failed to update progress" })
+          }
         }
 
         // Update inferred status in background (don't wait)
-        updateInferredStatus(req.userId!, parseInt(id)).catch((err) =>
+        updateInferredStatus(req.userId!, showId).catch((err) =>
           console.error("Background status update failed:", err)
         )
 
-        res.json({ success: true, count: episodes.length })
+        res.json({
+          success: true,
+          count: progressRecords.length,
+          skipped: episodes.length - progressRecords.length,
+        })
       } catch (error) {
         console.error("Bulk update progress error:", error)
         res.status(500).json({ message: "Failed to update progress" })
@@ -1676,6 +1691,41 @@ async function markShowEpisodesWatched(
   } catch (error) {
     console.error(`Error in markShowEpisodesWatched:`, error)
     throw error
+  }
+}
+
+// Returns a specific episode's air date, refreshing that season from TMDB if
+// it's missing from the cache (handles shows whose cache is stale/partial,
+// which ensureEpisodesCached's whole-show check won't catch). Returns null if
+// the episode can't be found even after a live check.
+async function getEpisodeAirDate(
+  showId: number,
+  seasonNumber: number,
+  episodeNumber: number
+): Promise<string | null> {
+  const { data: cached } = await supabase
+    .from("episodes")
+    .select("air_date")
+    .eq("show_id", showId)
+    .eq("season_number", seasonNumber)
+    .eq("episode_number", episodeNumber)
+    .maybeSingle()
+
+  if (cached) return cached.air_date
+
+  try {
+    const season = await getTVShowSeason(showId, seasonNumber)
+    await cacheEpisodesInDatabase(showId, [season])
+    const ep = (season.episodes || []).find(
+      (e: any) => e.episode_number === episodeNumber
+    )
+    return ep?.air_date ?? null
+  } catch (err) {
+    console.error(
+      `Failed to refresh season ${seasonNumber} for show ${showId}:`,
+      err
+    )
+    return null
   }
 }
 

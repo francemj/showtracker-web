@@ -19,7 +19,7 @@ import { StatusBadge } from "@/components/status-badge"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Star, Check, ChevronLeft } from "lucide-react"
-import { ShowWithProgress, TMDBSeason } from "@shared/schema"
+import { ShowWithProgress, TMDBSeason, isEpisodeAired } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -119,6 +119,12 @@ export default function ShowDetail() {
       })
     },
     onSuccess: invalidateAll,
+    onError: () =>
+      toast({
+        title: "Error",
+        description: "This episode hasn't aired yet.",
+        variant: "destructive",
+      }),
   })
 
   const addShowMutation = useMutation({
@@ -207,10 +213,7 @@ export default function ShowDetail() {
         wp.season === seasonNumber && wp.episode === episodeNumber && wp.watched
     )
 
-  const hasEpisodeAired = (airDate: string | null) => {
-    if (!airDate) return false
-    return new Date(airDate) <= new Date()
-  }
+  const hasEpisodeAired = (airDate: string | null) => isEpisodeAired(airDate)
 
   const getSeasonProgress = (seasonNumber: number) => {
     const season = seasons?.find((s) => s.season_number === seasonNumber)

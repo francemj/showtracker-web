@@ -136,3 +136,30 @@ CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
 
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public access to device_tokens" ON device_tokens FOR ALL USING (true);
+
+-- Counts a user's watched episodes that have aired, restricted to a set of shows.
+-- Does the watch_progress/episodes join and count in the DB so results aren't
+-- subject to PostgREST's default row cap on the underlying tables.
+CREATE OR REPLACE FUNCTION count_aired_watched_episodes(
+  p_user_id TEXT,
+  p_show_ids INTEGER[],
+  p_now TEXT
+)
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COUNT(*)::INTEGER
+  FROM watch_progress wp
+  JOIN episodes e
+    ON e.show_id = wp.show_id
+   AND e.season_number = wp.season_number
+   AND e.episode_number = wp.episode_number
+  WHERE wp.user_id = p_user_id
+    AND wp.watched = true
+    AND wp.show_id = ANY(p_show_ids)
+    AND e.air_date IS NOT NULL
+    AND e.air_date <= p_now
+$$;
+
+GRANT EXECUTE ON FUNCTION count_aired_watched_episodes(TEXT, INTEGER[], TEXT) TO anon, authenticated;
