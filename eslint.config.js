@@ -138,4 +138,14 @@ export default [
       },
     },
   },
+
+  // Standalone Node scripts (CI checks, etc.)
+  {
+    files: ["scripts/**"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 ]
