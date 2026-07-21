@@ -4,8 +4,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient"
 
 const STORAGE_KEY_INITIAL = "statusValidationInitial"
 const STORAGE_KEY_NAV = "statusValidationNav"
+const STORAGE_KEY_COMPLETED_RECHECK = "statusValidationCompletedRecheck"
 const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
 const THROTTLE_NAV_MS = 10 * 60 * 1000 // 10 minutes
+const THROTTLE_COMPLETED_RECHECK_MS = 24 * 60 * 60 * 1000 // 24 hours
 export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
 
 export function invalidateStatusRelatedQueries() {
@@ -20,7 +22,7 @@ export function invalidateStatusRelatedQueries() {
 }
 
 function tryRun(
-  scope: "all" | "caught_up_only",
+  scope: "all" | "caught_up_only" | "completed_recheck",
   storageKey: string,
   throttleMs: number
 ): void {
@@ -47,6 +49,13 @@ export function StatusValidationTrigger() {
   // Initial load: refresh all non-completed shows (throttled 30 min)
   useEffect(() => {
     tryRun("all", STORAGE_KEY_INITIAL, THROTTLE_INITIAL_MS)
+    // Also periodically re-check completed shows in case one was renewed
+    // (throttled much longer since this rarely matters)
+    tryRun(
+      "completed_recheck",
+      STORAGE_KEY_COMPLETED_RECHECK,
+      THROTTLE_COMPLETED_RECHECK_MS
+    )
   }, [])
 
   // On navigation: refresh all non-completed shows (throttled 10 min, separate from initial)
