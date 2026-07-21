@@ -45,6 +45,13 @@ const TABS = [
     segment: "completed",
     apiKey: "/api/shows/completed?page=1&limit=1",
   },
+  {
+    id: "stopped",
+    label: "Stopped",
+    href: "/(tabs)/library/stopped",
+    segment: "stopped",
+    apiKey: "/api/shows/stopped?page=1&limit=1",
+  },
 ] as const
 
 type TabId = (typeof TABS)[number]["id"]
@@ -81,12 +88,16 @@ export default function LibraryLayout() {
   const { data: compData } = useQuery<ShowsResponse>({
     queryKey: ["/api/shows/completed?page=1&limit=1"],
   })
+  const { data: stoppedData } = useQuery<ShowsResponse>({
+    queryKey: ["/api/shows/stopped?page=1&limit=1"],
+  })
 
   const totals: Record<TabId, number | undefined> = {
     watching: watchingData?.total,
     want_to_watch: wtwData?.total,
     caught_up: cuData?.total,
     completed: compData?.total,
+    stopped: stoppedData?.total,
   }
 
   const activeTab = TABS.find((tab) => pathname.includes(tab.segment))

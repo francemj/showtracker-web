@@ -31,6 +31,7 @@ const libraryItems: { title: string; url: string; status: StatusKey }[] = [
   { title: "Watching", url: "/watching", status: "watching" },
   { title: "Caught Up", url: "/caught-up", status: "caught_up" },
   { title: "Completed", url: "/completed", status: "completed" },
+  { title: "Stopped", url: "/stopped", status: "stopped" },
 ]
 
 function StatusDot({ status }: { status: StatusKey }) {
@@ -64,6 +65,7 @@ export function AppSidebar() {
     completedShows: number
     wantToWatchShows: number
     caughtUpShows: number
+    stoppedShows: number
     episodesWatched: number
   }>({ queryKey: ["/api/stats"] })
 
@@ -72,7 +74,7 @@ export function AppSidebar() {
     completed: stats?.completedShows,
     want_to_watch: stats?.wantToWatchShows,
     caught_up: stats?.caughtUpShows,
-    stopped: undefined,
+    stopped: stats?.stoppedShows,
   }
 
   const logoIcon = (

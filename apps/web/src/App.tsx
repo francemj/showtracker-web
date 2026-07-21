@@ -16,6 +16,7 @@ import WantToWatch from "@/pages/want-to-watch"
 import Watching from "@/pages/watching"
 import CaughtUp from "@/pages/caught-up"
 import Completed from "@/pages/completed"
+import Stopped from "@/pages/stopped"
 import ShowDetail from "@/pages/show-detail"
 import Profile from "@/pages/profile"
 import NotFound from "@/pages/not-found"
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/watching" component={Watching} />
       <Route path="/caught-up" component={CaughtUp} />
       <Route path="/completed" component={Completed} />
+      <Route path="/stopped" component={Stopped} />
       <Route path="/show/:id" component={ShowDetail} />
       <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
