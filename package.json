@@ -12,6 +12,7 @@
     "build": "vite build",
     "start": "NODE_ENV=production tsx api/index.ts",
     "check": "tsc",
+    "check:lambda-boundary": "node scripts/check-lambda-module-boundary.mjs",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "lint-staged": "lint-staged",

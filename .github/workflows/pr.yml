@@ -9,6 +9,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lambda-module-boundary:
+    name: Lambda module boundary check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - run: node scripts/check-lambda-module-boundary.mjs
+
   typecheck-root:
     name: TypeScript (root)
     runs-on: ubuntu-latest
