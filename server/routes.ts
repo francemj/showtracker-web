@@ -5,7 +5,7 @@ import { supabase } from "./lib/supabase"
 import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
-import { isEpisodeAired } from "../packages/shared/episode-utils"
+import { isEpisodeAired } from "./lib/episode-utils"
 
 interface AuthRequest extends Request {
   userId?: string
