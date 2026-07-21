@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import {
   ScrollView,
   View,
@@ -11,6 +11,7 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useLocalSearchParams, useRouter } from "expo-router"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { apiRequest } from "@showtracker/api-client"
 import type {
   ShowWithProgress,
@@ -28,8 +29,13 @@ import {
   SANS_700,
   MONO,
 } from "../../lib/theme"
+import {
+  STATUS_INVALIDATE_DELAY_MS,
+  invalidateStatusRelatedQueries,
+} from "../../lib/statusValidation"
 
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
+const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
 
 const STATUSES: { value: StatusKey; label: string }[] = [
   { value: "want_to_watch", label: "Want to Watch" },
@@ -74,6 +80,43 @@ export default function ShowDetailScreen() {
     qc.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
     qc.invalidateQueries({ queryKey: ["/api/stats"] })
   }
+
+  useEffect(() => {
+    if (!id) return
+    const parsedShowId = parseInt(id, 10)
+    if (Number.isNaN(parsedShowId)) return
+    const storageKey = `statusValidationShow:${parsedShowId}`
+
+    let cancelled = false
+    ;(async () => {
+      const raw = await AsyncStorage.getItem(storageKey)
+      const last = raw ? parseInt(raw, 10) : 0
+      if (last && Date.now() - last < SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS)
+        return
+
+      try {
+        const res = await apiRequest(
+          "POST",
+          "/api/user/shows/validate-status",
+          { showId: parsedShowId }
+        )
+        if (cancelled || !res.ok) return
+        await AsyncStorage.setItem(storageKey, String(Date.now()))
+        setTimeout(() => {
+          invalidateStatusRelatedQueries()
+          qc.invalidateQueries({ queryKey: ["/api/shows", id] })
+          qc.invalidateQueries({ queryKey: ["/api/shows", id, "seasons"] })
+          qc.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
+        }, STATUS_INVALIDATE_DELAY_MS)
+      } catch {
+        // Best-effort background refresh; ignore failures
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   const toggleEpisode = useMutation({
     mutationFn: ({
