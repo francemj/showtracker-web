@@ -23,6 +23,7 @@ import {
 } from "@expo-google-fonts/jetbrains-mono"
 import { AuthProvider } from "../lib/auth"
 import { queryClient } from "../lib/queryClient"
+import { StatusValidationTrigger } from "../lib/statusValidation"
 
 SplashScreen.preventAutoHideAsync()
 
@@ -101,6 +102,7 @@ export default function RootLayout() {
       <PaperProvider theme={theme}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
+            <StatusValidationTrigger />
             <Stack screenOptions={{ headerShown: false }} />
           </AuthProvider>
         </QueryClientProvider>
