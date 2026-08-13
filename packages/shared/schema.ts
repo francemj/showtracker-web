@@ -11,6 +11,7 @@ import { createInsertSchema } from "drizzle-zod"
 import { z } from "zod"
 
 export * from "./episode-utils"
+export * from "./episode-progress"
 
 // Users table
 export const users = pgTable("users", {

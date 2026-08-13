@@ -19,7 +19,15 @@ import { StatusBadge } from "@/components/status-badge"
 import { statusPalette, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Star, Check, ChevronLeft } from "lucide-react"
-import { ShowWithProgress, TMDBSeason, isEpisodeAired } from "@shared/schema"
+import {
+  ShowWithProgress,
+  TMDBSeason,
+  isEpisodeAired,
+  isEpisodeWatched as isEpisodeWatchedShared,
+  hasUnwatchedEpisodesBefore as hasUnwatchedEpisodesBeforeShared,
+  buildEpisodesToMark,
+  buildEpisodesToUnmark,
+} from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -208,10 +216,7 @@ export default function ShowDetail() {
   })
 
   const isEpisodeWatched = (seasonNumber: number, episodeNumber: number) =>
-    watchProgress?.some(
-      (wp) =>
-        wp.season === seasonNumber && wp.episode === episodeNumber && wp.watched
-    )
+    isEpisodeWatchedShared(watchProgress, seasonNumber, episodeNumber)
 
   const hasEpisodeAired = (airDate: string | null) => isEpisodeAired(airDate)
 
@@ -237,38 +242,12 @@ export default function ShowDetail() {
     targetSeason: number,
     targetEpisode: number
   ) => {
-    if (!seasons) return
-    const episodesToMark: Array<{
-      season: number
-      episode: number
-      watched: boolean
-    }> = []
-    for (const season of seasons) {
-      if (season.season_number > targetSeason) continue
-      if (season.episodes) {
-        for (const episode of season.episodes) {
-          if (!hasEpisodeAired(episode.air_date)) continue
-          if (season.season_number < targetSeason) {
-            if (!isEpisodeWatched(season.season_number, episode.episode_number))
-              episodesToMark.push({
-                season: season.season_number,
-                episode: episode.episode_number,
-                watched: true,
-              })
-          } else if (
-            season.season_number === targetSeason &&
-            episode.episode_number <= targetEpisode
-          ) {
-            if (!isEpisodeWatched(season.season_number, episode.episode_number))
-              episodesToMark.push({
-                season: season.season_number,
-                episode: episode.episode_number,
-                watched: true,
-              })
-          }
-        }
-      }
-    }
+    const episodesToMark = buildEpisodesToMark(
+      seasons,
+      watchProgress,
+      targetSeason,
+      targetEpisode
+    )
     if (episodesToMark.length === 0) return
     await apiRequest("POST", `/api/shows/${id}/progress/bulk`, {
       episodes: episodesToMark,
@@ -284,38 +263,12 @@ export default function ShowDetail() {
     targetSeason: number,
     targetEpisode: number
   ) => {
-    if (!seasons) return
-    const episodesToUnmark: Array<{
-      season: number
-      episode: number
-      watched: boolean
-    }> = []
-    for (const season of seasons) {
-      if (season.season_number < targetSeason) continue
-      if (season.episodes) {
-        for (const episode of season.episodes) {
-          if (!hasEpisodeAired(episode.air_date)) continue
-          if (season.season_number > targetSeason) {
-            if (isEpisodeWatched(season.season_number, episode.episode_number))
-              episodesToUnmark.push({
-                season: season.season_number,
-                episode: episode.episode_number,
-                watched: false,
-              })
-          } else if (
-            season.season_number === targetSeason &&
-            episode.episode_number >= targetEpisode
-          ) {
-            if (isEpisodeWatched(season.season_number, episode.episode_number))
-              episodesToUnmark.push({
-                season: season.season_number,
-                episode: episode.episode_number,
-                watched: false,
-              })
-          }
-        }
-      }
-    }
+    const episodesToUnmark = buildEpisodesToUnmark(
+      seasons,
+      watchProgress,
+      targetSeason,
+      targetEpisode
+    )
     if (episodesToUnmark.length === 0) return
     await apiRequest("POST", `/api/shows/${id}/progress/bulk`, {
       episodes: episodesToUnmark,
@@ -330,28 +283,13 @@ export default function ShowDetail() {
   const hasUnwatchedEpisodesBefore = (
     targetSeason: number,
     targetEpisode: number
-  ): boolean => {
-    if (!seasons) return false
-    for (const season of seasons) {
-      if (season.season_number > targetSeason) break
-      if (season.episodes) {
-        for (const episode of season.episodes) {
-          if (!hasEpisodeAired(episode.air_date)) continue
-          if (season.season_number < targetSeason) {
-            if (!isEpisodeWatched(season.season_number, episode.episode_number))
-              return true
-          } else if (
-            season.season_number === targetSeason &&
-            episode.episode_number < targetEpisode
-          ) {
-            if (!isEpisodeWatched(season.season_number, episode.episode_number))
-              return true
-          }
-        }
-      }
-    }
-    return false
-  }
+  ): boolean =>
+    hasUnwatchedEpisodesBeforeShared(
+      seasons,
+      watchProgress,
+      targetSeason,
+      targetEpisode
+    )
 
   const hasWatchedEpisodesAfter = (
     targetSeason: number,
