@@ -196,16 +196,18 @@ export function PosterGrid({
                   style={[styles.poster, { backgroundColor: t.surfaceAlt }]}
                 />
               )}
-              {isCaughtUp && show.nextEpisode && (
-                <View style={styles.upcomingBadge}>
-                  <Text style={styles.upcomingBadgeText}>
-                    S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
-                    {show.nextEpisode.daysUntil === 0
-                      ? "today"
-                      : `in ${show.nextEpisode.daysUntil}d`}
-                  </Text>
-                </View>
-              )}
+              {isCaughtUp &&
+                show.nextEpisode &&
+                show.nextEpisode.daysUntil != null && (
+                  <View style={styles.upcomingBadge}>
+                    <Text style={styles.upcomingBadgeText}>
+                      S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
+                      {show.nextEpisode.daysUntil === 0
+                        ? "today"
+                        : `in ${show.nextEpisode.daysUntil}d`}
+                    </Text>
+                  </View>
+                )}
               {!isCaughtUp && hasProgress && progress != null && (
                 <View style={styles.progressOverlay}>
                   <View style={styles.progressTrack}>

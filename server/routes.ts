@@ -415,7 +415,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       const scope = req.body?.scope ?? "all"
-      const validScopes = new Set(["all", "caught_up_only", "completed_recheck"])
+      const validScopes = new Set([
+        "all",
+        "caught_up_only",
+        "completed_recheck",
+      ])
       if (!validScopes.has(scope)) {
         return res.status(400).json({ message: "Invalid scope" })
       }
@@ -1267,7 +1271,7 @@ async function batchShowProgress(
         .eq("watched", true),
       supabase
         .from("episodes")
-        .select("show_id, season_number, episode_number, air_date")
+        .select("show_id, season_number, episode_number, air_date, name")
         .in("show_id", showIds)
         .order("show_id", { ascending: true })
         .order("season_number", { ascending: true })
@@ -1289,6 +1293,7 @@ async function batchShowProgress(
       season_number: number
       episode_number: number
       air_date: string | null
+      name: string | null
     }>
   > = {}
   for (const ep of episodeRows ?? []) {
@@ -1299,6 +1304,7 @@ async function batchShowProgress(
         season_number: number
         episode_number: number
         air_date: string | null
+        name: string | null
       }
     )
   }
@@ -1336,6 +1342,7 @@ async function batchShowProgress(
       episode: number
       airDate: string | null
       daysUntil: number | null
+      name: string | null
     } | null = null
 
     if (episodes) {
@@ -1351,6 +1358,7 @@ async function batchShowProgress(
             episode: ep.episode_number,
             airDate,
             daysUntil,
+            name: ep.name ?? null,
           }
           break
         }

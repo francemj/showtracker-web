@@ -19,7 +19,11 @@ import type {
   TMDBSeason,
   EpisodeProgress,
 } from "@showtracker/shared"
-import { isEpisodeAired } from "@showtracker/shared"
+import {
+  isEpisodeAired,
+  hasUnwatchedEpisodesBefore,
+  buildEpisodesToMark,
+} from "@showtracker/shared"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -54,6 +58,40 @@ const LIBRARY_ENDPOINTS = [
   "/api/shows/completed",
   "/api/shows/stopped",
 ]
+
+function upsertEpisodeProgress(
+  progress: EpisodeProgress[] | undefined,
+  seasonNumber: number,
+  episodeNumber: number,
+  watched: boolean
+): EpisodeProgress[] {
+  const list = progress ?? []
+  const idx = list.findIndex(
+    (p) => p.season === seasonNumber && p.episode === episodeNumber
+  )
+  if (idx === -1) {
+    return [...list, { season: seasonNumber, episode: episodeNumber, watched }]
+  }
+  const next = [...list]
+  next[idx] = { ...next[idx], watched }
+  return next
+}
+
+function upsertManyEpisodeProgress(
+  progress: EpisodeProgress[] | undefined,
+  entries: Array<{ season: number; episode: number; watched: boolean }>
+): EpisodeProgress[] {
+  let next = progress ?? []
+  for (const entry of entries) {
+    next = upsertEpisodeProgress(
+      next,
+      entry.season,
+      entry.episode,
+      entry.watched
+    )
+  }
+  return next
+}
 
 export default function ShowDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -132,38 +170,131 @@ export default function ShowDetailScreen() {
     }
   }, [id])
 
-  const toggleEpisode = useMutation({
-    mutationFn: ({
-      seasonNumber,
-      episodeNumber,
-      watched,
-    }: {
-      seasonNumber: number
-      episodeNumber: number
-      watched: boolean
-    }) =>
+  const progressQueryKey = ["/api/shows", id, "progress"]
+
+  const toggleEpisode = useMutation<
+    Response,
+    Error,
+    { seasonNumber: number; episodeNumber: number; watched: boolean },
+    { prev?: EpisodeProgress[] }
+  >({
+    mutationFn: ({ seasonNumber, episodeNumber, watched }) =>
       apiRequest("POST", `/api/shows/${id}/progress`, {
         season: seasonNumber,
         episode: episodeNumber,
         watched,
       }),
-    onSuccess: invalidateShow,
-    onError: () => Alert.alert("Error", "This episode hasn't aired yet."),
+    onMutate: async ({ seasonNumber, episodeNumber, watched }) => {
+      await qc.cancelQueries({ queryKey: progressQueryKey })
+      const prev = qc.getQueryData<EpisodeProgress[]>(progressQueryKey)
+      qc.setQueryData<EpisodeProgress[]>(progressQueryKey, (old) =>
+        upsertEpisodeProgress(old, seasonNumber, episodeNumber, watched)
+      )
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(progressQueryKey, ctx.prev)
+      Alert.alert("Error", "This episode hasn't aired yet.")
+    },
+    onSettled: invalidateShow,
   })
 
-  const markAllSeason = useMutation({
-    mutationFn: ({
-      seasonNumber,
-      watched,
-    }: {
-      seasonNumber: number
-      watched: boolean
-    }) =>
+  const markAllSeason = useMutation<
+    Response,
+    Error,
+    { seasonNumber: number; watched: boolean; episodeNumbers: number[] },
+    { prev?: EpisodeProgress[] }
+  >({
+    mutationFn: ({ seasonNumber, watched }) =>
       apiRequest("POST", `/api/shows/${id}/season/${seasonNumber}/mark-all`, {
         watched,
       }),
-    onSuccess: invalidateShow,
+    onMutate: async ({ seasonNumber, watched, episodeNumbers }) => {
+      await qc.cancelQueries({ queryKey: progressQueryKey })
+      const prev = qc.getQueryData<EpisodeProgress[]>(progressQueryKey)
+      qc.setQueryData<EpisodeProgress[]>(progressQueryKey, (old) =>
+        upsertManyEpisodeProgress(
+          old,
+          episodeNumbers.map((episode) => ({
+            season: seasonNumber,
+            episode,
+            watched,
+          }))
+        )
+      )
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(progressQueryKey, ctx.prev)
+      Alert.alert("Error", "Failed to update season. Please try again.")
+    },
+    onSettled: invalidateShow,
   })
+
+  const markPrevious = useMutation<
+    Response,
+    Error,
+    { episodes: Array<{ season: number; episode: number; watched: boolean }> },
+    { prev?: EpisodeProgress[] }
+  >({
+    mutationFn: ({ episodes }) =>
+      apiRequest("POST", `/api/shows/${id}/progress/bulk`, { episodes }),
+    onMutate: async ({ episodes }) => {
+      await qc.cancelQueries({ queryKey: progressQueryKey })
+      const prev = qc.getQueryData<EpisodeProgress[]>(progressQueryKey)
+      qc.setQueryData<EpisodeProgress[]>(progressQueryKey, (old) =>
+        upsertManyEpisodeProgress(old, episodes)
+      )
+      return { prev }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(progressQueryKey, ctx.prev)
+      Alert.alert("Error", "Failed to mark episodes. Please try again.")
+    },
+    onSettled: invalidateShow,
+  })
+
+  function handleEpisodeTap(
+    seasonNumber: number,
+    episodeNumber: number,
+    nextWatched: boolean
+  ) {
+    if (
+      nextWatched &&
+      hasUnwatchedEpisodesBefore(seasons, progress, seasonNumber, episodeNumber)
+    ) {
+      Alert.alert(
+        "Mark Previous Episodes?",
+        `Would you like to mark all previous episodes as watched? This will mark all episodes before S${seasonNumber}E${episodeNumber} as watched.`,
+        [
+          {
+            text: "Just This Episode",
+            onPress: () =>
+              toggleEpisode.mutate({
+                seasonNumber,
+                episodeNumber,
+                watched: true,
+              }),
+          },
+          {
+            text: "Mark All Previous",
+            onPress: () =>
+              markPrevious.mutate({
+                episodes: buildEpisodesToMark(
+                  seasons,
+                  progress,
+                  seasonNumber,
+                  episodeNumber
+                ),
+              }),
+          },
+          { text: "Cancel", style: "cancel" },
+        ]
+      )
+      return
+    }
+    toggleEpisode.mutate({ seasonNumber, episodeNumber, watched: nextWatched })
+  }
 
   const addShow = useMutation({
     mutationFn: (status: string) =>
@@ -509,6 +640,10 @@ export default function ShowDetailScreen() {
                   markAllSeason.mutate({
                     seasonNumber: activeSeason,
                     watched: !isFullyWatched,
+                    episodeNumbers:
+                      activeSeasonData.episodes?.map(
+                        (ep) => ep.episode_number
+                      ) ?? [],
                   })
                 }}
                 disabled={markAllSeason.isPending}
@@ -538,13 +673,17 @@ export default function ShowDetailScreen() {
                   !watched && !hasAired && { opacity: 0.4 },
                 ]}
                 onPress={() =>
-                  toggleEpisode.mutate({
-                    seasonNumber: ep.season_number,
-                    episodeNumber: ep.episode_number,
-                    watched: !watched,
-                  })
+                  handleEpisodeTap(
+                    ep.season_number,
+                    ep.episode_number,
+                    !watched
+                  )
                 }
-                disabled={toggleEpisode.isPending || (!watched && !hasAired)}
+                disabled={
+                  (!watched && !hasAired) ||
+                  toggleEpisode.isPending ||
+                  markPrevious.isPending
+                }
                 activeOpacity={0.7}
               >
                 <View

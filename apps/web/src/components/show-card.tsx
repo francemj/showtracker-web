@@ -83,7 +83,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
         {/* Rating badge */}
         {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
           <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-medium px-1.5 py-0.5 rounded-md">
+            <span className="inline-flex h-5 items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-semibold px-2 rounded-md">
               <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               {parseFloat(show.voteAverage).toFixed(1)}
             </span>
@@ -91,19 +91,18 @@ export function ShowCard({ show, href }: ShowCardProps) {
         )}
 
         {/* Caught-up: next episode air date badge */}
-        {isCaughtUp && show.nextEpisode && (
-          <div className="absolute top-2 left-2">
-            <span className="inline-block bg-black/65 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
-              S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
-              {show.nextEpisode.daysUntil != null &&
-              show.nextEpisode.daysUntil <= 0
-                ? "today"
-                : show.nextEpisode.daysUntil != null
-                  ? `in ${show.nextEpisode.daysUntil}d`
-                  : ""}
-            </span>
-          </div>
-        )}
+        {isCaughtUp &&
+          show.nextEpisode &&
+          show.nextEpisode.daysUntil != null && (
+            <div className="absolute top-2 left-2">
+              <span className="inline-flex h-5 items-center bg-black/65 text-white text-[11px] font-mono font-semibold px-2 rounded-md">
+                S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
+                {show.nextEpisode.daysUntil <= 0
+                  ? "today"
+                  : `in ${show.nextEpisode.daysUntil}d`}
+              </span>
+            </div>
+          )}
 
         {/* Progress bar on poster bottom */}
         {isWatching && progress > 0 && (

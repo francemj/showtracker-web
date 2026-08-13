@@ -81,17 +81,18 @@ function PosterRow({
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
-                {upcoming && show.nextEpisode && (
-                  <div className="absolute top-2 left-2">
-                    <span className="bg-black/70 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
-                      S{show.nextEpisode.season}E{show.nextEpisode.episode}
-                      {show.nextEpisode.daysUntil != null &&
-                        (show.nextEpisode.daysUntil <= 0
+                {upcoming &&
+                  show.nextEpisode &&
+                  show.nextEpisode.daysUntil != null && (
+                    <div className="absolute top-2 left-2">
+                      <span className="bg-black/70 text-white text-[10px] font-mono font-semibold px-2 py-1 rounded-md">
+                        S{show.nextEpisode.season}E{show.nextEpisode.episode}
+                        {show.nextEpisode.daysUntil <= 0
                           ? " today"
-                          : ` in ${show.nextEpisode.daysUntil}d`)}
-                    </span>
-                  </div>
-                )}
+                          : ` in ${show.nextEpisode.daysUntil}d`}
+                      </span>
+                    </div>
+                  )}
                 {!upcoming && progress > 0 && (
                   <div className="absolute bottom-0 left-0 right-0">
                     <div
@@ -278,10 +279,12 @@ export default function Dashboard() {
                   className="font-serif italic text-[52px] text-white leading-[1.05] tracking-[-0.025em]"
                   style={{ textShadow: "0 2px 18px rgba(0,0,0,0.35)" }}
                 >
-                  S{featured.nextEpisode.season} · E
-                  {featured.nextEpisode.episode}
+                  {featured.nextEpisode.name ??
+                    `S${featured.nextEpisode.season} · E${featured.nextEpisode.episode}`}
                 </p>
                 <p className="font-mono text-[13px] text-white/85 mt-2.5 font-medium">
+                  S{featured.nextEpisode.season} · E
+                  {featured.nextEpisode.episode} ·{" "}
                   {featured.watchedEpisodes ?? 0}/
                   {featured.totalEpisodes ?? "?"} watched
                 </p>

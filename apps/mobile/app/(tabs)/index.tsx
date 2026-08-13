@@ -133,7 +133,7 @@ function HeroContent({
         </View>
         {next ? (
           <Text style={styles.heroEpisodeTitle} numberOfLines={2}>
-            "{next.title ?? `S${next.season} · E${next.episode}`}"
+            "{next.name ?? `S${next.season} · E${next.episode}`}"
           </Text>
         ) : (
           <Text style={styles.heroEpisodeTitle}>{show.name}</Text>
@@ -282,16 +282,18 @@ function CarouselCard({
             style={[styles.carouselPoster, { backgroundColor: t.surfaceAlt }]}
           />
         )}
-        {isCaughtUp && show.nextEpisode && (
-          <View style={styles.upcomingBadge}>
-            <Text style={styles.upcomingBadgeText}>
-              S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
-              {show.nextEpisode.daysUntil === 0
-                ? "today"
-                : `in ${show.nextEpisode.daysUntil}d`}
-            </Text>
-          </View>
-        )}
+        {isCaughtUp &&
+          show.nextEpisode &&
+          show.nextEpisode.daysUntil != null && (
+            <View style={styles.upcomingBadge}>
+              <Text style={styles.upcomingBadgeText}>
+                S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
+                {show.nextEpisode.daysUntil === 0
+                  ? "today"
+                  : `in ${show.nextEpisode.daysUntil}d`}
+              </Text>
+            </View>
+          )}
         {!isCaughtUp && progress != null && (
           <View style={styles.progressOverlay}>
             <View style={[styles.progressTrack]}>
