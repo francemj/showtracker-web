@@ -83,7 +83,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
         {/* Rating badge */}
         {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
           <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-semibold leading-none px-2 py-1 rounded-md">
+            <span className="inline-flex h-5 items-center gap-1 bg-black/60 text-white text-[11px] font-mono font-semibold px-2 rounded-md">
               <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               {parseFloat(show.voteAverage).toFixed(1)}
             </span>
@@ -95,7 +95,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
           show.nextEpisode &&
           show.nextEpisode.daysUntil != null && (
             <div className="absolute top-2 left-2">
-              <span className="inline-flex items-center bg-black/65 text-white text-[11px] font-mono font-semibold leading-none px-2 py-1 rounded-md">
+              <span className="inline-flex h-5 items-center bg-black/65 text-white text-[11px] font-mono font-semibold px-2 rounded-md">
                 S{show.nextEpisode.season}E{show.nextEpisode.episode}{" "}
                 {show.nextEpisode.daysUntil <= 0
                   ? "today"
