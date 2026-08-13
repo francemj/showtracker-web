@@ -133,7 +133,7 @@ function HeroContent({
         </View>
         {next ? (
           <Text style={styles.heroEpisodeTitle} numberOfLines={2}>
-            "{next.title ?? `S${next.season} · E${next.episode}`}"
+            "{next.name ?? `S${next.season} · E${next.episode}`}"
           </Text>
         ) : (
           <Text style={styles.heroEpisodeTitle}>{show.name}</Text>

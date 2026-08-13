@@ -278,10 +278,12 @@ export default function Dashboard() {
                   className="font-serif italic text-[52px] text-white leading-[1.05] tracking-[-0.025em]"
                   style={{ textShadow: "0 2px 18px rgba(0,0,0,0.35)" }}
                 >
-                  S{featured.nextEpisode.season} · E
-                  {featured.nextEpisode.episode}
+                  {featured.nextEpisode.name ??
+                    `S${featured.nextEpisode.season} · E${featured.nextEpisode.episode}`}
                 </p>
                 <p className="font-mono text-[13px] text-white/85 mt-2.5 font-medium">
+                  S{featured.nextEpisode.season} · E
+                  {featured.nextEpisode.episode} ·{" "}
                   {featured.watchedEpisodes ?? 0}/
                   {featured.totalEpisodes ?? "?"} watched
                 </p>
