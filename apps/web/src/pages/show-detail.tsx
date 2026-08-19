@@ -475,7 +475,10 @@ export default function ShowDetail() {
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 30%, transparent 40%, hsl(var(--background)) 100%)",
+              // Reaches the page background well before the bottom, so the
+              // pulled-up title always sits on a known ground rather than on
+              // whatever the backdrop image happens to be there.
+              "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 30%, transparent 40%, hsl(var(--background) / 0.88) 72%, hsl(var(--background)) 88%)",
           }}
         />
 
@@ -519,14 +522,13 @@ export default function ShowDetail() {
             )}
           </div>
           <h1
-            className="font-serif font-normal text-[72px] text-white leading-none tracking-[-0.025em] mb-2"
-            style={{ textShadow: "0 2px 14px rgba(0,0,0,0.45)" }}
+            className="font-serif font-normal text-[40px] sm:text-[56px] lg:text-[72px] text-foreground leading-none tracking-[-0.025em] mb-2"
             data-testid="text-show-title"
           >
             {show.name}
           </h1>
           {show.genres && show.genres.length > 0 && (
-            <p className="text-white/80 text-[14px] mb-6">
+            <p className="text-muted-foreground text-[14px] mb-6">
               {show.genres.join(" · ")}
             </p>
           )}

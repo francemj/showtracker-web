@@ -12,9 +12,12 @@ import { useDebounce } from "@showtracker/api-client"
 import { Link } from "wouter"
 import { useInfiniteScroll } from "@/hooks/use-infinite-scroll"
 
+const MIN_SEARCH_LENGTH = 2
+
 export default function Search() {
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
+  const hasSearched = debouncedSearch.length >= MIN_SEARCH_LENGTH
   const { toast } = useToast()
   const { theme } = useTheme()
 
@@ -30,7 +33,7 @@ export default function Search() {
       },
       getNextPageParam: (lastPage) =>
         lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
-      enabled: debouncedSearch.length >= 2,
+      enabled: hasSearched,
       initialPageParam: 1,
     })
 
@@ -93,7 +96,7 @@ export default function Search() {
       {/* Header */}
       <div className="pb-6">
         <div className="font-mono text-[11px] text-muted-foreground uppercase tracking-[0.14em] font-semibold mb-2">
-          {debouncedSearch && !isLoading
+          {hasSearched && !isLoading
             ? `${totalResults.toLocaleString()} results`
             : "Search"}
         </div>
@@ -123,7 +126,7 @@ export default function Search() {
       </div>
 
       {/* Loading skeletons */}
-      {isLoading && debouncedSearch && (
+      {isLoading && hasSearched && (
         <div className="space-y-0 mt-2 max-w-[920px]">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="flex gap-5 py-5 border-b border-border">
@@ -144,7 +147,7 @@ export default function Search() {
           {searchResults.map((show) => {
             const posterUrl = show.poster_path
               ? `https://image.tmdb.org/t/p/w300${show.poster_path}`
-              : "/placeholder-poster.png"
+              : "/placeholder-poster.svg"
             const year = show.first_air_date
               ? new Date(show.first_air_date).getFullYear()
               : null
@@ -280,8 +283,9 @@ export default function Search() {
         </div>
       )}
 
-      {/* Empty states */}
-      {!isLoading && debouncedSearch && searchResults.length === 0 && (
+      {/* Empty states. "No shows found" must only appear once a search has
+          actually run — below the minimum length nothing is ever requested. */}
+      {!isLoading && hasSearched && searchResults.length === 0 && (
         <p className="text-muted-foreground font-sans mt-4">
           No shows found for "{debouncedSearch}". Try a different search term.
         </p>
@@ -289,6 +293,11 @@ export default function Search() {
       {!debouncedSearch && (
         <p className="text-muted-foreground font-sans mt-2">
           Enter a show name to search the database.
+        </p>
+      )}
+      {debouncedSearch && !hasSearched && (
+        <p className="text-muted-foreground font-sans mt-2">
+          Keep typing — searches start at {MIN_SEARCH_LENGTH} characters.
         </p>
       )}
     </div>

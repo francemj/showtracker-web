@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ShowWithProgress } from "@shared/schema"
+import { ShowWithProgress, isEpisodeAired } from "@shared/schema"
 import { Link, useLocation } from "wouter"
 import { apiRequest } from "@/lib/queryClient"
 import { statusPalette } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
-import { Check } from "lucide-react"
+import { Check, Search as SearchIcon } from "lucide-react"
 import { useMutation } from "@tanstack/react-query"
 import { queryClient } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -66,7 +66,7 @@ function PosterRow({
         {shows.map((show) => {
           const posterUrl = show.posterPath
             ? `https://image.tmdb.org/t/p/w500${show.posterPath}`
-            : "/placeholder-poster.png"
+            : "/placeholder-poster.svg"
           const progress = show.progress || 0
           return (
             <Link
@@ -185,18 +185,38 @@ export default function Dashboard() {
   const wantShows = wantData?.shows || []
   const caughtUpShows = caughtUpData?.shows || []
 
-  // Most recently updated watching show for hero
+  const mostRecent = (list: ShowWithProgress[]) =>
+    [...list].sort((a, b) => {
+      const aTime = a.userShow?.updatedAt
+        ? new Date(a.userShow.updatedAt).getTime()
+        : 0
+      const bTime = b.userShow?.updatedAt
+        ? new Date(b.userShow.updatedAt).getTime()
+        : 0
+      return bTime - aTime
+    })[0]
+
+  // Prefer something in progress, but being caught up on everything is the
+  // normal steady state for a tracker — fall back rather than showing the
+  // new-user empty hero to someone with a full library.
   const featured = watchingShows.length
-    ? [...watchingShows].sort((a, b) => {
-        const aTime = a.userShow?.updatedAt
-          ? new Date(a.userShow.updatedAt).getTime()
-          : 0
-        const bTime = b.userShow?.updatedAt
-          ? new Date(b.userShow.updatedAt).getTime()
-          : 0
-        return bTime - aTime
-      })[0]
-    : null
+    ? mostRecent(watchingShows)
+    : caughtUpShows.length
+      ? mostRecent(caughtUpShows)
+      : wantShows.length
+        ? mostRecent(wantShows)
+        : null
+
+  const featuredKind = watchingShows.length
+    ? "Continue watching"
+    : caughtUpShows.length
+      ? "Up next"
+      : "In your list"
+
+  const featuredEpisodeAired = isEpisodeAired(featured?.nextEpisode?.airDate)
+  const libraryEmpty =
+    !watchingShows.length && !caughtUpShows.length && !wantShows.length
+  const libraryLoading = watchingLoading || caughtUpLoading || wantLoading
 
   const watchingPalette = statusPalette("watching", theme)
 
@@ -270,7 +290,7 @@ export default function Dashboard() {
                 }}
               />
               <span className="text-[11px] text-white/90 uppercase tracking-[0.18em] font-semibold font-sans">
-                Continue watching · {featured.name}
+                {featuredKind} · {featured.name}
               </span>
             </div>
             {featured.nextEpisode ? (
@@ -298,7 +318,7 @@ export default function Dashboard() {
               </p>
             )}
             <div className="flex gap-2.5 mt-5">
-              {featured.nextEpisode && (
+              {featured.nextEpisode && featuredEpisodeAired && (
                 <button
                   onClick={() => markEpisodeMutation.mutate()}
                   disabled={markEpisodeMutation.isPending}
@@ -320,14 +340,22 @@ export default function Dashboard() {
               </button>
             </div>
           </div>
-        ) : !watchingLoading ? (
+        ) : !libraryLoading && libraryEmpty ? (
           <div className="absolute left-6 right-6 bottom-10 max-w-2xl">
             <p className="font-serif italic text-[52px] text-white leading-[1.05] tracking-[-0.025em]">
-              Welcome back.
+              Nothing tracked yet.
             </p>
             <p className="text-white/70 text-[15px] mt-3 font-sans">
-              Add shows to your library to get started.
+              Search for a show to start tracking what you watch.
             </p>
+            <button
+              onClick={() => setLocation("/search")}
+              className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white text-black text-[13.5px] font-bold leading-none mt-5"
+              data-testid="button-empty-search"
+            >
+              <SearchIcon className="w-3.5 h-3.5" strokeWidth={3} />
+              Find a show
+            </button>
           </div>
         ) : null}
       </div>

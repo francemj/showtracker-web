@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300" width="200" height="300" role="img" aria-label="No poster available">
+  <rect width="200" height="300" fill="#2a2f36"/>
+  <g fill="none" stroke="#5b646f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="62" y="120" width="76" height="54" rx="6"/>
+    <path d="M78 120 L96 100"/>
+    <path d="M112 120 L130 100"/>
+  </g>
+  <circle cx="100" cy="196" r="3" fill="#5b646f"/>
+  <text x="100" y="228" fill="#7b858f" font-family="system-ui, -apple-system, sans-serif" font-size="13" text-anchor="middle">No poster</text>
+</svg>

@@ -262,6 +262,37 @@
     @apply hidden;
   }
 
+  /* Sideways-scrolling strips (library tabs) keep the scroll, lose the bar */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Controls that appear on hover over a .group parent. Visible by default so
+     touch devices — which never fire hover — can still reach them, and hidden
+     only where hover actually exists. Opacity alone would leave an invisible
+     control still clickable and in the tab order, so pointer-events follow it
+     and keyboard focus brings it back. */
+  .reveal-on-hover {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 200ms ease;
+  }
+  @media (hover: hover) {
+    .reveal-on-hover {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .group:hover .reveal-on-hover,
+    .reveal-on-hover:focus-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
   /* Placeholder styling for contentEditable div */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);

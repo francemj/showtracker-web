@@ -18,7 +18,7 @@ export function ShowCard({ show, href }: ShowCardProps) {
   const { theme } = useTheme()
   const posterUrl = show.posterPath
     ? `https://image.tmdb.org/t/p/w500${show.posterPath}`
-    : "/placeholder-poster.png"
+    : "/placeholder-poster.svg"
 
   const progress = show.progress || 0
   const year = show.firstAirDate
@@ -122,12 +122,15 @@ export function ShowCard({ show, href }: ShowCardProps) {
           </div>
         )}
 
-        {/* Quick-watch button */}
+        {/* Quick-watch button — see .reveal-on-hover in index.css for why this
+            is a utility rather than Tailwind's group-hover: it must stay
+            reachable on touch, where hover never fires. */}
         {isWatching && show.nextEpisode && (
           <button
-            className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-md"
+            className="reveal-on-hover absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             onClick={handleQuickWatch}
             disabled={markEpisodeMutation.isPending}
+            aria-label={`Mark ${show.name} S${show.nextEpisode.season}E${show.nextEpisode.episode} as watched`}
             data-testid={`button-quick-watch-${show.id}`}
           >
             <Check className="w-4 h-4" strokeWidth={3} />
