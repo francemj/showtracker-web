@@ -9,6 +9,7 @@ interface ShowGridProps {
   isFetchingNextPage?: boolean
   emptyMessage?: React.ReactNode
   noContainer?: boolean
+  hideStatusBadge?: boolean
 }
 
 export const gridColumns = {
@@ -27,6 +28,7 @@ export function ShowGrid({
   isFetchingNextPage,
   emptyMessage,
   noContainer,
+  hideStatusBadge,
 }: ShowGridProps) {
   const breakpoint = useBreakpoint()
 
@@ -57,7 +59,12 @@ export function ShowGrid({
       return (
         <>
           {shows.map((show) => (
-            <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
+            <ShowCard
+              key={show.id}
+              show={show}
+              href={`/show/${show.id}`}
+              hideStatusBadge={hideStatusBadge}
+            />
           ))}
           {isFetchingNextPage &&
             [...Array(tailSkeletonCount)].map((_, i) => skeleton(i))}
@@ -67,7 +74,12 @@ export function ShowGrid({
     return (
       <div className={showGridClass}>
         {shows.map((show) => (
-          <ShowCard key={show.id} show={show} href={`/show/${show.id}`} />
+          <ShowCard
+            key={show.id}
+            show={show}
+            href={`/show/${show.id}`}
+            hideStatusBadge={hideStatusBadge}
+          />
         ))}
         {isFetchingNextPage &&
           [...Array(tailSkeletonCount)].map((_, i) => skeleton(i))}

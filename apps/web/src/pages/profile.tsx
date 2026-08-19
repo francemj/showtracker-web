@@ -98,9 +98,7 @@ export default function Profile() {
 
           <Button
             onClick={() => updateProfile.mutate()}
-            disabled={
-              updateProfile.isPending || !name.trim() || !picture.trim()
-            }
+            disabled={updateProfile.isPending || !name.trim()}
             data-testid="button-save-profile"
           >
             {updateProfile.isPending ? "Saving..." : "Save Changes"}

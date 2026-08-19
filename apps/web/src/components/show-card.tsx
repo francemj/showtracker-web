@@ -11,9 +11,11 @@ import { useTheme } from "@/components/theme-provider"
 interface ShowCardProps {
   show: ShowWithProgress
   href?: string
+  /** Library pages are already filtered to one status, so the badge only repeats it. */
+  hideStatusBadge?: boolean
 }
 
-export function ShowCard({ show, href }: ShowCardProps) {
+export function ShowCard({ show, href, hideStatusBadge }: ShowCardProps) {
   const { toast } = useToast()
   const { theme } = useTheme()
   const posterUrl = show.posterPath
@@ -30,7 +32,8 @@ export function ShowCard({ show, href }: ShowCardProps) {
 
   const watchingPalette = statusPalette("watching", theme)
 
-  const displayStatusBadge = userStatus && (!isCaughtUp || !show.nextEpisode)
+  const displayStatusBadge =
+    !hideStatusBadge && userStatus && (!isCaughtUp || !show.nextEpisode)
 
   const markEpisodeMutation = useMutation({
     mutationFn: async () => {

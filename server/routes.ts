@@ -207,8 +207,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           updates.name = name.trim()
         }
+        // An empty picture is a request to clear the avatar, not a bad value.
         if (picture !== undefined) {
-          if (typeof picture !== "string" || !picture.trim()) {
+          if (typeof picture !== "string") {
             return res.status(400).json({ message: "Invalid picture" })
           }
           updates.picture = picture.trim()
@@ -573,6 +574,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
+  // Resume a stopped show. Stopping is the only manual status change in the
+  // product; every other status is inferred, so resume recomputes rather than
+  // letting the client name a destination.
+  app.post(
+    "/api/user/shows/:showId/resume",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const showId = parseInt(req.params.showId, 10)
+        if (!Number.isInteger(showId) || showId <= 0) {
+          return res.status(400).json({ message: "Invalid show ID" })
+        }
+
+        const { data: userShow } = await supabase
+          .from("user_shows")
+          .select("status")
+          .eq("user_id", req.userId!)
+          .eq("show_id", showId)
+          .maybeSingle()
+
+        if (!userShow) {
+          return res.status(404).json({ message: "Show not in your library" })
+        }
+
+        const status = await updateInferredStatus(req.userId!, showId)
+        if (!status) {
+          return res
+            .status(503)
+            .json({ message: "Couldn't work out where this show belongs yet." })
+        }
+
+        res.json({ status })
+      } catch (error) {
+        console.error("Resume show error:", error)
+        res.status(500).json({ message: "Failed to resume show" })
+      }
+    }
+  )
+
   // Remove show from user collection (soft delete: set status to "stopped")
   app.delete(
     "/api/user/shows/:showId",
@@ -718,15 +758,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params
+        const showId = parseInt(id, 10)
+        if (!Number.isInteger(showId) || showId <= 0) {
+          return res.status(400).json({ message: "Invalid show ID" })
+        }
 
         const { data: show } = await supabase
           .from("shows")
           .select("*")
-          .eq("id", parseInt(id))
+          .eq("id", showId)
           .single()
 
         if (!show) {
-          const tmdbShow = await getTVShowDetails(parseInt(id))
+          const tmdbShow = await getTVShowDetails(showId).catch(() => null)
+          if (!tmdbShow) {
+            return res.status(404).json({ message: "Show not found" })
+          }
           return res.json({
             id: tmdbShow.id,
             name: tmdbShow.name,
@@ -820,11 +867,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params
+        const parsedId = parseInt(id, 10)
+        if (!Number.isInteger(parsedId) || parsedId <= 0) {
+          return res.status(400).json({ message: "Invalid show ID" })
+        }
 
         const { data: show } = await supabase
           .from("shows")
           .select("number_of_seasons")
-          .eq("id", parseInt(id))
+          .eq("id", parsedId)
           .single()
 
         let numberOfSeasons = show?.number_of_seasons
@@ -1838,7 +1889,10 @@ async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
 // Update show status based on watch progress and show details
 // This is called whenever progress changes to keep the stored status in sync
 // Uses cached episodes from the database for accurate aired episode counting
-async function updateInferredStatus(userId: string, showId: number) {
+async function updateInferredStatus(
+  userId: string,
+  showId: number
+): Promise<string | null> {
   try {
     // Get show status
     const { data: show } = await supabase
@@ -1849,7 +1903,7 @@ async function updateInferredStatus(userId: string, showId: number) {
 
     if (!show) {
       console.log(`⚠ Show ${showId} not found, skipping status update`)
-      return
+      return null
     }
 
     // Count watched episodes
@@ -1877,7 +1931,7 @@ async function updateInferredStatus(userId: string, showId: number) {
         `Error counting aired episodes for show ${showId}:`,
         countError
       )
-      return
+      return null
     }
 
     let totalAiredEpisodes = airedCount || 0
@@ -1897,7 +1951,7 @@ async function updateInferredStatus(userId: string, showId: number) {
         console.log(
           `⚠ No cached episodes for show ${showId}, skipping status update`
         )
-        return
+        return null
       }
     }
 
@@ -1920,14 +1974,16 @@ async function updateInferredStatus(userId: string, showId: number) {
         `Error updating user_shows status for show ${showId}:`,
         updateError
       )
-      return
+      return null
     }
 
     console.log(
       `✓ Auto-updated show ${showId} status to "${newStatus}" (${watchedCount}/${totalAiredEpisodes} aired episodes watched, show status: ${show.status})`
     )
+    return newStatus
   } catch (error) {
     console.error(`Error updating inferred status:`, error)
     // Don't throw - we don't want status updates to fail progress tracking
+    return null
   }
 }
