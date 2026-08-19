@@ -8,6 +8,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { AppSidebar } from "@/components/app-sidebar"
+import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { StatusValidationTrigger } from "@/components/status-validation-trigger"
 import AuthPage from "@/pages/auth"
 import Dashboard from "@/pages/dashboard"
@@ -69,10 +70,11 @@ function AuthenticatedApp() {
       <StatusValidationTrigger />
       <div className="flex h-screen w-full">
         <AppSidebar />
-        <main className="flex-1 overflow-y-auto p-8">
+        <main className="flex-1 overflow-y-auto p-8 pb-24 md:pb-8">
           <Router />
         </main>
       </div>
+      <MobileTabBar />
     </SidebarProvider>
   )
 }

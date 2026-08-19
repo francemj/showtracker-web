@@ -26,13 +26,14 @@ const primaryItems = [
   { title: "Search", url: "/search", icon: Search },
 ]
 
-const libraryItems: { title: string; url: string; status: StatusKey }[] = [
-  { title: "Want to Watch", url: "/want-to-watch", status: "want_to_watch" },
-  { title: "Watching", url: "/watching", status: "watching" },
-  { title: "Caught Up", url: "/caught-up", status: "caught_up" },
-  { title: "Completed", url: "/completed", status: "completed" },
-  { title: "Stopped", url: "/stopped", status: "stopped" },
-]
+export const libraryItems: { title: string; url: string; status: StatusKey }[] =
+  [
+    { title: "Want to Watch", url: "/want-to-watch", status: "want_to_watch" },
+    { title: "Watching", url: "/watching", status: "watching" },
+    { title: "Caught Up", url: "/caught-up", status: "caught_up" },
+    { title: "Completed", url: "/completed", status: "completed" },
+    { title: "Stopped", url: "/stopped", status: "stopped" },
+  ]
 
 function StatusDot({ status }: { status: StatusKey }) {
   const { theme } = useTheme()

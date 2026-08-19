@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { AddToCollectionButton } from "@/components/add-to-collection-button"
 import { StatusBadge } from "@/components/status-badge"
-import { statusPalette, type StatusKey } from "@/lib/status"
+import { statusPalette, STATUS_LABEL, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Star, Check, ChevronLeft } from "lucide-react"
 import {
@@ -27,6 +27,8 @@ import {
   hasUnwatchedEpisodesBefore as hasUnwatchedEpisodesBeforeShared,
   buildEpisodesToMark,
   buildEpisodesToUnmark,
+  findLastAiredEpisode,
+  inferShowStatus,
 } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -191,6 +193,26 @@ export default function ShowDetail() {
       toast({
         title: "Error",
         description: "Failed to mark show as stopped.",
+        variant: "destructive",
+      }),
+  })
+
+  // Resume tracking a stopped show. Writes the status the progress already
+  // implies, so the next background validation sweep agrees and leaves it put.
+  const resumeShowMutation = useMutation({
+    mutationFn: async (status: StatusKey) =>
+      apiRequest("PATCH", `/api/user/shows/${id}`, { status }),
+    onSuccess: (_, status) => {
+      invalidateAll()
+      toast({
+        title: "Tracking resumed",
+        description: `Moved back to ${STATUS_LABEL[status]}.`,
+      })
+    },
+    onError: (error: Error) =>
+      toast({
+        title: "Couldn't resume tracking",
+        description: error.message,
         variant: "destructive",
       }),
   })
@@ -523,33 +545,8 @@ export default function ShowDetail() {
                 addShowMutation.mutate({ showId, initialStatus: s })
               }
               onMarkAll={() => {
-                if (seasons && seasons.length > 0) {
-                  const lastAiredSeason = seasons.reduce(
-                    (max, season) =>
-                      Math.max(
-                        max,
-                        season.episodes?.reduce(
-                          (m, ep) =>
-                            hasEpisodeAired(ep.air_date)
-                              ? Math.max(m, ep.episode_number)
-                              : m,
-                          0
-                        ) ?? 0
-                      ),
-                    0
-                  )
-                  const lastAiredEpisode =
-                    seasons
-                      .find((s) => s.season_number === lastAiredSeason)
-                      ?.episodes?.reduce(
-                        (m, ep) =>
-                          hasEpisodeAired(ep.air_date)
-                            ? Math.max(m, ep.episode_number)
-                            : m,
-                        0
-                      ) ?? 0
-                  handleEpisodeToggle(lastAiredSeason, lastAiredEpisode, true)
-                }
+                const last = findLastAiredEpisode(seasons)
+                if (last) markPreviousEpisodes(last.season, last.episode)
               }}
               isPending={addShowMutation.isPending}
               userShow={show.userShow}
@@ -569,13 +566,32 @@ export default function ShowDetail() {
               </Button>
             )}
             {show.userShow?.status === "stopped" && (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="text-stopped-message"
-              >
-                You've stopped tracking this show. Your progress is saved. Mark
-                an episode as watched below to start tracking again.
-              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="lg"
+                  disabled={resumeShowMutation.isPending}
+                  onClick={() =>
+                    resumeShowMutation.mutate(
+                      inferShowStatus({
+                        tmdbStatus: show.status,
+                        watchedEpisodes: show.watchedEpisodes ?? 0,
+                        totalAiredEpisodes: show.totalEpisodes ?? 0,
+                      })
+                    )
+                  }
+                  data-testid="button-resume-tracking"
+                >
+                  {resumeShowMutation.isPending
+                    ? "Resuming…"
+                    : "Resume tracking"}
+                </Button>
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="text-stopped-message"
+                >
+                  You've stopped tracking this show. Your progress is saved.
+                </p>
+              </div>
             )}
           </div>
         </div>

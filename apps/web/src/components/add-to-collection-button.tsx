@@ -56,6 +56,11 @@ export function AddToCollectionButton({
         : undefined
 
   if (userShow) {
+    // Stopped shows are resumed from the show detail page, not marked watched.
+    if (userShow.status === "stopped") {
+      return null
+    }
+
     if (showIsEnded && userShow.status !== "completed") {
       return (
         <Button

@@ -6,6 +6,7 @@ import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
 import { isEpisodeAired } from "../packages/shared/episode-utils"
+import { inferShowStatus } from "../packages/shared/episode-progress"
 
 interface AuthRequest extends Request {
   userId?: string
@@ -1889,25 +1890,11 @@ async function updateInferredStatus(userId: string, showId: number) {
     }
 
     // Determine new status based on aired episodes
-    let newStatus: string
-
-    const isShowEnded = show.status === "Ended" || show.status === "Canceled"
-    const allAiredWatched =
-      totalAiredEpisodes > 0 && watchedCount >= totalAiredEpisodes
-
-    if (watchedCount === 0) {
-      // No episodes watched → Want to Watch
-      newStatus = "want_to_watch"
-    } else if (isShowEnded && allAiredWatched) {
-      // Show ended/canceled and all aired episodes watched → Completed
-      newStatus = "completed"
-    } else if (!isShowEnded && allAiredWatched) {
-      // Show still airing and all aired episodes watched → Caught Up
-      newStatus = "caught_up"
-    } else {
-      // Some episodes watched but not all → Watching
-      newStatus = "watching"
-    }
+    const newStatus = inferShowStatus({
+      tmdbStatus: show.status,
+      watchedEpisodes: watchedCount,
+      totalAiredEpisodes,
+    })
 
     // Update the status in the database
     const { error: updateError } = await supabase

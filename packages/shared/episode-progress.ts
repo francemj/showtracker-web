@@ -1,4 +1,4 @@
-import type { TMDBSeason, EpisodeProgress } from "./schema"
+import type { TMDBSeason, EpisodeProgress, StatusKey } from "./schema"
 import { isEpisodeAired } from "./episode-utils"
 
 export function isEpisodeWatched(
@@ -156,4 +156,48 @@ export function buildEpisodesToUnmark(
     }
   }
   return episodesToUnmark
+}
+
+// Last aired episode across a show, walking seasons from the end. Skips
+// specials (season 0). Returns null when nothing has aired yet.
+export function findLastAiredEpisode(
+  seasons: TMDBSeason[] | undefined
+): { season: number; episode: number } | null {
+  if (!seasons) return null
+  const ordered = [...seasons]
+    .filter((s) => s.season_number > 0)
+    .sort((a, b) => b.season_number - a.season_number)
+
+  for (const season of ordered) {
+    let lastEpisode = 0
+    for (const episode of season.episodes ?? []) {
+      if (isEpisodeAired(episode.air_date))
+        lastEpisode = Math.max(lastEpisode, episode.episode_number)
+    }
+    if (lastEpisode > 0)
+      return { season: season.season_number, episode: lastEpisode }
+  }
+  return null
+}
+
+// The single definition of how watch progress maps to a collection status.
+// Used by the server after every progress change, and by the web client when
+// resuming a stopped show so both agree on where the show lands.
+export function inferShowStatus({
+  tmdbStatus,
+  watchedEpisodes,
+  totalAiredEpisodes,
+}: {
+  tmdbStatus: string | null | undefined
+  watchedEpisodes: number
+  totalAiredEpisodes: number
+}): StatusKey {
+  if (watchedEpisodes === 0) return "want_to_watch"
+
+  const isShowEnded = tmdbStatus === "Ended" || tmdbStatus === "Canceled"
+  const allAiredWatched =
+    totalAiredEpisodes > 0 && watchedEpisodes >= totalAiredEpisodes
+
+  if (allAiredWatched) return isShowEnded ? "completed" : "caught_up"
+  return "watching"
 }
