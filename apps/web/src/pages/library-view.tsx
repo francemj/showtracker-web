@@ -88,7 +88,7 @@ function ShowListView({ shows, isLoading, emptyMessage }: ShowListViewProps) {
       {shows.map((show) => {
         const posterUrl = show.posterPath
           ? `https://image.tmdb.org/t/p/w185${show.posterPath}`
-          : "/placeholder-poster.png"
+          : "/placeholder-poster.svg"
         const year = show.firstAirDate
           ? new Date(show.firstAirDate).getFullYear()
           : null
@@ -152,20 +152,39 @@ export function LibraryView({
   const { theme } = useTheme()
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
+  const resolvedEmptyMessage = filterValue.trim() ? (
+    <div className="col-span-full py-8">
+      <p className="text-muted-foreground">No shows match “{filterValue}”.</p>
+      <button
+        onClick={() => onFilterChange("")}
+        className="mt-3 px-3.5 py-2 rounded-full text-[12.5px] font-semibold border border-border text-foreground hover:bg-muted transition-colors"
+        data-testid="button-clear-filter"
+      >
+        Clear filter
+      </button>
+    </div>
+  ) : (
+    emptyMessage
+  )
+
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-end justify-between pb-6">
+      {/* Header — stacks on narrow screens so the filter never lands on the title */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between pb-6">
         <div>
           <div className="font-mono text-[11px] text-muted-foreground uppercase tracking-[0.14em] font-semibold mb-2">
-            {isLoading ? <Skeleton className="h-3 w-16" /> : `${total} shows`}
+            {isLoading ? (
+              <Skeleton className="h-3 w-16" />
+            ) : (
+              `${total} ${total === 1 ? "show" : "shows"}`
+            )}
           </div>
-          <h1 className="font-serif font-normal text-[56px] leading-none tracking-[-0.025em] text-foreground">
+          <h1 className="font-serif font-normal text-[40px] sm:text-[56px] leading-none tracking-[-0.025em] text-foreground">
             Library
           </h1>
         </div>
-        <div className="flex items-center gap-2.5 pb-1">
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card text-[13px] text-muted-foreground min-w-[200px]">
+        <div className="flex items-center gap-2.5 md:pb-1">
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card text-[13px] text-muted-foreground flex-1 md:flex-none md:min-w-[200px]">
             <svg
               width="14"
               height="14"
@@ -202,15 +221,16 @@ export function LibraryView({
         </div>
       </div>
 
-      {/* Underline tabs */}
-      <div className="flex gap-6 border-b border-border mb-7">
+      {/* Underline tabs — scroll sideways rather than wrapping or clipping,
+          which previously put Stopped entirely off-screen on a phone */}
+      <div className="flex gap-6 border-b border-border mb-7 overflow-x-auto scrollbar-none -mx-8 px-8 md:mx-0 md:px-0">
         {TABS.map((tab) => {
           const isActive = tab.id === activeTab
           const sp = statusPalette(tab.id, theme)
           return (
-            <Link key={tab.id} href={tab.href}>
+            <Link key={tab.id} href={tab.href} className="shrink-0">
               <div
-                className="flex items-center gap-2 pb-3.5 -mb-px cursor-pointer"
+                className="flex items-center gap-2 pb-3.5 -mb-px cursor-pointer whitespace-nowrap"
                 style={{
                   borderBottom: isActive
                     ? `2px solid ${sp.solid}`
@@ -235,19 +255,20 @@ export function LibraryView({
         })}
       </div>
 
-      {/* Grid or List */}
+      {/* Grid or List. A filter that matches nothing is not an empty library —
+          say which one it is, and offer the way out. */}
       {viewMode === "grid" ? (
         <ShowGrid
           shows={shows}
           isLoading={isLoading}
           isFetchingNextPage={isFetchingNextPage}
-          emptyMessage={emptyMessage}
+          emptyMessage={resolvedEmptyMessage}
         />
       ) : (
         <ShowListView
           shows={shows}
           isLoading={isLoading}
-          emptyMessage={emptyMessage}
+          emptyMessage={resolvedEmptyMessage}
         />
       )}
 

@@ -957,10 +957,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         }
 
-        // Update inferred status in background (don't wait)
-        updateInferredStatus(req.userId!, showId).catch((err) =>
-          console.error("Background status update failed:", err)
-        )
+        // Await the status recompute so the response the client invalidates
+        // against already reflects the new status. Fire-and-forget here meant
+        // the refetch raced the write and showed a stale status.
+        try {
+          await updateInferredStatus(req.userId!, showId)
+        } catch (err) {
+          console.error("Status update failed:", err)
+        }
 
         res.json({ success: true })
       } catch (error) {
@@ -1015,10 +1019,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Failed to update season" })
         }
 
-        // Update inferred status in background (don't wait)
-        updateInferredStatus(req.userId!, parseInt(id)).catch((err) =>
-          console.error("Background status update failed:", err)
-        )
+        // Await the status recompute so the response the client invalidates
+        // against already reflects the new status. Fire-and-forget here meant
+        // the refetch raced the write and showed a stale status.
+        try {
+          await updateInferredStatus(req.userId!, parseInt(id))
+        } catch (err) {
+          console.error("Status update failed:", err)
+        }
 
         res.json({ success: true })
       } catch (error) {
@@ -1082,10 +1090,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Update inferred status in background (don't wait)
-        updateInferredStatus(req.userId!, showId).catch((err) =>
-          console.error("Background status update failed:", err)
-        )
+        // Await the status recompute so the response the client invalidates
+        // against already reflects the new status. Fire-and-forget here meant
+        // the refetch raced the write and showed a stale status.
+        try {
+          await updateInferredStatus(req.userId!, showId)
+        } catch (err) {
+          console.error("Status update failed:", err)
+        }
 
         res.json({
           success: true,
