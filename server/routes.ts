@@ -2,7 +2,12 @@ import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 import { supabase } from "./lib/supabase"
-import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
+import {
+  searchTVShows,
+  getTVShowDetails,
+  getTVShowSeason,
+  type TmdbFetchOptions,
+} from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
 import { isEpisodeAired } from "../packages/shared/episode-utils"
@@ -1255,13 +1260,19 @@ async function runValidateStatusJob({
       const showStartMs = Date.now()
       try {
         console.log(`[validate-status:${runId}] show start`, { showId })
-        const tmdbShow = await upsertShowFromTmdb(showId)
+        // This job is what keeps our database current with TMDB, so it always
+        // goes to the source. Serving it a cached response would mean
+        // "refreshing" our source of truth with data we already had. The fresh
+        // results are written back to the cache, so read paths benefit too.
+        const tmdbShow = await upsertShowFromTmdb(showId, {
+          forceRefresh: true,
+        })
         if (tmdbShow?.number_of_seasons) {
           const seasons = await Promise.all(
             Array.from(
               { length: tmdbShow.number_of_seasons },
               (_, i) => i + 1
-            ).map((n) => getTVShowSeason(showId, n))
+            ).map((n) => getTVShowSeason(showId, n, { forceRefresh: true }))
           )
           await cacheEpisodesInDatabase(showId, seasons)
         }
@@ -1295,8 +1306,11 @@ async function runValidateStatusJob({
   }
 }
 
-async function upsertShowFromTmdb(showId: number) {
-  const tmdbShow = await getTVShowDetails(showId)
+async function upsertShowFromTmdb(
+  showId: number,
+  options: TmdbFetchOptions = {}
+) {
+  const tmdbShow = await getTVShowDetails(showId, options)
   const { error: showError } = await supabase.from("shows").upsert({
     id: tmdbShow.id,
     name: tmdbShow.name,

@@ -18,6 +18,17 @@ const TTL_SECONDS = {
   search: 60 * 60,
 } as const
 
+export interface TmdbFetchOptions {
+  /**
+   * Skip the cached copy and fetch from TMDB. The background sync exists to
+   * pull TMDB's latest into our database, so it must never be served a cached
+   * response — that would refresh the source of truth with data we already
+   * had. The fresh result is still written back, so the sync warms the cache
+   * for everyone else.
+   */
+  forceRefresh?: boolean
+}
+
 /**
  * Read-through cache around a TMDB call. Redis is an optimisation, never a
  * dependency — if it is down or slow, callers still get live data.
@@ -25,13 +36,16 @@ const TTL_SECONDS = {
 async function cached<T>(
   key: string,
   ttlSeconds: number,
-  fetcher: () => Promise<T>
+  fetcher: () => Promise<T>,
+  options: TmdbFetchOptions = {}
 ): Promise<T> {
-  try {
-    const hit = await redis.get<T>(key)
-    if (hit) return hit
-  } catch (err) {
-    console.error(`TMDB cache read failed for ${key}:`, err)
+  if (!options.forceRefresh) {
+    try {
+      const hit = await redis.get<T>(key)
+      if (hit) return hit
+    } catch (err) {
+      console.error(`TMDB cache read failed for ${key}:`, err)
+    }
   }
 
   const value = await fetcher()
@@ -67,19 +81,31 @@ export async function searchTVShows(query: string, page: number = 1) {
   )
 }
 
-export async function getTVShowDetails(showId: number) {
-  return cached(`tmdb:show:${showId}`, TTL_SECONDS.details, async () => {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/tv/${showId}?api_key=${TMDB_API_KEY}`
-    )
-    if (!response.ok) {
-      throw new Error("Failed to get TV show details")
-    }
-    return response.json()
-  })
+export async function getTVShowDetails(
+  showId: number,
+  options: TmdbFetchOptions = {}
+) {
+  return cached(
+    `tmdb:show:${showId}`,
+    TTL_SECONDS.details,
+    async () => {
+      const response = await fetch(
+        `${TMDB_BASE_URL}/tv/${showId}?api_key=${TMDB_API_KEY}`
+      )
+      if (!response.ok) {
+        throw new Error("Failed to get TV show details")
+      }
+      return response.json()
+    },
+    options
+  )
 }
 
-export async function getTVShowSeason(showId: number, seasonNumber: number) {
+export async function getTVShowSeason(
+  showId: number,
+  seasonNumber: number,
+  options: TmdbFetchOptions = {}
+) {
   return cached(
     `tmdb:season:${showId}:${seasonNumber}`,
     TTL_SECONDS.season,
@@ -91,6 +117,7 @@ export async function getTVShowSeason(showId: number, seasonNumber: number) {
         throw new Error("Failed to get TV show season")
       }
       return response.json()
-    }
+    },
+    options
   )
 }
