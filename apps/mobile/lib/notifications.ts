@@ -13,6 +13,18 @@ Notifications.setNotificationHandler({
   }),
 })
 
+// Android 8+ delivers every notification through a channel. Without one it
+// falls back to a default the user can't name or tune, so the only control they
+// get is silencing the whole app.
+async function ensureAndroidChannel(): Promise<void> {
+  if (Platform.OS !== "android") return
+  await Notifications.setNotificationChannelAsync("episodes", {
+    name: "New episodes",
+    description: "When a show you follow airs something new.",
+    importance: Notifications.AndroidImportance.DEFAULT,
+  })
+}
+
 async function registerDeviceToken(): Promise<void> {
   try {
     const projectId =
@@ -37,6 +49,7 @@ async function registerDeviceToken(): Promise<void> {
 export async function syncPushRegistration(): Promise<void> {
   const { status } = await Notifications.getPermissionsAsync()
   if (status !== "granted") return
+  await ensureAndroidChannel()
   await registerDeviceToken()
 }
 
@@ -49,6 +62,7 @@ export async function requestPushPermission(): Promise<boolean> {
       : (await Notifications.requestPermissionsAsync()).status
 
   if (status !== "granted") return false
+  await ensureAndroidChannel()
   await registerDeviceToken()
   return true
 }

@@ -5,6 +5,7 @@ import * as SplashScreen from "expo-splash-screen"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper"
 import { SafeAreaProvider } from "react-native-safe-area-context"
+import { StatusBar } from "expo-status-bar"
 import {
   useFonts,
   InstrumentSerif_400Regular,
@@ -99,6 +100,10 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      {/* Screens whose own background sits under the status bar (Home's hero,
+          the show backdrop) override this; everything else is a themed
+          surface, where "auto" is right. */}
+      <StatusBar style="auto" />
       <PaperProvider theme={theme}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>

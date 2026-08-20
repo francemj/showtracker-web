@@ -14,6 +14,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
+import { useIsFocused } from "@react-navigation/native"
+import { StatusBar } from "expo-status-bar"
+import { useHeroStatusBarStyle } from "../../lib/heroStatusBar"
 import { Image } from "react-native"
 import { apiRequest } from "@showtracker/api-client"
 import type {
@@ -38,6 +41,7 @@ import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../../lib/layout"
 const TMDB_W300 = "https://image.tmdb.org/t/p/w300"
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
 const DASHBOARD_LIMIT = 6
+const HERO_HEIGHT = 420
 
 function StatusDot({ color }: { color: string }) {
   return (
@@ -337,6 +341,11 @@ export default function DashboardScreen() {
   const t = useAppTheme()
   const qc = useQueryClient()
   const tabBarHeight = useBottomTabBarHeight()
+  const insets = useSafeAreaInsets()
+  const isFocused = useIsFocused()
+  const { statusBarStyle, onScroll } = useHeroStatusBarStyle(
+    HERO_HEIGHT - insets.top
+  )
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -408,6 +417,8 @@ export default function DashboardScreen() {
     <ScrollView
       style={{ backgroundColor: t.bg }}
       contentContainerStyle={{ paddingBottom: tabBarHeight + 32 }}
+      onScroll={onScroll}
+      scrollEventThrottle={32}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -417,6 +428,7 @@ export default function DashboardScreen() {
         />
       }
     >
+      {isFocused && <StatusBar style={statusBarStyle} />}
       {featuredShow ? (
         <HeroSection
           show={featuredShow}
@@ -461,15 +473,15 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   heroContainer: {
-    height: 420,
+    height: HERO_HEIGHT,
   },
   heroImage: {
     width: "100%",
-    height: 420,
+    height: HERO_HEIGHT,
     justifyContent: "space-between",
   },
   heroPlaceholder: {
-    height: 420,
+    height: HERO_HEIGHT,
   },
   heroTopBar: {
     flexDirection: "row",
