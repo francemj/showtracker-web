@@ -3,7 +3,7 @@ import { useColorScheme } from "react-native"
 import { Tabs, Redirect } from "expo-router"
 import { Ionicons } from "@expo/vector-icons"
 import { useAuth } from "../../lib/auth"
-import { registerForPushNotifications } from "../../lib/notifications"
+import { syncPushRegistration } from "../../lib/notifications"
 import { COLORS, SANS_600 } from "../../lib/theme"
 
 export default function TabLayout() {
@@ -11,9 +11,12 @@ export default function TabLayout() {
   const scheme = useColorScheme()
   const t = scheme === "dark" ? COLORS.dark : COLORS.light
 
+  // Refresh the device token for someone who already granted permission. The
+  // prompt itself lives on Profile, behind a control the user pressed — asking
+  // cold on first open spends the one prompt iOS allows on no context at all.
   useEffect(() => {
     if (user) {
-      registerForPushNotifications()
+      syncPushRegistration()
     }
   }, [user])
 

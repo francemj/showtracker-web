@@ -8,8 +8,11 @@ import { useAuth } from "./auth"
 const STORAGE_KEY_INITIAL = "statusValidationInitial"
 const STORAGE_KEY_FOREGROUND = "statusValidationForeground"
 const STORAGE_KEY_COMPLETED_RECHECK = "statusValidationCompletedRecheck"
-const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
-const THROTTLE_FOREGROUND_MS = 10 * 60 * 1000 // 10 minutes
+// Kept in step with apps/web/src/components/status-validation-trigger.tsx.
+// Mobile had the better trigger (AppState) but drifted to half web's cadence,
+// so the same account could disagree with itself across devices.
+const THROTTLE_INITIAL_MS = 15 * 60 * 1000 // 15 minutes
+const THROTTLE_FOREGROUND_MS = 5 * 60 * 1000 // 5 minutes
 const THROTTLE_COMPLETED_RECHECK_MS = 24 * 60 * 60 * 1000 // 24 hours
 export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
 

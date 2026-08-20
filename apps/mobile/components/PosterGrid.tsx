@@ -5,12 +5,12 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   Text,
   ActivityIndicator,
   RefreshControl,
 } from "react-native"
 import { useRouter } from "expo-router"
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
 import type { ShowWithProgress } from "@showtracker/shared"
 import {
   useAppTheme,
@@ -22,11 +22,9 @@ import {
   MONO,
   MONO_500,
 } from "../lib/theme"
+import { useGridMetrics } from "../lib/layout"
 
 const TMDB_W342 = "https://image.tmdb.org/t/p/w342"
-const SCREEN_WIDTH = Dimensions.get("window").width
-const POSTER_WIDTH = Math.floor((SCREEN_WIDTH - 22 * 2 - 18) / 2)
-const POSTER_HEIGHT = Math.floor(POSTER_WIDTH * 1.5)
 
 type Props = {
   shows: ShowWithProgress[] | undefined
@@ -77,17 +75,23 @@ const EMPTY_COPY: Record<
   },
 }
 
-function SkeletonCard() {
+function SkeletonCard({
+  posterWidth,
+  posterHeight,
+}: {
+  posterWidth: number
+  posterHeight: number
+}) {
   const t = useAppTheme()
   return (
-    <View style={[styles.cell, { width: POSTER_WIDTH }]}>
+    <View style={[styles.cell, { width: posterWidth }]}>
       <View
         style={[
           styles.posterSkeleton,
           {
             backgroundColor: t.surfaceAlt,
-            width: POSTER_WIDTH,
-            height: POSTER_HEIGHT,
+            width: posterWidth,
+            height: posterHeight,
           },
         ]}
       />
@@ -113,12 +117,16 @@ function PlaceholderState({
   body,
   actionLabel,
   onAction,
+  posterWidth,
+  posterHeight,
 }: {
   t: ReturnType<typeof useAppTheme>
   title: string
   body: string
   actionLabel?: string
   onAction?: () => void
+  posterWidth: number
+  posterHeight: number
 }) {
   return (
     <View style={styles.emptyCenter}>
@@ -131,8 +139,8 @@ function PlaceholderState({
               {
                 borderColor: t.borderStrong,
                 opacity,
-                width: POSTER_WIDTH * 0.52,
-                height: POSTER_HEIGHT * 0.52,
+                width: posterWidth * 0.52,
+                height: posterHeight * 0.52,
               },
             ]}
           />
@@ -171,12 +179,18 @@ export function PosterGrid({
 }: Props) {
   const t = useAppTheme()
   const router = useRouter()
+  const tabBarHeight = useBottomTabBarHeight()
+  const { columns, posterWidth, posterHeight } = useGridMetrics()
 
   if (isLoading) {
     return (
       <View style={styles.grid}>
-        {[1, 2, 3, 4].map((i) => (
-          <SkeletonCard key={i} />
+        {Array.from({ length: columns * 2 }, (_, i) => (
+          <SkeletonCard
+            key={i}
+            posterWidth={posterWidth}
+            posterHeight={posterHeight}
+          />
         ))}
       </View>
     )
@@ -192,6 +206,8 @@ export function PosterGrid({
         body={error?.message ?? "Something went wrong. Please try again."}
         actionLabel={onRetry ? "Try again" : undefined}
         onAction={onRetry}
+        posterWidth={posterWidth}
+        posterHeight={posterHeight}
       />
     )
   }
@@ -205,6 +221,8 @@ export function PosterGrid({
           body={`Nothing here matches “${filter}”.`}
           actionLabel={onClearFilter ? "Clear filter" : undefined}
           onAction={onClearFilter}
+          posterWidth={posterWidth}
+          posterHeight={posterHeight}
         />
       )
     }
@@ -216,6 +234,8 @@ export function PosterGrid({
         body={copy.body}
         actionLabel={copy.browse ? "Browse Search →" : undefined}
         onAction={copy.browse ? () => router.push("/(tabs)/search") : undefined}
+        posterWidth={posterWidth}
+        posterHeight={posterHeight}
       />
     )
   }
@@ -224,10 +244,17 @@ export function PosterGrid({
     <FlatList
       data={shows}
       keyExtractor={(item) => String(item.id)}
-      numColumns={2}
+      key={`columns-${columns}`}
+      numColumns={columns}
       columnWrapperStyle={styles.row}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[
+        styles.listContent,
+        { paddingBottom: tabBarHeight + 32 },
+      ]}
       style={styles.list}
+      // Without this the first tap while the filter keyboard is up only
+      // dismisses the keyboard, and the row you aimed at never opens.
+      keyboardShouldPersistTaps="handled"
       onEndReached={onEndReached}
       onEndReachedThreshold={0.3}
       refreshControl={
@@ -260,14 +287,22 @@ export function PosterGrid({
 
         return (
           <TouchableOpacity
-            style={[styles.cell, { width: POSTER_WIDTH }]}
+            style={[styles.cell, { width: posterWidth }]}
             onPress={() => router.push(`/shows/${show.id}`)}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              hasProgress &&
+              show.watchedEpisodes != null &&
+              show.totalEpisodes != null
+                ? `${show.name}, ${show.watchedEpisodes} of ${show.totalEpisodes} episodes watched`
+                : show.name
+            }
           >
             <View
               style={[
                 styles.posterWrap,
-                { width: POSTER_WIDTH, height: POSTER_HEIGHT },
+                { width: posterWidth, height: posterHeight },
               ]}
             >
               {posterUri ? (
@@ -345,10 +380,11 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 22,
     paddingTop: 18,
-    paddingBottom: 32,
   },
   row: {
-    justifyContent: "space-between",
+    // Not space-between: a partial last row would spread its posters across
+    // the full width instead of lining them up under the row above.
+    gap: 18,
     marginBottom: 18,
   },
   cell: {
