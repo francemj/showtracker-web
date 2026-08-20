@@ -55,6 +55,11 @@ function StatusDot({ status }: { status: StatusKey }) {
 export function AppSidebar() {
   const [location] = useLocation()
   const { user, logout } = useAuth()
+  // Auth0 email signup sets `name` to the email address. Showing both lines
+  // then prints the same string twice — and truncated at this width they look
+  // identical — so collapse to the email alone when there's no real name.
+  const hasRealName = !!user?.name && user.name !== user?.email
+  const displayName = hasRealName ? user!.name : user?.email
   const { closeSidebar, open } = useSidebar()
   const { theme } = useTheme()
   const watchingSolid = statusPalette("watching", theme).solid
@@ -214,18 +219,20 @@ export function AppSidebar() {
               <Avatar className="w-8 h-8">
                 <AvatarImage src={user?.picture} alt={user?.name} />
                 <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
-                  {user?.name?.charAt(0).toUpperCase() || (
+                  {displayName?.charAt(0).toUpperCase() || (
                     <User className="w-4 h-4" />
                   )}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate leading-tight">
-                  {user?.name}
+                  {displayName}
                 </p>
-                <p className="text-xs text-sidebar-foreground/50 truncate">
-                  {user?.email}
-                </p>
+                {hasRealName && (
+                  <p className="text-xs text-sidebar-foreground/50 truncate">
+                    {user?.email}
+                  </p>
+                )}
               </div>
             </Link>
             <Button
@@ -244,7 +251,7 @@ export function AppSidebar() {
               <Avatar className="w-8 h-8">
                 <AvatarImage src={user?.picture} alt={user?.name} />
                 <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
-                  {user?.name?.charAt(0).toUpperCase() || (
+                  {displayName?.charAt(0).toUpperCase() || (
                     <User className="w-4 h-4" />
                   )}
                 </AvatarFallback>

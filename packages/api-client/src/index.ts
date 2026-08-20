@@ -18,10 +18,25 @@ export function setApiBaseUrl(url: string) {
   apiBaseUrl = url.replace(/\/$/, "")
 }
 
+export interface ApiError extends Error {
+  status: number
+}
+
+// Surface the server's own message so callers can show it verbatim instead of
+// guessing at a cause. The status stays available for callers that branch on it.
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText
-    throw new Error(`${res.status}: ${text}`)
+    let message = text
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed?.message) message = parsed.message
+    } catch {
+      // Not JSON — fall back to the raw body.
+    }
+    const error = new Error(message) as ApiError
+    error.status = res.status
+    throw error
   }
 }
 

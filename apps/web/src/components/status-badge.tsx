@@ -15,7 +15,7 @@ export function StatusBadge({
   return (
     <span
       style={{ background: p.solid, color: "#fff" }}
-      className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-[0.05em]"
+      className="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-[0.05em]"
       data-testid={testId}
     >
       {STATUS_LABEL[status]}

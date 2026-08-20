@@ -28,7 +28,6 @@ import {
   buildEpisodesToMark,
   buildEpisodesToUnmark,
   findLastAiredEpisode,
-  inferShowStatus,
 } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -38,6 +37,8 @@ import {
 } from "@/components/status-validation-trigger"
 
 const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
+// Past this many seasons the pill row wraps into stacked rows, so switch to a select.
+const SEASON_PILL_LIMIT = 8
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -89,6 +90,10 @@ export default function ShowDetail() {
     enabled: !!id,
   })
 
+  useEffect(() => {
+    if (show?.name) document.title = `${show.name} · Showtracker`
+  }, [show?.name])
+
   const { data: seasons, isLoading: seasonsLoading } = useQuery<TMDBSeason[]>({
     queryKey: ["/api/shows", id, "seasons"],
     enabled: !!id,
@@ -129,10 +134,10 @@ export default function ShowDetail() {
       })
     },
     onSuccess: invalidateAll,
-    onError: () =>
+    onError: (error: Error) =>
       toast({
-        title: "Error",
-        description: "This episode hasn't aired yet.",
+        title: "Couldn't update episode",
+        description: error.message,
         variant: "destructive",
       }),
   })
@@ -200,9 +205,9 @@ export default function ShowDetail() {
   // Resume tracking a stopped show. Writes the status the progress already
   // implies, so the next background validation sweep agrees and leaves it put.
   const resumeShowMutation = useMutation({
-    mutationFn: async (status: StatusKey) =>
-      apiRequest("PATCH", `/api/user/shows/${id}`, { status }),
-    onSuccess: (_, status) => {
+    mutationFn: async () => apiRequest("POST", `/api/user/shows/${id}/resume`),
+    onSuccess: async (res) => {
+      const { status } = (await res.json()) as { status: StatusKey }
       invalidateAll()
       toast({
         title: "Tracking resumed",
@@ -233,8 +238,14 @@ export default function ShowDetail() {
     },
     onSuccess: () => {
       invalidateAll()
-      toast({ title: "Season Updated" })
+      toast({ title: "Season updated" })
     },
+    onError: (error: Error) =>
+      toast({
+        title: "Couldn't update season",
+        description: error.message,
+        variant: "destructive",
+      }),
   })
 
   const isEpisodeWatched = (seasonNumber: number, episodeNumber: number) =>
@@ -485,7 +496,11 @@ export default function ShowDetail() {
         {/* Back button */}
         <div className="absolute top-6 left-8">
           <button
-            onClick={() => setLocation("/watching")}
+            onClick={() =>
+              window.history.length > 1
+                ? window.history.back()
+                : setLocation("/watching")
+            }
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-white text-[12.5px] font-semibold border border-white/22"
             style={{
               background: "rgba(255,255,255,0.15)",
@@ -493,7 +508,7 @@ export default function ShowDetail() {
             }}
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-            Library
+            Back
           </button>
         </div>
       </div>
@@ -572,15 +587,7 @@ export default function ShowDetail() {
                 <Button
                   size="lg"
                   disabled={resumeShowMutation.isPending}
-                  onClick={() =>
-                    resumeShowMutation.mutate(
-                      inferShowStatus({
-                        tmdbStatus: show.status,
-                        watchedEpisodes: show.watchedEpisodes ?? 0,
-                        totalAiredEpisodes: show.totalEpisodes ?? 0,
-                      })
-                    )
-                  }
+                  onClick={() => resumeShowMutation.mutate()}
                   data-testid="button-resume-tracking"
                 >
                   {resumeShowMutation.isPending
@@ -647,10 +654,28 @@ export default function ShowDetail() {
           <h2 className="font-serif font-normal text-[36px] leading-none tracking-[-0.02em] text-foreground">
             Episodes
           </h2>
-          {/* Season pill switcher */}
-          <div className="flex gap-2 flex-wrap">
+          {/* Season switcher — pills stay readable up to a point, past which a
+              long-running show turns them into rows that crowd the heading. */}
+          <div className="flex gap-2 flex-wrap justify-end max-w-[70%]">
             {seasonsLoading ? (
               <Skeleton className="h-8 w-48" />
+            ) : realSeasons.length > SEASON_PILL_LIMIT ? (
+              <select
+                value={effectiveActiveSeason}
+                onChange={(e) => setActiveSeason(Number(e.target.value))}
+                className="px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border border-border bg-card text-foreground"
+                aria-label="Season"
+                data-testid="select-season"
+              >
+                {realSeasons.map((season) => (
+                  <option
+                    key={season.season_number}
+                    value={season.season_number}
+                  >
+                    Season {season.season_number}
+                  </option>
+                ))}
+              </select>
             ) : (
               realSeasons.map((season) => {
                 const isActive = season.season_number === effectiveActiveSeason
@@ -700,7 +725,10 @@ export default function ShowDetail() {
                   ),
                 })
               }
-              disabled={markSeasonWatchedMutation.isPending}
+              disabled={
+                markSeasonWatchedMutation.isPending ||
+                activeSeasonProgress.total === 0
+              }
               data-testid={`button-mark-season-${effectiveActiveSeason}`}
             >
               {activeSeasonProgress.watched === activeSeasonProgress.total &&
@@ -718,7 +746,7 @@ export default function ShowDetail() {
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
-        ) : activeSeasonData?.episodes ? (
+        ) : activeSeasonData?.episodes?.length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-14">
             {activeSeasonData.episodes.map((episode) => {
               const watched = isEpisodeWatched(
@@ -767,6 +795,11 @@ export default function ShowDetail() {
                       className={`text-[15px] font-medium leading-snug truncate ${watched ? "text-muted-foreground" : "text-foreground"}`}
                     >
                       {episode.name}
+                      {!hasAired && (
+                        <span className="ml-2 align-middle inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold uppercase tracking-[0.08em] border border-border text-muted-foreground">
+                          Upcoming
+                        </span>
+                      )}
                     </p>
                     <p className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
                       S{effectiveActiveSeason}·E{episode.episode_number}
@@ -781,7 +814,9 @@ export default function ShowDetail() {
           </div>
         ) : (
           <p className="text-muted-foreground">
-            No episode information available.
+            {activeSeasonData
+              ? "No episodes announced for this season yet."
+              : "No episode information available."}
           </p>
         )}
       </div>
@@ -795,23 +830,26 @@ export default function ShowDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Mark Previous Episodes?</AlertDialogTitle>
             <AlertDialogDescription>
-              Would you like to mark all previous episodes as watched? This will
-              mark all episodes before S{pendingEpisode?.seasonNumber}E
-              {pendingEpisode?.episodeNumber} as watched.
+              This marks every aired episode up to and including S
+              {pendingEpisode?.seasonNumber}E{pendingEpisode?.episodeNumber} as
+              watched.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
+            <AlertDialogCancel data-testid="button-mark-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleMarkJustOne}
               data-testid="button-mark-just-one"
             >
-              Just This Episode
-            </AlertDialogCancel>
+              Just this episode
+            </AlertDialogAction>
             <AlertDialogAction
               onClick={handleConfirmMarkAll}
               data-testid="button-mark-all-previous"
             >
-              Mark All Previous
+              Mark all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -831,17 +869,20 @@ export default function ShowDetail() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
+            <AlertDialogCancel data-testid="button-unmark-cancel">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleUnmarkJustOne}
               data-testid="button-unmark-just-one"
             >
-              Just This Episode
-            </AlertDialogCancel>
+              Just this episode
+            </AlertDialogAction>
             <AlertDialogAction
               onClick={handleConfirmUnmarkAll}
               data-testid="button-unmark-all-succeeding"
             >
-              Unmark All Succeeding
+              Unmark all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

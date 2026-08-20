@@ -112,11 +112,18 @@ function PosterRow({
                   {show.name}
                 </p>
                 <p className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                  {upcoming
-                    ? show.firstAirDate
-                      ? new Date(show.firstAirDate).getFullYear()
-                      : ""
-                    : `${show.watchedEpisodes ?? 0}/${show.totalEpisodes ?? "?"} eps`}
+                  {upcoming || !show.watchedEpisodes
+                    ? [
+                        show.firstAirDate
+                          ? new Date(show.firstAirDate).getFullYear()
+                          : null,
+                        show.numberOfSeasons
+                          ? `${show.numberOfSeasons}s`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : `${show.watchedEpisodes}/${show.totalEpisodes ?? "?"} eps`}
                 </p>
               </div>
             </Link>
@@ -231,9 +238,17 @@ export default function Dashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
       toast({ title: "Episode marked as watched" })
     },
+    onError: (error: Error) =>
+      toast({
+        title: "Couldn't mark episode as watched",
+        description: error.message,
+        variant: "destructive",
+      }),
   })
 
   const backdropUrl = featured?.backdropPath

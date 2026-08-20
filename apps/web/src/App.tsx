@@ -43,6 +43,17 @@ function Router() {
   )
 }
 
+const PAGE_TITLES: Record<string, string> = {
+  "/": "Home",
+  "/search": "Search",
+  "/want-to-watch": "Want to Watch",
+  "/watching": "Watching",
+  "/caught-up": "Caught Up",
+  "/completed": "Completed",
+  "/stopped": "Stopped",
+  "/profile": "Profile",
+}
+
 function AuthenticatedApp() {
   const { isAuthenticated, isLoading } = useAuth()
   const [location] = useLocation()
@@ -52,6 +63,14 @@ function AuthenticatedApp() {
   // route change and a new page would open wherever the last one was scrolled.
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 })
+  }, [location])
+
+  // One static title meant every page shared a tab name and history entry.
+  // Show detail sets its own from the show name once loaded.
+  useEffect(() => {
+    const title = PAGE_TITLES[location]
+    if (title) document.title = `${title} · Showtracker`
+    else if (!location.startsWith("/show/")) document.title = "Showtracker"
   }, [location])
 
   if (isLoading) {

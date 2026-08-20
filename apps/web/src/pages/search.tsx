@@ -2,7 +2,7 @@ import { useState, useMemo } from "react"
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AddToCollectionButton } from "@/components/add-to-collection-button"
-import { statusPalette, type StatusKey } from "@/lib/status"
+import { statusPalette, STATUS_LABEL, type StatusKey } from "@/lib/status"
 import { useTheme } from "@/components/theme-provider"
 import { Search as SearchIcon, Check, Star } from "lucide-react"
 import { UserShow, SearchResponse } from "@shared/schema"
@@ -85,6 +85,34 @@ export default function Search() {
         variant: "destructive",
       }),
   })
+
+  // Resume asks the server to recompute where the show belongs; the client
+  // never names a status because every status but "stopped" is inferred.
+  const resumeShowMutation = useMutation({
+    mutationFn: async (showId: number) =>
+      apiRequest("POST", `/api/user/shows/${showId}/resume`),
+    onSuccess: async (res) => {
+      const { status } = (await res.json()) as { status: StatusKey }
+      queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/watching"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
+      toast({
+        title: "Tracking resumed",
+        description: `Moved back to ${STATUS_LABEL[status]}.`,
+      })
+    },
+    onError: (error: Error) =>
+      toast({
+        title: "Couldn't resume tracking",
+        description: error.message,
+        variant: "destructive",
+      }),
+  })
+  const resumeShow = (showId: number) => resumeShowMutation.mutate(showId)
 
   const findUserShow = (showId: number): UserShow | undefined =>
     userShows?.find((us) => us.showId === showId)
@@ -244,7 +272,7 @@ export default function Search() {
                     </div>
                   )}
                   {userShow && (
-                    <div className="mt-3.5">
+                    <div className="mt-3.5 flex items-center gap-2">
                       <button
                         className="px-3.5 py-2 rounded-full text-[12.5px] font-semibold border border-border text-muted-foreground bg-transparent opacity-60 cursor-default inline-flex items-center gap-1.5"
                         disabled
@@ -253,6 +281,18 @@ export default function Search() {
                         <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
                         In Collection
                       </button>
+                      {/* Stopped is the one status a user sets by hand, so it's
+                          the one they need to be able to undo from here. */}
+                      {userShow.status === "stopped" && (
+                        <button
+                          onClick={() => resumeShow(show.id)}
+                          disabled={resumeShowMutation.isPending}
+                          className="px-3.5 py-2 rounded-full text-foreground text-[12.5px] font-semibold border border-border bg-transparent hover:bg-muted transition-colors"
+                          data-testid={`button-resume-${show.id}`}
+                        >
+                          Resume tracking
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

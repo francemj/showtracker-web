@@ -60,9 +60,15 @@ interface ShowListViewProps {
   shows?: ShowWithProgress[]
   isLoading: boolean
   emptyMessage?: React.ReactNode
+  mode: "light" | "dark"
 }
 
-function ShowListView({ shows, isLoading, emptyMessage }: ShowListViewProps) {
+function ShowListView({
+  shows,
+  isLoading,
+  emptyMessage,
+  mode,
+}: ShowListViewProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col divide-y divide-border">
@@ -106,9 +112,11 @@ function ShowListView({ shows, isLoading, emptyMessage }: ShowListViewProps) {
           .filter(Boolean)
           .join(" · ")
 
+        const progress = show.progress || 0
+
         return (
           <Link key={show.id} href={`/show/${show.id}`} className="block">
-            <div className="flex items-center gap-4 py-3 px-2 -mx-2 rounded-lg hover:bg-muted/40 transition-colors">
+            <div className="flex items-center gap-4 py-3 px-2 -mx-2 rounded-lg hover:bg-muted/40 transition-colors max-w-[920px]">
               <img
                 src={posterUrl}
                 alt={show.name}
@@ -122,6 +130,17 @@ function ShowListView({ shows, isLoading, emptyMessage }: ShowListViewProps) {
                 <p className="text-[12px] font-mono text-muted-foreground mt-0.5">
                   {meta}
                 </p>
+                {isWatching && progress > 0 && (
+                  <div className="relative h-[3px] w-full max-w-[220px] rounded-full overflow-hidden bg-muted mt-1.5">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{
+                        width: `${progress}%`,
+                        background: statusPalette("watching", mode).solid,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               {show.voteAverage && parseFloat(show.voteAverage) > 0 && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground shrink-0">
@@ -263,12 +282,14 @@ export function LibraryView({
           isLoading={isLoading}
           isFetchingNextPage={isFetchingNextPage}
           emptyMessage={resolvedEmptyMessage}
+          hideStatusBadge
         />
       ) : (
         <ShowListView
           shows={shows}
           isLoading={isLoading}
           emptyMessage={resolvedEmptyMessage}
+          mode={theme}
         />
       )}
 
