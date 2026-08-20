@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import {
-  ScrollView,
+  Animated,
   View,
   StyleSheet,
   TouchableOpacity,
   ImageBackground,
+  ScrollView,
   Alert,
 } from "react-native"
 import { Text, Menu, ActivityIndicator } from "react-native-paper"
@@ -21,6 +22,7 @@ import type {
 } from "@showtracker/shared"
 import {
   isEpisodeAired,
+  formatAirDate,
   hasUnwatchedEpisodesBefore,
   buildEpisodesToMark,
 } from "@showtracker/shared"
@@ -35,12 +37,14 @@ import {
   SANS_700,
   MONO,
 } from "../../lib/theme"
+import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../../lib/layout"
 import {
   STATUS_INVALIDATE_DELAY_MS,
   invalidateStatusRelatedQueries,
 } from "../../lib/statusValidation"
 
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
+const BACKDROP_HEIGHT = 460
 const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
 
 function upsertEpisodeProgress(
@@ -86,6 +90,20 @@ export default function ShowDetailScreen() {
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null)
   const [statusMenuVisible, setStatusMenuVisible] = useState(false)
   const [moreMenuVisible, setMoreMenuVisible] = useState(false)
+
+  // The backdrop is deliberately full-bleed under the status bar, but once you
+  // scroll past it the body text runs under the clock and battery with nothing
+  // behind it. Fade a bar of the page background in as the hero leaves.
+  const [scrollY] = useState(() => new Animated.Value(0))
+  const statusBarOpacity = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [BACKDROP_HEIGHT - 220, BACKDROP_HEIGHT - 140],
+        outputRange: [0, 1],
+        extrapolate: "clamp",
+      }),
+    [scrollY]
+  )
 
   const { data: show, isLoading } = useQuery<ShowWithProgress>({
     queryKey: ["/api/shows", id],
@@ -392,368 +410,441 @@ export default function ShowDetailScreen() {
   const nextEp = show.nextEpisode
 
   return (
-    <ScrollView
-      style={{ backgroundColor: t.bg }}
-      contentContainerStyle={{ paddingBottom: 48 }}
-    >
-      {/* Cinematic backdrop */}
-      <View style={styles.backdropContainer}>
-        {backdropUri ? (
-          <ImageBackground
-            source={{ uri: backdropUri }}
-            style={styles.backdrop}
-            resizeMode="cover"
-          >
-            <LinearGradient
-              colors={["rgba(0,0,0,0.4)", "transparent", "transparent", t.bg]}
-              locations={[0, 0.3, 0.5, 1]}
-              style={StyleSheet.absoluteFill}
-            />
-            <BackdropChrome
-              onBack={() => router.back()}
-              onMore={() => setMoreMenuVisible(true)}
-              moreMenuVisible={moreMenuVisible}
-              onDismissMore={() => setMoreMenuVisible(false)}
-              insets={insets}
-              isInCollection={isInCollection}
-              isStopped={currentStatus === "stopped"}
-              onStop={() => {
-                setMoreMenuVisible(false)
-                confirmStopTracking()
-              }}
-              onResume={() => {
-                setMoreMenuVisible(false)
-                resumeTracking.mutate()
-              }}
-            />
-          </ImageBackground>
-        ) : (
-          <View style={[styles.backdrop, { backgroundColor: t.surfaceAlt }]}>
-            <BackdropChrome
-              onBack={() => router.back()}
-              onMore={() => setMoreMenuVisible(true)}
-              moreMenuVisible={moreMenuVisible}
-              onDismissMore={() => setMoreMenuVisible(false)}
-              insets={insets}
-              isInCollection={isInCollection}
-              isStopped={currentStatus === "stopped"}
-              onStop={() => {
-                setMoreMenuVisible(false)
-                confirmStopTracking()
-              }}
-              onResume={() => {
-                setMoreMenuVisible(false)
-                resumeTracking.mutate()
-              }}
-            />
-          </View>
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.statusBarScrim,
+          {
+            height: insets.top,
+            backgroundColor: t.bg,
+            opacity: statusBarOpacity,
+          },
+        ]}
+      />
+      <Animated.ScrollView
+        style={{ backgroundColor: t.bg }}
+        contentContainerStyle={{ paddingBottom: 48 }}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
         )}
-      </View>
-
-      {/* Pulled-up info block */}
-      <View style={[styles.infoBlock, { marginTop: -100 }]}>
-        <View style={styles.chips}>
-          {currentStatus && (
-            <View
-              style={[styles.statusChip, { backgroundColor: sp.light.solid }]}
+      >
+        {/* Cinematic backdrop */}
+        <View style={styles.backdropContainer}>
+          {backdropUri ? (
+            <ImageBackground
+              source={{ uri: backdropUri }}
+              style={styles.backdrop}
+              resizeMode="cover"
             >
-              <Text style={styles.statusChipText}>
-                {STATUS_LABELS[currentStatus].toUpperCase()}
-              </Text>
-            </View>
-          )}
-          {show.firstAirDate && (
-            <View style={[styles.darkChip]}>
-              <Text style={styles.darkChipText}>
-                {show.firstAirDate.slice(0, 4)}
-              </Text>
-            </View>
-          )}
-        </View>
-        <Text style={styles.showTitle}>{show.name}</Text>
-        <Text style={styles.showMeta}>
-          {show.genres?.join(" · ")}
-          {regularSeasons.length > 0
-            ? ` · ${regularSeasons.length} season${regularSeasons.length !== 1 ? "s" : ""}`
-            : ""}
-        </Text>
-      </View>
-
-      {/* Overview */}
-      {show.overview && (
-        <View style={styles.overviewBlock}>
-          <Text style={[styles.overview, { color: t.fgMuted }]}>
-            {show.overview}
-          </Text>
-        </View>
-      )}
-
-      {/* Add to collection (if not in) */}
-      {!isInCollection && (
-        <View style={styles.actionBlock}>
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: t.accent }]}
-            onPress={() => addShow.mutate("want_to_watch")}
-            activeOpacity={0.8}
-          >
-            {addShow.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.addBtnText}>Add to Collection</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Stopped: resume is the way back, not a stray episode tap */}
-      {isInCollection && currentStatus === "stopped" && (
-        <View style={styles.actionBlock}>
-          <Text
-            style={{
-              color: t.fgMuted,
-              fontFamily: SANS,
-              fontSize: 13.5,
-              marginBottom: 12,
-            }}
-          >
-            You've stopped tracking this show. Your progress is saved.
-          </Text>
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: t.accent }]}
-            onPress={() => resumeTracking.mutate()}
-            disabled={resumeTracking.isPending}
-            activeOpacity={0.8}
-          >
-            {resumeTracking.isPending ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.addBtnText}>Resume tracking</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Progress */}
-      {isInCollection &&
-        show.watchedEpisodes != null &&
-        show.totalEpisodes != null && (
-          <View style={styles.progressBlock}>
-            <View style={styles.progressHeader}>
-              <Text style={[styles.sectionTitle, { color: t.fg }]}>
-                Progress
-              </Text>
-              <Text style={[styles.progressCount, { color: t.fg }]}>
-                {show.watchedEpisodes}/{show.totalEpisodes} ·{" "}
-                {Math.round(progressPct * 100)}%
-              </Text>
-            </View>
-            <View
-              style={[styles.progressTrack, { backgroundColor: t.surfaceAlt }]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${progressPct * 100}%` as any,
-                    backgroundColor: sp.light.solid,
-                  },
+              <LinearGradient
+                colors={[
+                  "rgba(0,0,0,0.45)",
+                  "transparent",
+                  "rgba(0,0,0,0.55)",
+                  "rgba(0,0,0,0.55)",
+                  t.bg,
                 ]}
+                locations={[0, 0.35, 0.72, 0.94, 1]}
+                style={StyleSheet.absoluteFill}
+              />
+              <BackdropChrome
+                onBack={() => router.back()}
+                onMore={() => setMoreMenuVisible(true)}
+                moreMenuVisible={moreMenuVisible}
+                onDismissMore={() => setMoreMenuVisible(false)}
+                insets={insets}
+                isInCollection={isInCollection}
+                isStopped={currentStatus === "stopped"}
+                onStop={() => {
+                  setMoreMenuVisible(false)
+                  confirmStopTracking()
+                }}
+                onResume={() => {
+                  setMoreMenuVisible(false)
+                  resumeTracking.mutate()
+                }}
+              />
+            </ImageBackground>
+          ) : (
+            <View style={[styles.backdrop, { backgroundColor: t.surfaceAlt }]}>
+              <BackdropChrome
+                onBack={() => router.back()}
+                onMore={() => setMoreMenuVisible(true)}
+                moreMenuVisible={moreMenuVisible}
+                onDismissMore={() => setMoreMenuVisible(false)}
+                insets={insets}
+                isInCollection={isInCollection}
+                isStopped={currentStatus === "stopped"}
+                onStop={() => {
+                  setMoreMenuVisible(false)
+                  confirmStopTracking()
+                }}
+                onResume={() => {
+                  setMoreMenuVisible(false)
+                  resumeTracking.mutate()
+                }}
               />
             </View>
-            <View style={styles.progressActions}>
-              <TouchableOpacity
-                style={[styles.nextBtn, { backgroundColor: sp.light.solid }]}
-                onPress={() => {
-                  if (nextEp) {
-                    toggleEpisode.mutate({
-                      seasonNumber: nextEp.season,
-                      episodeNumber: nextEp.episode,
-                      watched: true,
-                    })
-                  }
-                }}
-                disabled={!nextEp || toggleEpisode.isPending}
-                activeOpacity={0.8}
+          )}
+        </View>
+
+        {/* Pulled-up info block */}
+        <View style={[styles.infoBlock, { marginTop: -140 }]}>
+          <View style={styles.chips}>
+            {currentStatus && (
+              <View
+                style={[styles.statusChip, { backgroundColor: sp.light.solid }]}
               >
-                <Text style={styles.nextBtnText}>
-                  {nextEp
-                    ? `Next: S${nextEp.season} E${nextEp.episode}`
-                    : "Up to date"}
+                <Text style={styles.statusChipText}>
+                  {STATUS_LABELS[currentStatus].toUpperCase()}
                 </Text>
-              </TouchableOpacity>
-              <Menu
-                visible={statusMenuVisible}
-                onDismiss={() => setStatusMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity
-                    style={[styles.moreBtn, { borderColor: t.border }]}
-                    onPress={() => setStatusMenuVisible(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.moreBtnText, { color: t.fg }]}>
-                      ···
-                    </Text>
-                  </TouchableOpacity>
-                }
-              >
-                <CollectionMenuItems
-                  isStopped={currentStatus === "stopped"}
-                  onStop={() => {
-                    setStatusMenuVisible(false)
-                    confirmStopTracking()
-                  }}
-                  onResume={() => {
-                    setStatusMenuVisible(false)
-                    resumeTracking.mutate()
-                  }}
-                />
-              </Menu>
-            </View>
+              </View>
+            )}
+            {show.firstAirDate && (
+              <View style={[styles.darkChip]}>
+                <Text style={styles.darkChipText}>
+                  {show.firstAirDate.slice(0, 4)}
+                </Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.showTitle}>{show.name}</Text>
+          <Text style={styles.showMeta}>
+            {show.genres?.join(" · ")}
+            {regularSeasons.length > 0
+              ? ` · ${regularSeasons.length} season${regularSeasons.length !== 1 ? "s" : ""}`
+              : ""}
+          </Text>
+        </View>
+
+        {/* Overview */}
+        {show.overview && (
+          <View style={styles.overviewBlock}>
+            <Text style={[styles.overview, { color: t.fgMuted }]}>
+              {show.overview}
+            </Text>
           </View>
         )}
 
-      {/* Episodes */}
-      {regularSeasons.length > 0 && (
-        <View style={styles.episodesBlock}>
-          <Text style={[styles.sectionTitle, { color: t.fg }]}>Episodes</Text>
+        {/* Add to collection (if not in) */}
+        {!isInCollection && (
+          <View style={styles.actionBlock}>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: t.accent }]}
+              onPress={() => addShow.mutate("want_to_watch")}
+              activeOpacity={0.8}
+            >
+              {addShow.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.addBtnText}>Add to Collection</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Season pills */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.seasonPills}
-          >
-            {regularSeasons.map((s) => {
-              const isActive = s.season_number === activeSeason
-              return (
-                <TouchableOpacity
-                  key={s.season_number}
-                  style={[
-                    styles.seasonPill,
-                    {
-                      backgroundColor: isActive ? t.fg : "transparent",
-                      borderColor: isActive ? t.fg : t.border,
-                    },
-                  ]}
-                  onPress={() => setSelectedSeason(s.season_number)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.seasonPillText,
-                      { color: isActive ? t.bg : t.fgMuted },
-                    ]}
-                  >
-                    Season {s.season_number}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
+        {/* Stopped: resume is the way back, not a stray episode tap */}
+        {isInCollection && currentStatus === "stopped" && (
+          <View style={styles.actionBlock}>
+            <Text
+              style={{
+                color: t.fgMuted,
+                fontFamily: SANS,
+                fontSize: 13.5,
+                marginBottom: 12,
+              }}
+            >
+              You've stopped tracking this show. Your progress is saved.
+            </Text>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: t.accent }]}
+              onPress={() => resumeTracking.mutate()}
+              disabled={resumeTracking.isPending}
+              activeOpacity={0.8}
+            >
+              {resumeTracking.isPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.addBtnText}>Resume tracking</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
 
-          {/* Mark all row */}
-          {activeSeasonData && (
-            <View style={[styles.markAllRow, { borderBottomColor: t.border }]}>
-              <Text style={[styles.markAllSeasonName, { color: t.fg }]}>
-                {activeSeasonData.name ?? `Season ${activeSeason}`}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  const isFullyWatched = activeSeasonData.episodes?.every(
-                    (ep) =>
-                      watchedSet.has(`${ep.season_number}x${ep.episode_number}`)
-                  )
-                  markAllSeason.mutate({
-                    seasonNumber: activeSeason,
-                    watched: !isFullyWatched,
-                    episodeNumbers:
-                      activeSeasonData.episodes?.map(
-                        (ep) => ep.episode_number
-                      ) ?? [],
-                  })
-                }}
-                disabled={markAllSeason.isPending}
-              >
-                <Text style={[styles.markAllText, { color: t.accent }]}>
-                  {markAllSeason.isPending ? "…" : "Mark All"}
+        {/* Progress */}
+        {isInCollection &&
+          show.watchedEpisodes != null &&
+          show.totalEpisodes != null && (
+            <View style={styles.progressBlock}>
+              <View style={styles.progressHeader}>
+                <Text style={[styles.sectionTitle, { color: t.fg }]}>
+                  Progress
                 </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Episode rows */}
-          {activeSeasonData?.episodes?.map((ep) => {
-            const watched = watchedSet.has(
-              `${ep.season_number}x${ep.episode_number}`
-            )
-            const hasAired = isEpisodeAired(ep.air_date)
-            const isCurrentSp = currentStatus
-              ? STATUS_COLORS[currentStatus]
-              : STATUS_COLORS.watching
-            return (
-              <TouchableOpacity
-                key={`${ep.season_number}x${ep.episode_number}`}
+                <Text style={[styles.progressCount, { color: t.fg }]}>
+                  {show.watchedEpisodes}/{show.totalEpisodes} ·{" "}
+                  {Math.round(progressPct * 100)}%
+                </Text>
+              </View>
+              <View
                 style={[
-                  styles.episodeRow,
-                  { borderBottomColor: t.border },
-                  !watched && !hasAired && { opacity: 0.4 },
+                  styles.progressTrack,
+                  { backgroundColor: t.surfaceAlt },
                 ]}
-                onPress={() =>
-                  handleEpisodeTap(
-                    ep.season_number,
-                    ep.episode_number,
-                    !watched
-                  )
-                }
-                disabled={
-                  (!watched && !hasAired) ||
-                  toggleEpisode.isPending ||
-                  markPrevious.isPending
-                }
-                activeOpacity={0.7}
               >
                 <View
                   style={[
-                    styles.episodeToggle,
+                    styles.progressFill,
                     {
-                      backgroundColor: watched
-                        ? isCurrentSp.light.solid
-                        : "transparent",
-                      borderColor: watched
-                        ? isCurrentSp.light.solid
-                        : t.borderStrong,
+                      width: `${progressPct * 100}%` as any,
+                      backgroundColor: sp.light.solid,
                     },
                   ]}
+                />
+              </View>
+              <View style={styles.progressActions}>
+                <TouchableOpacity
+                  style={[styles.nextBtn, { backgroundColor: sp.light.solid }]}
+                  onPress={() => {
+                    if (nextEp) {
+                      toggleEpisode.mutate({
+                        seasonNumber: nextEp.season,
+                        episodeNumber: nextEp.episode,
+                        watched: true,
+                      })
+                    }
+                  }}
+                  disabled={!nextEp || toggleEpisode.isPending}
+                  activeOpacity={0.8}
                 >
-                  {watched ? (
-                    <Text style={styles.episodeCheck}>✓</Text>
-                  ) : (
-                    <Text style={[styles.episodeNum, { color: t.fgMuted }]}>
-                      {ep.episode_number}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.episodeInfo}>
-                  <Text
+                  <Text style={styles.nextBtnText}>
+                    {nextEp
+                      ? `Next: S${nextEp.season} E${nextEp.episode}`
+                      : "Up to date"}
+                  </Text>
+                </TouchableOpacity>
+                <Menu
+                  visible={statusMenuVisible}
+                  onDismiss={() => setStatusMenuVisible(false)}
+                  anchor={
+                    <TouchableOpacity
+                      style={[styles.moreBtn, { borderColor: t.border }]}
+                      onPress={() => setStatusMenuVisible(true)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel="More options"
+                    >
+                      <Text style={[styles.moreBtnText, { color: t.fg }]}>
+                        ···
+                      </Text>
+                    </TouchableOpacity>
+                  }
+                >
+                  <CollectionMenuItems
+                    isStopped={currentStatus === "stopped"}
+                    onStop={() => {
+                      setStatusMenuVisible(false)
+                      confirmStopTracking()
+                    }}
+                    onResume={() => {
+                      setStatusMenuVisible(false)
+                      resumeTracking.mutate()
+                    }}
+                  />
+                </Menu>
+              </View>
+            </View>
+          )}
+
+        {/* Episodes */}
+        {regularSeasons.length > 0 && (
+          <View style={styles.episodesBlock}>
+            <Text style={[styles.sectionTitle, { color: t.fg }]}>Episodes</Text>
+
+            {/* Season pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.seasonPills}
+            >
+              {regularSeasons.map((s) => {
+                const isActive = s.season_number === activeSeason
+                return (
+                  <TouchableOpacity
+                    key={s.season_number}
                     style={[
-                      styles.episodeName,
-                      { color: watched ? t.fgMuted : t.fg },
+                      styles.seasonPill,
+                      {
+                        backgroundColor: isActive ? t.fg : "transparent",
+                        borderColor: isActive ? t.fg : t.border,
+                      },
                     ]}
-                    numberOfLines={1}
+                    onPress={() => setSelectedSeason(s.season_number)}
+                    activeOpacity={0.7}
                   >
-                    {ep.name}
+                    <Text
+                      style={[
+                        styles.seasonPillText,
+                        { color: isActive ? t.bg : t.fgMuted },
+                      ]}
+                    >
+                      Season {s.season_number}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
+
+            {/* Mark all row */}
+            {activeSeasonData && (
+              <View
+                style={[styles.markAllRow, { borderBottomColor: t.border }]}
+              >
+                <Text style={[styles.markAllSeasonName, { color: t.fg }]}>
+                  {activeSeasonData.name ?? `Season ${activeSeason}`}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  // The label alone is a ~50x17pt target, well under the 44pt
+                  // minimum — taps aimed at it land beside it and do nothing.
+                  hitSlop={{ top: 14, bottom: 14, left: 16, right: 16 }}
+                  accessibilityLabel={`Mark every episode of ${
+                    activeSeasonData.name ?? `season ${activeSeason}`
+                  } watched`}
+                  onPress={() => {
+                    const isFullyWatched = activeSeasonData.episodes?.every(
+                      (ep) =>
+                        watchedSet.has(
+                          `${ep.season_number}x${ep.episode_number}`
+                        )
+                    )
+                    markAllSeason.mutate({
+                      seasonNumber: activeSeason,
+                      watched: !isFullyWatched,
+                      episodeNumbers:
+                        activeSeasonData.episodes?.map(
+                          (ep) => ep.episode_number
+                        ) ?? [],
+                    })
+                  }}
+                  disabled={markAllSeason.isPending}
+                >
+                  <Text style={[styles.markAllText, { color: t.accent }]}>
+                    {markAllSeason.isPending ? "…" : "Mark All"}
                   </Text>
-                  <Text style={[styles.episodeMeta, { color: t.fgFaint }]}>
-                    S{ep.season_number} · E{ep.episode_number}
-                    {ep.air_date ? `  ·  ${ep.air_date}` : ""}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-      )}
-    </ScrollView>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Episode rows */}
+            {activeSeasonData?.episodes?.map((ep) => {
+              const watched = watchedSet.has(
+                `${ep.season_number}x${ep.episode_number}`
+              )
+              const hasAired = isEpisodeAired(ep.air_date)
+              const isCurrentSp = currentStatus
+                ? STATUS_COLORS[currentStatus]
+                : STATUS_COLORS.watching
+              return (
+                <TouchableOpacity
+                  key={`${ep.season_number}x${ep.episode_number}`}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: watched, disabled: !hasAired }}
+                  accessibilityLabel={`S${ep.season_number} E${ep.episode_number}${
+                    ep.name ? `, ${ep.name}` : ""
+                  }${hasAired ? "" : ", not aired yet"}`}
+                  style={[
+                    styles.episodeRow,
+                    { borderBottomColor: t.border },
+                    !watched && !hasAired && { opacity: 0.4 },
+                  ]}
+                  onPress={() =>
+                    handleEpisodeTap(
+                      ep.season_number,
+                      ep.episode_number,
+                      !watched
+                    )
+                  }
+                  disabled={
+                    (!watched && !hasAired) ||
+                    toggleEpisode.isPending ||
+                    markPrevious.isPending
+                  }
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      styles.episodeToggle,
+                      // Dim the row's content, not the row: the "Upcoming" tag
+                      // is the non-colour cue and has to stay readable.
+                      !watched && !hasAired && styles.dimmed,
+                      {
+                        backgroundColor: watched
+                          ? isCurrentSp.light.solid
+                          : "transparent",
+                        borderColor: watched
+                          ? isCurrentSp.light.solid
+                          : t.borderStrong,
+                      },
+                    ]}
+                  >
+                    {watched ? (
+                      <Text style={styles.episodeCheck}>✓</Text>
+                    ) : (
+                      <Text style={[styles.episodeNum, { color: t.fgMuted }]}>
+                        {ep.episode_number}
+                      </Text>
+                    )}
+                  </View>
+                  <View
+                    style={[
+                      styles.episodeInfo,
+                      !watched && !hasAired && styles.dimmed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.episodeName,
+                        { color: watched ? t.fgMuted : t.fg },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {ep.name}
+                    </Text>
+                    <Text style={[styles.episodeMeta, { color: t.fgFaint }]}>
+                      S{ep.season_number} · E{ep.episode_number}
+                      {ep.air_date
+                        ? `  ·  ${formatAirDate(ep.air_date, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}`
+                        : ""}
+                    </Text>
+                  </View>
+                  {!hasAired && (
+                    <View
+                      style={[
+                        styles.upcomingTag,
+                        { borderColor: t.borderStrong },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.upcomingTagText, { color: t.fgMuted }]}
+                      >
+                        Upcoming
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
+      </Animated.ScrollView>
+    </>
   )
 }
 
@@ -805,6 +896,8 @@ function BackdropChrome({
         style={styles.glassBtn}
         onPress={onBack}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
       >
         <Text style={styles.glassBtnText}>‹</Text>
       </TouchableOpacity>
@@ -816,6 +909,8 @@ function BackdropChrome({
             style={styles.glassBtn}
             onPress={onMore}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
           >
             <Text style={styles.glassBtnText}>⋮</Text>
           </TouchableOpacity>
@@ -833,7 +928,39 @@ function BackdropChrome({
   )
 }
 
+// Every body block shares one centred column. Without it, an iPad renders the
+// overview at ~140 characters a line and pins the episode rows to the far left
+// of a 1032pt screen.
+const contentColumn = {
+  paddingHorizontal: SCREEN_PADDING,
+  width: "100%" as const,
+  maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+  alignSelf: "center" as const,
+}
+
 const styles = StyleSheet.create({
+  statusBarScrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  dimmed: {
+    opacity: 0.4,
+  },
+  upcomingTag: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginLeft: 8,
+  },
+  upcomingTagText: {
+    fontFamily: SANS_600,
+    fontSize: 10.5,
+    letterSpacing: 0.2,
+  },
   center: {
     flex: 1,
     justifyContent: "center",
@@ -873,7 +1000,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   infoBlock: {
-    paddingHorizontal: 22,
+    ...contentColumn,
     position: "relative",
   },
   chips: {
@@ -923,7 +1050,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   overviewBlock: {
-    paddingHorizontal: 22,
+    ...contentColumn,
     marginTop: 24,
   },
   overview: {
@@ -932,7 +1059,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   actionBlock: {
-    paddingHorizontal: 22,
+    ...contentColumn,
     marginTop: 20,
   },
   addBtn: {
@@ -946,7 +1073,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   progressBlock: {
-    paddingHorizontal: 22,
+    ...contentColumn,
     marginTop: 20,
   },
   progressHeader: {
@@ -1005,7 +1132,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   episodesBlock: {
-    paddingHorizontal: 22,
+    ...contentColumn,
     marginTop: 24,
   },
   seasonPills: {

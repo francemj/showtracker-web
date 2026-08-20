@@ -18,6 +18,7 @@ import {
 } from "@tanstack/react-query"
 import { useRouter, useNavigation } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
 import { apiRequest } from "@showtracker/api-client"
 import type { TMDBShow, UserShow, SearchResponse } from "@showtracker/shared"
 import {
@@ -75,6 +76,12 @@ function SearchResultRow({
       style={[styles.resultRow, { borderBottomColor: t.border }]}
       onPress={() => router.push(`/shows/${show.id}`)}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={
+        collectionStatus
+          ? `${show.name}, in ${STATUS_LABELS[collectionStatus]}`
+          : show.name
+      }
     >
       {/* Poster */}
       <View style={styles.posterWrap}>
@@ -201,6 +208,7 @@ export default function SearchScreen() {
   const t = useAppTheme()
   const qc = useQueryClient()
   const insets = useSafeAreaInsets()
+  const tabBarHeight = useBottomTabBarHeight()
   const inputRef = useRef<TextInput>(null)
   const navigation = useNavigation()
 
@@ -291,6 +299,8 @@ export default function SearchScreen() {
             <TouchableOpacity
               onPress={() => setQuery("")}
               style={styles.clearBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
             >
               <Text style={[styles.clearBtnText, { color: t.fgMuted }]}>✕</Text>
             </TouchableOpacity>
@@ -333,8 +343,14 @@ export default function SearchScreen() {
             isPending={addMutation.isPending}
           />
         )}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: tabBarHeight + 24 },
+        ]}
         keyboardDismissMode="on-drag"
+        // Default is "never", so the first tap on a result only dismissed the
+        // keyboard — you had to tap the same row twice to open it.
+        keyboardShouldPersistTaps="handled"
         onEndReached={() => {
           if (hasNextPage && !isFetchingNextPage) fetchNextPage()
         }}

@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import {
   View,
   TextInput,
@@ -13,6 +13,7 @@ import { useMutation } from "@tanstack/react-query"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { apiRequest } from "@showtracker/api-client"
 import { useAuth } from "../lib/auth"
+import { hasPushPermission, requestPushPermission } from "../lib/notifications"
 import {
   useAppTheme,
   STATUS_COLORS,
@@ -21,6 +22,7 @@ import {
   SANS_600,
   SANS_700,
 } from "../lib/theme"
+import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../lib/layout"
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -29,8 +31,29 @@ export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth()
   const destructive = STATUS_COLORS.stopped.light.solid
 
-  const [name, setName] = useState(user?.name ?? "")
+  // Auth0 seeds `name` with the email address when there's no real name, which
+  // then shows up twice — under the avatar and inside the field you're meant to
+  // fill in. Treat that seed as empty and let the placeholder do its job.
+  const [name, setName] = useState(
+    user?.name && user.name !== user.email ? user.name : ""
+  )
   const [picture, setPicture] = useState(user?.picture ?? "")
+  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    hasPushPermission().then(setPushEnabled)
+  }, [])
+
+  const enablePush = async () => {
+    const granted = await requestPushPermission()
+    setPushEnabled(granted)
+    if (!granted) {
+      Alert.alert(
+        "Notifications are off",
+        "iOS only asks once. To turn them on, open Settings › ShowTracker › Notifications."
+      )
+    }
+  }
 
   const updateProfile = useMutation({
     mutationFn: () =>
@@ -69,6 +92,8 @@ export default function ProfileScreen() {
           onPress={() => router.back()}
           style={styles.backBtn}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Text style={[styles.backBtnText, { color: t.fg }]}>‹</Text>
         </TouchableOpacity>
@@ -141,6 +166,21 @@ export default function ProfileScreen() {
           )}
         </TouchableOpacity>
 
+        {pushEnabled === false && (
+          <TouchableOpacity
+            style={[styles.notifyBtn, { borderColor: t.border }]}
+            onPress={enablePush}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.notifyBtnText, { color: t.fg }]}>
+              Turn on episode notifications
+            </Text>
+            <Text style={[styles.notifyBtnHint, { color: t.fgMuted }]}>
+              Get told when a show you follow airs something new.
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[styles.signOutBtn, { borderColor: t.border }]}
           onPress={logout}
@@ -202,8 +242,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   content: {
-    paddingHorizontal: 22,
+    paddingHorizontal: SCREEN_PADDING,
     paddingTop: 8,
+    // A 1400pt-wide input for an email address, with the bottom half of the
+    // screen empty, is what a phone layout does when nobody caps it.
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+    alignSelf: "center",
   },
   avatarRow: {
     alignItems: "center",
@@ -257,6 +302,23 @@ const styles = StyleSheet.create({
     fontFamily: SANS_700,
     fontSize: 14.5,
     color: "#fff",
+  },
+  notifyBtn: {
+    marginTop: 24,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  notifyBtnText: {
+    fontFamily: SANS_600,
+    fontSize: 14.5,
+  },
+  notifyBtnHint: {
+    fontFamily: SANS,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
   signOutBtn: {
     marginTop: 12,

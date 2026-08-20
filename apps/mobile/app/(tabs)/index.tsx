@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
 import { Image } from "react-native"
 import { apiRequest } from "@showtracker/api-client"
 import type {
@@ -32,6 +33,7 @@ import {
   MONO_500,
 } from "../../lib/theme"
 import { invalidateStatusRelatedQueries } from "../../lib/statusValidation"
+import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../../lib/layout"
 
 const TMDB_W300 = "https://image.tmdb.org/t/p/w300"
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
@@ -122,8 +124,13 @@ function HeroContent({
       {/* Top bar */}
       <View style={[styles.heroTopBar, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.heroLogo}>Showtracker</Text>
-        <TouchableOpacity style={styles.glassButton} onPress={() => {}}>
-          <Text style={{ color: "#fff", fontSize: 16 }}>⚙</Text>
+        <TouchableOpacity
+          style={styles.glassButton}
+          onPress={() => router.push("/profile")}
+          accessibilityRole="button"
+          accessibilityLabel="Profile and settings"
+        >
+          <Text style={styles.glassButtonGlyph}>⚙</Text>
         </TouchableOpacity>
       </View>
 
@@ -329,6 +336,7 @@ function CarouselCard({
 export default function DashboardScreen() {
   const t = useAppTheme()
   const qc = useQueryClient()
+  const tabBarHeight = useBottomTabBarHeight()
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -399,7 +407,7 @@ export default function DashboardScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: t.bg }}
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: tabBarHeight + 32 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -467,24 +475,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: SCREEN_PADDING,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+    alignSelf: "center",
   },
   heroLogo: {
     fontFamily: SERIF_ITALIC,
     fontSize: 20,
     color: "rgba(255,255,255,0.95)",
   },
+  glassButtonGlyph: {
+    color: "#fff",
+    fontSize: 16,
+  },
   glassButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    // Dark, not light: the glyph is white and the backdrop behind it is a
+    // poster that can be any colour, including near-white.
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
   },
   heroBottom: {
-    paddingHorizontal: 22,
+    paddingHorizontal: SCREEN_PADDING,
     paddingBottom: 22,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+    alignSelf: "center",
   },
   heroEyebrow: {
     flexDirection: "row",
@@ -551,9 +573,13 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 22,
+    paddingHorizontal: SCREEN_PADDING,
     paddingTop: 20,
     paddingBottom: 4,
+    // Uncapped, the four figures end up in opposite corners of an iPad.
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+    alignSelf: "center",
   },
   statItem: {
     alignItems: "center",

@@ -110,7 +110,9 @@ export default function LibraryLayout() {
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.eyebrow, { color: t.fgFaint }]}>
-              {activeCount != null ? `${activeCount} SHOWS` : ""}
+              {activeCount != null && activeTab
+                ? `${activeCount} ${activeTab.label.toUpperCase()}`
+                : ""}
             </Text>
             <Text style={[styles.title, { color: t.fg }]}>Library</Text>
           </View>
@@ -118,6 +120,8 @@ export default function LibraryLayout() {
             onPress={() => router.push("/profile")}
             style={styles.profileBtn}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Profile and settings"
           >
             <Ionicons
               name="person-circle-outline"

@@ -9,6 +9,7 @@ import {
 import { PosterGrid } from "./PosterGrid"
 import { useLibraryShows } from "../lib/useLibraryShows"
 import { useAppTheme, SANS, type StatusKey } from "../lib/theme"
+import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../lib/layout"
 
 type Props = {
   endpoint: string
@@ -42,6 +43,8 @@ export function LibraryScreen({ endpoint, status }: Props) {
             <TouchableOpacity
               onPress={() => lib.setSearch("")}
               style={styles.clearBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Clear filter"
             >
               <Text style={[styles.clearText, { color: t.fgMuted }]}>✕</Text>
             </TouchableOpacity>
@@ -69,9 +72,13 @@ export function LibraryScreen({ endpoint, status }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   filterWrap: {
-    paddingHorizontal: 22,
+    paddingHorizontal: SCREEN_PADDING,
     paddingTop: 12,
     paddingBottom: 4,
+    // The grid earns the full width of an iPad; a text field does not.
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH + SCREEN_PADDING * 2,
+    alignSelf: "center",
   },
   filterBox: {
     flexDirection: "row",
