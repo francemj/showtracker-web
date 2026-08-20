@@ -285,6 +285,7 @@ export default function SearchScreen() {
             onChangeText={setQuery}
             returnKeyType="search"
             autoCorrect={false}
+            autoCapitalize="none"
           />
           {query.length > 0 && (
             <TouchableOpacity
