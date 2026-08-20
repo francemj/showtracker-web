@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { User as UserIcon } from "lucide-react"
+import { User as UserIcon, LogOut } from "lucide-react"
 import { useAuth } from "@/lib/auth"
 import { apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
@@ -107,6 +107,17 @@ export default function Profile() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Sign out lives in the sidebar on desktop, which mobile doesn't show */}
+      <Button
+        variant="outline"
+        className="mt-6 w-full md:hidden"
+        onClick={logout}
+        data-testid="button-logout-profile"
+      >
+        <LogOut className="w-4 h-4 mr-2" />
+        Sign Out
+      </Button>
 
       <Card className="mt-6 border-destructive-border">
         <CardHeader>
