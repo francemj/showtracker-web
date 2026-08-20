@@ -22,6 +22,7 @@ const STATUS_QUERY_PREFIXES = [
   "/api/shows/want-to-watch",
   "/api/shows/caught-up",
   "/api/shows/completed",
+  "/api/shows/stopped",
 ]
 
 export function invalidateStatusRelatedQueries() {

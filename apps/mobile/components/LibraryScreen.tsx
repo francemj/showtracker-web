@@ -36,6 +36,7 @@ export function LibraryScreen({ endpoint, status }: Props) {
             value={lib.search}
             onChangeText={lib.setSearch}
             autoCorrect={false}
+            autoCapitalize="none"
           />
           {lib.search.length > 0 && (
             <TouchableOpacity
@@ -51,6 +52,11 @@ export function LibraryScreen({ endpoint, status }: Props) {
         shows={lib.shows}
         isLoading={lib.isLoading}
         status={status}
+        isError={lib.isError}
+        error={lib.error}
+        onRetry={lib.refetch}
+        filter={lib.search}
+        onClearFilter={() => lib.setSearch("")}
         onEndReached={lib.onEndReached}
         isFetchingNextPage={lib.isFetchingNextPage}
         onRefresh={lib.refetch}

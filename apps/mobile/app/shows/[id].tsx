@@ -43,22 +43,6 @@ import {
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
 const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
 
-const STATUSES: { value: StatusKey; label: string }[] = [
-  { value: "want_to_watch", label: "Want to Watch" },
-  { value: "watching", label: "Watching" },
-  { value: "caught_up", label: "Caught Up" },
-  { value: "completed", label: "Completed" },
-  { value: "stopped", label: "Stopped" },
-]
-
-const LIBRARY_ENDPOINTS = [
-  "/api/shows/watching",
-  "/api/shows/want-to-watch",
-  "/api/shows/caught-up",
-  "/api/shows/completed",
-  "/api/shows/stopped",
-]
-
 function upsertEpisodeProgress(
   progress: EpisodeProgress[] | undefined,
   seasonNumber: number,
@@ -126,11 +110,11 @@ export default function ShowDetailScreen() {
   const invalidateShow = () => {
     qc.invalidateQueries({ queryKey: ["/api/shows", id] })
     qc.invalidateQueries({ queryKey: ["/api/shows", id, "progress"] })
-    qc.invalidateQueries({ queryKey: ["/api/stats"] })
-    for (const endpoint of LIBRARY_ENDPOINTS) {
-      qc.invalidateQueries({ queryKey: [endpoint] })
-      qc.invalidateQueries({ queryKey: [`${endpoint}?page=1&limit=1`] })
-    }
+    // Library query keys bake their paging and search into the key string
+    // ("/api/shows/watching?page=1&limit=6"), so invalidating the bare
+    // endpoint matched nothing and Home kept showing the pre-toggle count
+    // until a manual pull-to-refresh.
+    invalidateStatusRelatedQueries()
   }
 
   useEffect(() => {
@@ -168,7 +152,7 @@ export default function ShowDetailScreen() {
     return () => {
       cancelled = true
     }
-  }, [id])
+  }, [id, qc])
 
   const progressQueryKey = ["/api/shows", id, "progress"]
 
@@ -303,22 +287,51 @@ export default function ShowDetailScreen() {
       invalidateShow()
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
     },
+    onError: (error: Error) =>
+      Alert.alert("Couldn't add this show", error.message),
   })
 
-  const removeShow = useMutation({
+  // Stopping is the only manual status change in the product. It soft-deletes
+  // to `stopped` and keeps every watched episode, so the menu says what it
+  // does rather than "Remove from collection".
+  const stopTracking = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/user/shows/${id}`),
     onSuccess: () => {
       invalidateShow()
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
-      router.back()
     },
+    onError: (error: Error) =>
+      Alert.alert("Couldn't stop tracking", error.message),
   })
 
-  const updateStatus = useMutation({
-    mutationFn: (status: string) =>
-      apiRequest("PATCH", `/api/user/shows/${id}`, { status }),
-    onSuccess: invalidateShow,
+  // The server recomputes where a resumed show belongs; naming a destination
+  // from the client only gets overwritten by the next validation sweep.
+  const resumeTracking = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/user/shows/${id}/resume`),
+    onSuccess: async (res) => {
+      const { status } = (await res.json()) as { status: StatusKey }
+      invalidateShow()
+      qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
+      Alert.alert("Tracking resumed", `Moved back to ${STATUS_LABELS[status]}.`)
+    },
+    onError: (error: Error) =>
+      Alert.alert("Couldn't resume tracking", error.message),
   })
+
+  function confirmStopTracking() {
+    Alert.alert(
+      "Stop tracking?",
+      "This moves the show to your Stopped list. Your watch progress is kept, and you can resume any time.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Stop Tracking",
+          style: "destructive",
+          onPress: () => stopTracking.mutate(),
+        },
+      ]
+    )
+  }
 
   if (isLoading) {
     return (
@@ -403,13 +416,14 @@ export default function ShowDetailScreen() {
               onDismissMore={() => setMoreMenuVisible(false)}
               insets={insets}
               isInCollection={isInCollection}
-              onRemove={() => {
-                removeShow.mutate()
+              isStopped={currentStatus === "stopped"}
+              onStop={() => {
                 setMoreMenuVisible(false)
+                confirmStopTracking()
               }}
-              onStatusChange={(s) => {
-                updateStatus.mutate(s)
+              onResume={() => {
                 setMoreMenuVisible(false)
+                resumeTracking.mutate()
               }}
             />
           </ImageBackground>
@@ -422,13 +436,14 @@ export default function ShowDetailScreen() {
               onDismissMore={() => setMoreMenuVisible(false)}
               insets={insets}
               isInCollection={isInCollection}
-              onRemove={() => {
-                removeShow.mutate()
+              isStopped={currentStatus === "stopped"}
+              onStop={() => {
                 setMoreMenuVisible(false)
+                confirmStopTracking()
               }}
-              onStatusChange={(s) => {
-                updateStatus.mutate(s)
+              onResume={() => {
                 setMoreMenuVisible(false)
+                resumeTracking.mutate()
               }}
             />
           </View>
@@ -490,13 +505,31 @@ export default function ShowDetailScreen() {
         </View>
       )}
 
-      {/* Stopped explanation */}
+      {/* Stopped: resume is the way back, not a stray episode tap */}
       {isInCollection && currentStatus === "stopped" && (
         <View style={styles.actionBlock}>
-          <Text style={{ color: t.fgMuted, fontFamily: SANS, fontSize: 13.5 }}>
-            You've stopped tracking this show. Your progress is saved. Mark an
-            episode as watched below to start tracking again.
+          <Text
+            style={{
+              color: t.fgMuted,
+              fontFamily: SANS,
+              fontSize: 13.5,
+              marginBottom: 12,
+            }}
+          >
+            You've stopped tracking this show. Your progress is saved.
           </Text>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: t.accent }]}
+            onPress={() => resumeTracking.mutate()}
+            disabled={resumeTracking.isPending}
+            activeOpacity={0.8}
+          >
+            {resumeTracking.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.addBtnText}>Resume tracking</Text>
+            )}
+          </TouchableOpacity>
         </View>
       )}
 
@@ -563,22 +596,15 @@ export default function ShowDetailScreen() {
                   </TouchableOpacity>
                 }
               >
-                {STATUSES.map((s) => (
-                  <Menu.Item
-                    key={s.value}
-                    title={s.label}
-                    onPress={() => {
-                      updateStatus.mutate(s.value)
-                      setStatusMenuVisible(false)
-                    }}
-                  />
-                ))}
-                <Menu.Item
-                  title="Remove from collection"
-                  titleStyle={{ color: "#c03030" }}
-                  onPress={() => {
-                    removeShow.mutate()
+                <CollectionMenuItems
+                  isStopped={currentStatus === "stopped"}
+                  onStop={() => {
                     setStatusMenuVisible(false)
+                    confirmStopTracking()
+                  }}
+                  onResume={() => {
+                    setStatusMenuVisible(false)
+                    resumeTracking.mutate()
                   }}
                 />
               </Menu>
@@ -731,6 +757,27 @@ export default function ShowDetailScreen() {
   )
 }
 
+function CollectionMenuItems({
+  isStopped,
+  onStop,
+  onResume,
+}: {
+  isStopped: boolean
+  onStop: () => void
+  onResume: () => void
+}) {
+  if (isStopped) {
+    return <Menu.Item title="Resume tracking" onPress={onResume} />
+  }
+  return (
+    <Menu.Item
+      title="Stop tracking"
+      titleStyle={{ color: "#c03030" }}
+      onPress={onStop}
+    />
+  )
+}
+
 function BackdropChrome({
   onBack,
   onMore,
@@ -738,8 +785,9 @@ function BackdropChrome({
   onDismissMore,
   insets,
   isInCollection,
-  onRemove,
-  onStatusChange,
+  isStopped,
+  onStop,
+  onResume,
 }: {
   onBack: () => void
   onMore: () => void
@@ -747,8 +795,9 @@ function BackdropChrome({
   onDismissMore: () => void
   insets: { top: number }
   isInCollection: boolean
-  onRemove: () => void
-  onStatusChange: (s: string) => void
+  isStopped: boolean
+  onStop: () => void
+  onResume: () => void
 }) {
   return (
     <View style={[styles.backdropNav, { paddingTop: insets.top + 12 }]}>
@@ -772,19 +821,11 @@ function BackdropChrome({
           </TouchableOpacity>
         }
       >
-        {isInCollection &&
-          STATUSES.map((s) => (
-            <Menu.Item
-              key={s.value}
-              title={s.label}
-              onPress={() => onStatusChange(s.value)}
-            />
-          ))}
         {isInCollection && (
-          <Menu.Item
-            title="Remove from collection"
-            titleStyle={{ color: "#c03030" }}
-            onPress={onRemove}
+          <CollectionMenuItems
+            isStopped={isStopped}
+            onStop={onStop}
+            onResume={onResume}
           />
         )}
       </Menu>

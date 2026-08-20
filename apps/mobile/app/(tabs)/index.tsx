@@ -6,6 +6,7 @@ import {
   ImageBackground,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from "react-native"
 import { Text, ActivityIndicator } from "react-native-paper"
 import { LinearGradient } from "expo-linear-gradient"
@@ -30,6 +31,7 @@ import {
   MONO,
   MONO_500,
 } from "../../lib/theme"
+import { invalidateStatusRelatedQueries } from "../../lib/statusValidation"
 
 const TMDB_W300 = "https://image.tmdb.org/t/p/w300"
 const TMDB_W780 = "https://image.tmdb.org/t/p/w780"
@@ -386,11 +388,12 @@ export default function DashboardScreen() {
       qc.invalidateQueries({
         queryKey: ["/api/shows", String(featuredShow?.id), "progress"],
       })
-      qc.invalidateQueries({
-        queryKey: [`/api/shows/watching?page=1&limit=${DASHBOARD_LIMIT}`],
-      })
-      qc.invalidateQueries({ queryKey: ["/api/stats"] })
+      // Watching the last aired episode moves the show to Caught Up, so
+      // refreshing only the Watching carousel left the other two stale.
+      invalidateStatusRelatedQueries()
     },
+    onError: (error: Error) =>
+      Alert.alert("Couldn't mark this watched", error.message),
   })
 
   return (

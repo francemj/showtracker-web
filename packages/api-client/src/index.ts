@@ -109,6 +109,8 @@ export function useLibraryShows(endpoint: string) {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isError,
+    error,
     refetch,
     isRefetching,
   } = useInfiniteQuery<PaginatedShowsResponse>({
@@ -131,6 +133,11 @@ export function useLibraryShows(endpoint: string) {
     shows,
     total,
     isLoading,
+    // Callers need to tell "the request failed" apart from "you have no
+    // shows". Without these the only non-loading branch is the empty state,
+    // so a failed fetch renders as an empty library.
+    isError,
+    error: error as Error | null,
     hasNextPage: hasNextPage ?? false,
     isFetchingNextPage,
     fetchNextPage,

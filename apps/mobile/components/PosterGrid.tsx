@@ -32,11 +32,49 @@ type Props = {
   shows: ShowWithProgress[] | undefined
   isLoading: boolean
   status: StatusKey
-  emptyMessage?: string
+  isError?: boolean
+  error?: Error | null
+  onRetry?: () => void
+  filter?: string
+  onClearFilter?: () => void
   onEndReached?: () => void
   isFetchingNextPage?: boolean
   onRefresh?: () => void
   refreshing?: boolean
+}
+
+// Each tab is empty for a different reason, and only two of them are fixed by
+// adding more shows. Telling someone with 28 shows to "add shows to start
+// tracking" because their Stopped tab is empty is worse than saying nothing.
+const EMPTY_COPY: Record<
+  StatusKey,
+  { title: string; body: string; browse: boolean }
+> = {
+  watching: {
+    title: "Nothing in progress",
+    body: "Shows you've started but haven't finished appear here.",
+    browse: true,
+  },
+  want_to_watch: {
+    title: "Nothing on the list",
+    body: "Shows you want to get to appear here.",
+    browse: true,
+  },
+  caught_up: {
+    title: "Nothing to catch up on",
+    body: "Shows where you've watched every episode that's aired appear here.",
+    browse: false,
+  },
+  completed: {
+    title: "Nothing completed yet",
+    body: "Shows you've watched all the way through appear here.",
+    browse: false,
+  },
+  stopped: {
+    title: "Nothing stopped",
+    body: "Shows you've stopped tracking appear here. Your progress is kept if you resume.",
+    browse: false,
+  },
 }
 
 function SkeletonCard() {
@@ -69,15 +107,19 @@ function SkeletonCard() {
   )
 }
 
-function EmptyState({
-  status: _status,
+function PlaceholderState({
   t,
+  title,
+  body,
+  actionLabel,
+  onAction,
 }: {
-  status: StatusKey
   t: ReturnType<typeof useAppTheme>
+  title: string
+  body: string
+  actionLabel?: string
+  onAction?: () => void
 }) {
-  const router = useRouter()
-
   return (
     <View style={styles.emptyCenter}>
       <View style={styles.ghostPosters}>
@@ -96,19 +138,19 @@ function EmptyState({
           />
         ))}
       </View>
-      <Text style={[styles.emptyTitle, { color: t.fg }]}>Nothing here yet</Text>
-      <Text style={[styles.emptyBody, { color: t.fgMuted }]}>
-        Add shows to start tracking your watch history.
-      </Text>
-      <TouchableOpacity
-        style={[styles.emptyBtn, { backgroundColor: t.fg }]}
-        onPress={() => router.push("/(tabs)/search")}
-        activeOpacity={0.8}
-      >
-        <Text style={[styles.emptyBtnText, { color: t.bg }]}>
-          Browse Search →
-        </Text>
-      </TouchableOpacity>
+      <Text style={[styles.emptyTitle, { color: t.fg }]}>{title}</Text>
+      <Text style={[styles.emptyBody, { color: t.fgMuted }]}>{body}</Text>
+      {actionLabel && onAction && (
+        <TouchableOpacity
+          style={[styles.emptyBtn, { backgroundColor: t.fg }]}
+          onPress={onAction}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.emptyBtnText, { color: t.bg }]}>
+            {actionLabel}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -117,6 +159,11 @@ export function PosterGrid({
   shows,
   isLoading,
   status,
+  isError,
+  error,
+  onRetry,
+  filter,
+  onClearFilter,
   onEndReached,
   isFetchingNextPage,
   onRefresh,
@@ -135,8 +182,42 @@ export function PosterGrid({
     )
   }
 
+  // The query client retries nothing, so a failed fetch stays failed until
+  // someone asks again. Say so, and offer the retry.
+  if (isError) {
+    return (
+      <PlaceholderState
+        t={t}
+        title="Couldn't load your shows"
+        body={error?.message ?? "Something went wrong. Please try again."}
+        actionLabel={onRetry ? "Try again" : undefined}
+        onAction={onRetry}
+      />
+    )
+  }
+
   if (!shows || shows.length === 0) {
-    return <EmptyState status={status} t={t} />
+    if (filter) {
+      return (
+        <PlaceholderState
+          t={t}
+          title="No matches"
+          body={`Nothing here matches “${filter}”.`}
+          actionLabel={onClearFilter ? "Clear filter" : undefined}
+          onAction={onClearFilter}
+        />
+      )
+    }
+    const copy = EMPTY_COPY[status]
+    return (
+      <PlaceholderState
+        t={t}
+        title={copy.title}
+        body={copy.body}
+        actionLabel={copy.browse ? "Browse Search →" : undefined}
+        onAction={copy.browse ? () => router.push("/(tabs)/search") : undefined}
+      />
+    )
   }
 
   return (
