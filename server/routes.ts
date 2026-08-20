@@ -507,6 +507,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Failed to add show" })
         }
 
+        // A show can carry watch progress from before it was added — rows left
+        // by an earlier soft-delete, or orphaned by an older client. Returning
+        // the default status there means the client renders "Want to Watch"
+        // next to a real completion percentage, which is a state inference can
+        // never produce. Recompute before responding so the two agree.
+        const { count: priorWatched } = await supabase
+          .from("watch_progress")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", req.userId!)
+          .eq("show_id", showId)
+          .eq("watched", true)
+
+        if (priorWatched && priorWatched > 0 && !initialStatus) {
+          const inferred = await updateInferredStatus(req.userId!, showId)
+          if (inferred) userShow.status = inferred
+        }
+
         // Cache episodes in background to enable status inference
         // If initialStatus is 'completed', also mark all episodes as watched
         ;(async () => {
@@ -1019,20 +1036,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ message: "Failed to update progress" })
         }
 
-        // Ensure user_shows exists so updateInferredStatus can update it
-        const { data: existing } = await supabase
-          .from("user_shows")
-          .select("id")
-          .eq("user_id", req.userId)
-          .eq("show_id", showId)
-          .maybeSingle()
-
-        if (!existing) {
-          await supabase.from("user_shows").insert({
-            user_id: req.userId,
-            show_id: showId,
-            status: "watching",
-          })
+        if (watched) {
+          await ensureUserShow(req.userId!, showId)
         }
 
         // Await the status recompute so the response the client invalidates
@@ -1094,6 +1099,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (error) {
           return res.status(500).json({ message: "Failed to update season" })
+        }
+
+        if (watched && progressRecords.length > 0) {
+          await ensureUserShow(req.userId!, parseInt(id))
         }
 
         // Await the status recompute so the response the client invalidates
@@ -1164,6 +1173,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res
               .status(500)
               .json({ message: "Failed to update progress" })
+          }
+
+          if (progressRecords.some((record) => record.watched)) {
+            await ensureUserShow(req.userId!, showId)
           }
         }
 
@@ -2001,6 +2014,35 @@ async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
   } catch (error) {
     console.error(`Error caching episodes for show ${showId}:`, error)
     throw error
+  }
+}
+
+// Marking an episode watched is a statement that you are tracking the show, so
+// every progress write makes sure a user_shows row exists first. Without this,
+// `watch_progress` rows accumulate for shows that were never added — and
+// updateInferredStatus, which UPDATEs user_shows by (user_id, show_id), matches
+// zero rows and silently does nothing. Adding the show later then inherits that
+// orphaned progress, arriving with a status that contradicts it.
+async function ensureUserShow(userId: string, showId: number): Promise<void> {
+  const { data: existing } = await supabase
+    .from("user_shows")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("show_id", showId)
+    .maybeSingle()
+
+  if (existing) return
+
+  // Seeded, not decided: updateInferredStatus runs immediately after every
+  // caller and replaces this with the status the progress actually implies.
+  const { error } = await supabase.from("user_shows").insert({
+    user_id: userId,
+    show_id: showId,
+    status: "watching",
+  })
+
+  if (error) {
+    console.error(`Error creating user_shows row for show ${showId}:`, error)
   }
 }
 
