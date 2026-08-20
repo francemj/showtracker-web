@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Platform,
 } from "react-native"
 import { Text, ActivityIndicator } from "react-native-paper"
 import { useRouter } from "expo-router"
@@ -50,7 +51,9 @@ export default function ProfileScreen() {
     if (!granted) {
       Alert.alert(
         "Notifications are off",
-        "iOS only asks once. To turn them on, open Settings › ShowTracker › Notifications."
+        Platform.OS === "ios"
+          ? "iOS only asks once. To turn them on, open Settings › ShowTracker › Notifications."
+          : "To turn them on, open Settings › Apps › ShowTracker › Notifications."
       )
     }
   }

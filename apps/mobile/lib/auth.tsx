@@ -5,12 +5,22 @@ import React, {
   useState,
   useCallback,
 } from "react"
-import Auth0 from "react-native-auth0"
+import Auth0, { WebAuthErrorCodes } from "react-native-auth0"
+import type { WebAuthError } from "react-native-auth0"
+import { Alert } from "react-native"
 import { setApiTokenGetter } from "@showtracker/api-client"
 import { AUTH0_DOMAIN, AUTH0_CLIENT_ID, API_URL } from "./config"
 import { apiRequest } from "@showtracker/api-client"
 
 const auth0 = new Auth0({ domain: AUTH0_DOMAIN, clientId: AUTH0_CLIENT_ID })
+
+function isUserDismissal(error: unknown): boolean {
+  const type = (error as WebAuthError | undefined)?.type
+  return (
+    type === WebAuthErrorCodes.USER_CANCELLED ||
+    type === WebAuthErrorCodes.BROWSER_TERMINATED
+  )
+}
 
 type AuthUser = {
   id: string
@@ -89,6 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       await auth0.credentialsManager.saveCredentials(credentials)
       await syncUser()
+    } catch (error) {
+      // Dismissing the browser is a deliberate "not now", not a failure, and on
+      // Android the back gesture makes it a routine one — so it stays silent.
+      // Everything else used to vanish too, leaving the button looking inert.
+      if (!isUserDismissal(error)) {
+        Alert.alert(
+          "Couldn't sign you in",
+          error instanceof Error ? error.message : "Please try again."
+        )
+      }
     } finally {
       setIsLoading(false)
     }

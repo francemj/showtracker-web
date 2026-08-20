@@ -38,6 +38,8 @@ import {
   MONO,
 } from "../../lib/theme"
 import { CONTENT_MAX_WIDTH, SCREEN_PADDING } from "../../lib/layout"
+import { useHeroStatusBarStyle } from "../../lib/heroStatusBar"
+import { StatusBar } from "expo-status-bar"
 import {
   STATUS_INVALIDATE_DELAY_MS,
   invalidateStatusRelatedQueries,
@@ -95,6 +97,11 @@ export default function ShowDetailScreen() {
   // scroll past it the body text runs under the clock and battery with nothing
   // behind it. Fade a bar of the page background in as the hero leaves.
   const [scrollY] = useState(() => new Animated.Value(0))
+  // Flip the bar's contrast at the point the scrim finishes fading in, so the
+  // two never disagree about what is behind the clock.
+  const { statusBarStyle, onScroll } = useHeroStatusBarStyle(
+    BACKDROP_HEIGHT - 140
+  )
   const statusBarOpacity = useMemo(
     () =>
       scrollY.interpolate({
@@ -411,6 +418,7 @@ export default function ShowDetailScreen() {
 
   return (
     <>
+      <StatusBar style={statusBarStyle} />
       <Animated.View
         pointerEvents="none"
         style={[
@@ -428,7 +436,7 @@ export default function ShowDetailScreen() {
         scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true, listener: onScroll }
         )}
       >
         {/* Cinematic backdrop */}
