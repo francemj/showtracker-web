@@ -1254,6 +1254,7 @@ async function runValidateStatusJob({
 
     let succeeded = 0
     let failed = 0
+    let skipped = 0
 
     for (const row of rows) {
       const showId = row.show_id as number
@@ -1268,13 +1269,25 @@ async function runValidateStatusJob({
           forceRefresh: true,
         })
         if (tmdbShow?.number_of_seasons) {
-          const seasons = await Promise.all(
-            Array.from(
-              { length: tmdbShow.number_of_seasons },
-              (_, i) => i + 1
-            ).map((n) => getTVShowSeason(showId, n, { forceRefresh: true }))
-          )
-          await cacheEpisodesInDatabase(showId, seasons)
+          // Show details are one cheap call and tell us whether anything can
+          // have changed. Refetching every season is the expensive part, so
+          // skip it for a finished show whose episode count already matches —
+          // nothing can move. Anything still running is always refetched,
+          // since air dates shift without the count changing.
+          if (await needsEpisodeRefresh(showId, tmdbShow)) {
+            const seasons = await Promise.all(
+              Array.from(
+                { length: tmdbShow.number_of_seasons },
+                (_, i) => i + 1
+              ).map((n) => getTVShowSeason(showId, n, { forceRefresh: true }))
+            )
+            await cacheEpisodesInDatabase(showId, seasons)
+          } else {
+            skipped += 1
+            console.log(`[validate-status:${runId}] episodes unchanged`, {
+              showId,
+            })
+          }
         }
         await updateInferredStatus(userId, showId)
         succeeded += 1
@@ -1296,6 +1309,7 @@ async function runValidateStatusJob({
       processed: rows.length,
       succeeded,
       failed,
+      seasonRefetchSkipped: skipped,
       elapsedMs: Date.now() - runStartMs,
     })
   } catch (err: any) {
@@ -1835,6 +1849,28 @@ async function getEpisodeAirDate(
     )
     return null
   }
+}
+
+// True when a show's episodes could have changed since we last cached them.
+// A finished show whose cached episode count already matches TMDB cannot have
+// moved, so its seasons don't need refetching — that's the bulk of a sweep's
+// cost. Anything still running always refreshes: air dates shift for upcoming
+// episodes without the episode count changing at all.
+async function needsEpisodeRefresh(
+  showId: number,
+  tmdbShow: { status?: string; number_of_episodes?: number }
+): Promise<boolean> {
+  const isEnded = tmdbShow.status === "Ended" || tmdbShow.status === "Canceled"
+  if (!isEnded) return true
+  if (!tmdbShow.number_of_episodes) return true
+
+  const { count, error } = await supabase
+    .from("episodes")
+    .select("*", { count: "exact", head: true })
+    .eq("show_id", showId)
+
+  if (error || count == null) return true
+  return count !== tmdbShow.number_of_episodes
 }
 
 // Rebuild the seasons payload from the episodes table. Returns null when the

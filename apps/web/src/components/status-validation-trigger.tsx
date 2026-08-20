@@ -2,8 +2,10 @@ import { useEffect } from "react"
 import { apiRequest, queryClient } from "@/lib/queryClient"
 
 const STORAGE_KEY_INITIAL = "statusValidationInitial"
+const STORAGE_KEY_FOCUS = "statusValidationFocus"
 const STORAGE_KEY_COMPLETED_RECHECK = "statusValidationCompletedRecheck"
-const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
+const THROTTLE_INITIAL_MS = 15 * 60 * 1000 // 15 minutes
+const THROTTLE_FOCUS_MS = 5 * 60 * 1000 // 5 minutes
 const THROTTLE_COMPLETED_RECHECK_MS = 24 * 60 * 60 * 1000 // 24 hours
 // Only used for the bulk sweeps, which are genuinely asynchronous. Anything
 // targeting a single show now finishes inline and invalidates on its result.
@@ -41,12 +43,15 @@ function tryRun(
 }
 
 /**
- * Refreshes show metadata from TMDB and re-runs status inference.
+ * Refreshes show metadata from TMDB and re-runs status inference, keeping the
+ * database current as the source of truth.
  *
- * This used to also run on every route change, which meant a full sweep of the
- * library — a TMDB fetch per show and per season — for the simple act of
- * navigating, and lists visibly reshuffling a minute later. Sweeps now happen
- * once per session; a show you actually open validates itself on its own page.
+ * This used to run on every route change, which meant a full library sweep for
+ * the simple act of navigating, and lists visibly reshuffling a minute later
+ * while the user was still reading. It now runs on session start and when the
+ * tab regains focus — the moment someone comes back is exactly when refreshed
+ * content is wanted, and it can't fire mid-interaction the way navigation did.
+ * A show you open validates itself on its own page, inline.
  */
 export function StatusValidationTrigger() {
   useEffect(() => {
@@ -57,6 +62,18 @@ export function StatusValidationTrigger() {
       STORAGE_KEY_COMPLETED_RECHECK,
       THROTTLE_COMPLETED_RECHECK_MS
     )
+
+    const onFocus = () => {
+      if (document.visibilityState !== "visible") return
+      tryRun("all", STORAGE_KEY_FOCUS, THROTTLE_FOCUS_MS)
+    }
+
+    document.addEventListener("visibilitychange", onFocus)
+    window.addEventListener("focus", onFocus)
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus)
+      window.removeEventListener("focus", onFocus)
+    }
   }, [])
 
   return null
