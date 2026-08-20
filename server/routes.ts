@@ -444,7 +444,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showId: targetShowId ?? null,
       })
 
-      res.status(202).json({ message: "Validation started" })
+      // A single show is cheap enough to finish inline, especially now that
+      // TMDB responses are cached. Answering with the real result lets the
+      // client refetch once, on a fact, instead of guessing with a timer.
+      if (targetShowId !== undefined) {
+        try {
+          await runValidateStatusJob({ runId, userId, scope, targetShowId })
+          return res.json({ message: "Validation complete", done: true })
+        } catch (error) {
+          console.error(`[validate-status:${runId}] inline run failed`, error)
+          return res.status(500).json({ message: "Validation failed" })
+        }
+      }
+
+      res.status(202).json({ message: "Validation started", done: false })
 
       const schedulerMode = scheduleBackgroundTask(
         async () =>
@@ -895,9 +908,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (_, i) => i + 1
         )
 
+        // The episodes table already holds everything this endpoint returns,
+        // and every write path keeps it current. Serving from it turns one
+        // request per season into a single query — for a 38-season show that
+        // is 38 TMDB round trips replaced by one.
+        const cachedSeasons = await readSeasonsFromCache(parsedId, seasonNums)
+        if (cachedSeasons) {
+          return res.json(cachedSeasons)
+        }
+
         const seasonResults = await Promise.allSettled(
           seasonNums.map(async (seasonNum) => {
-            return await getTVShowSeason(parseInt(id), seasonNum)
+            return await getTVShowSeason(parsedId, seasonNum)
           })
         )
 
@@ -1799,6 +1821,55 @@ async function getEpisodeAirDate(
     )
     return null
   }
+}
+
+// Rebuild the seasons payload from the episodes table. Returns null when the
+// cache can't stand in for TMDB — no rows at all, or a season missing entirely
+// (a newly announced season won't be there yet).
+async function readSeasonsFromCache(
+  showId: number,
+  seasonNums: number[]
+): Promise<any[] | null> {
+  const { data: rows, error } = await supabase
+    .from("episodes")
+    .select(
+      "season_number, episode_number, name, air_date, runtime, overview, still_path"
+    )
+    .eq("show_id", showId)
+    .order("season_number", { ascending: true })
+    .order("episode_number", { ascending: true })
+
+  if (error || !rows?.length) return null
+
+  const bySeason = new Map<number, any[]>()
+  for (const row of rows) {
+    const list = bySeason.get(row.season_number) ?? []
+    list.push({
+      id: `${showId}-${row.season_number}-${row.episode_number}`,
+      episode_number: row.episode_number,
+      season_number: row.season_number,
+      name: row.name,
+      overview: row.overview,
+      still_path: row.still_path,
+      air_date: row.air_date,
+      runtime: row.runtime,
+    })
+    bySeason.set(row.season_number, list)
+  }
+
+  // A partially cached show would silently hide seasons, so fall back instead.
+  if (seasonNums.some((n) => !bySeason.has(n))) return null
+
+  return seasonNums.map((n) => ({
+    id: `${showId}-${n}`,
+    season_number: n,
+    name: `Season ${n}`,
+    overview: "",
+    poster_path: null,
+    air_date: bySeason.get(n)![0]?.air_date ?? null,
+    episode_count: bySeason.get(n)!.length,
+    episodes: bySeason.get(n)!,
+  }))
 }
 
 // Ensure episodes are cached for a show (fetches from TMDB if missing). No-op if already cached.

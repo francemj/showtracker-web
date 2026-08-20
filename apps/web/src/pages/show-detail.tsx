@@ -31,10 +31,7 @@ import {
 } from "@shared/schema"
 import { queryClient, apiRequest } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
-import {
-  STATUS_INVALIDATE_DELAY_MS,
-  invalidateStatusRelatedQueries,
-} from "@/components/status-validation-trigger"
+import { invalidateStatusRelatedQueries } from "@/components/status-validation-trigger"
 
 const SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS = 10 * 60 * 1000
 // Past this many seasons the pill row wraps into stacked rows, so switch to a select.
@@ -65,22 +62,21 @@ export default function ShowDetail() {
     const last = raw ? parseInt(raw, 10) : 0
     if (last && Date.now() - last < SHOW_DETAIL_VALIDATE_STATUS_THROTTLE_MS)
       return
+    // Single-show validation completes inline, so refetch on its result
+    // rather than guessing when the work might have finished.
     apiRequest("POST", "/api/user/shows/validate-status", {
       showId: parsedShowId,
     })
-      .then((res) => {
-        if (!res.ok) return
+      .then(() => {
         sessionStorage.setItem(storageKey, String(Date.now()))
-        setTimeout(() => {
-          invalidateStatusRelatedQueries()
-          queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
-          queryClient.invalidateQueries({
-            queryKey: ["/api/shows", id, "seasons"],
-          })
-          queryClient.invalidateQueries({
-            queryKey: ["/api/shows", id, "progress"],
-          })
-        }, STATUS_INVALIDATE_DELAY_MS)
+        invalidateStatusRelatedQueries()
+        queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
+        queryClient.invalidateQueries({
+          queryKey: ["/api/shows", id, "seasons"],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ["/api/shows", id, "progress"],
+        })
       })
       .catch(() => {})
   }, [id])

@@ -1,14 +1,13 @@
-import { useEffect, useRef } from "react"
-import { useLocation } from "wouter"
+import { useEffect } from "react"
 import { apiRequest, queryClient } from "@/lib/queryClient"
 
 const STORAGE_KEY_INITIAL = "statusValidationInitial"
-const STORAGE_KEY_NAV = "statusValidationNav"
 const STORAGE_KEY_COMPLETED_RECHECK = "statusValidationCompletedRecheck"
 const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
-const THROTTLE_NAV_MS = 10 * 60 * 1000 // 10 minutes
 const THROTTLE_COMPLETED_RECHECK_MS = 24 * 60 * 60 * 1000 // 24 hours
-export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
+// Only used for the bulk sweeps, which are genuinely asynchronous. Anything
+// targeting a single show now finishes inline and invalidates on its result.
+export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000
 
 export function invalidateStatusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
@@ -16,9 +15,7 @@ export function invalidateStatusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-  queryClient.invalidateQueries({
-    queryKey: ["/api/shows/want-to-watch", "dashboard"],
-  })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
 }
 
 function tryRun(
@@ -35,37 +32,32 @@ function tryRun(
     .then((res) => {
       if (res.ok) {
         sessionStorage.setItem(storageKey, String(Date.now()))
-        // Invalidate after delay so UI refetches once backend has updated
+        // The bulk sweep runs in the background, so there is no result to wait
+        // on — refetch once, later, rather than polling.
         setTimeout(invalidateStatusRelatedQueries, STATUS_INVALIDATE_DELAY_MS)
       }
     })
     .catch(() => {})
 }
 
+/**
+ * Refreshes show metadata from TMDB and re-runs status inference.
+ *
+ * This used to also run on every route change, which meant a full sweep of the
+ * library — a TMDB fetch per show and per season — for the simple act of
+ * navigating, and lists visibly reshuffling a minute later. Sweeps now happen
+ * once per session; a show you actually open validates itself on its own page.
+ */
 export function StatusValidationTrigger() {
-  const [location] = useLocation()
-  const isFirstLocation = useRef(true)
-
-  // Initial load: refresh all non-completed shows (throttled 30 min)
   useEffect(() => {
     tryRun("all", STORAGE_KEY_INITIAL, THROTTLE_INITIAL_MS)
-    // Also periodically re-check completed shows in case one was renewed
-    // (throttled much longer since this rarely matters)
+    // Completed shows rarely change, but a renewal should eventually surface.
     tryRun(
       "completed_recheck",
       STORAGE_KEY_COMPLETED_RECHECK,
       THROTTLE_COMPLETED_RECHECK_MS
     )
   }, [])
-
-  // On navigation: refresh all non-completed shows (throttled 10 min, separate from initial)
-  useEffect(() => {
-    if (isFirstLocation.current) {
-      isFirstLocation.current = false
-      return
-    }
-    tryRun("all", STORAGE_KEY_NAV, THROTTLE_NAV_MS)
-  }, [location])
 
   return null
 }
