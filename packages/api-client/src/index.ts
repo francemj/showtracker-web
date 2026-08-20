@@ -141,6 +141,12 @@ export function useLibraryShows(endpoint: string) {
   }
 }
 
+// Watch progress changes from other devices and from the background status
+// sweep, so cached data has to be able to go stale on its own. Long enough
+// that navigating between library tabs doesn't refetch on every visit, short
+// enough that returning to the app shows the truth.
+const DEFAULT_STALE_TIME_MS = 60 * 1000
+
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
@@ -148,8 +154,12 @@ export function makeQueryClient(): QueryClient {
         queryFn: getQueryFn({ on401: "throw" }),
         networkMode: "always",
         refetchInterval: false,
-        refetchOnWindowFocus: false,
-        staleTime: Infinity,
+        // Previously staleTime: Infinity with no refetch triggers, which meant
+        // data only ever changed when something explicitly invalidated it — so
+        // anything the server changed on its own stayed wrong until reload.
+        staleTime: DEFAULT_STALE_TIME_MS,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         retry: false,
       },
       mutations: {

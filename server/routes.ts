@@ -2,10 +2,15 @@ import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 import { supabase } from "./lib/supabase"
-import { searchTVShows, getTVShowDetails, getTVShowSeason } from "./lib/tmdb"
+import {
+  searchTVShows,
+  getTVShowDetails,
+  getTVShowSeason,
+  type TmdbFetchOptions,
+} from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
-import { isEpisodeAired } from "../packages/shared/episode-utils"
+import { isEpisodeAired, parseAirDate } from "../packages/shared/episode-utils"
 import { inferShowStatus } from "../packages/shared/episode-progress"
 
 interface AuthRequest extends Request {
@@ -444,7 +449,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showId: targetShowId ?? null,
       })
 
-      res.status(202).json({ message: "Validation started" })
+      // A single show is cheap enough to finish inline, especially now that
+      // TMDB responses are cached. Answering with the real result lets the
+      // client refetch once, on a fact, instead of guessing with a timer.
+      if (targetShowId !== undefined) {
+        try {
+          await runValidateStatusJob({ runId, userId, scope, targetShowId })
+          return res.json({ message: "Validation complete", done: true })
+        } catch (error) {
+          console.error(`[validate-status:${runId}] inline run failed`, error)
+          return res.status(500).json({ message: "Validation failed" })
+        }
+      }
+
+      res.status(202).json({ message: "Validation started", done: false })
 
       const schedulerMode = scheduleBackgroundTask(
         async () =>
@@ -895,9 +913,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (_, i) => i + 1
         )
 
+        // The episodes table already holds everything this endpoint returns,
+        // and every write path keeps it current. Serving from it turns one
+        // request per season into a single query — for a 38-season show that
+        // is 38 TMDB round trips replaced by one.
+        const cachedSeasons = await readSeasonsFromCache(parsedId, seasonNums)
+        if (cachedSeasons) {
+          return res.json(cachedSeasons)
+        }
+
         const seasonResults = await Promise.allSettled(
           seasonNums.map(async (seasonNum) => {
-            return await getTVShowSeason(parseInt(id), seasonNum)
+            return await getTVShowSeason(parsedId, seasonNum)
           })
         )
 
@@ -1045,9 +1072,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Only mark aired episodes
-        const now = new Date()
-        const airedEpisodes = season.episodes.filter(
-          (ep: any) => ep.air_date && new Date(ep.air_date) <= now
+        const airedEpisodes = season.episodes.filter((ep: any) =>
+          isEpisodeAired(ep.air_date)
         )
 
         // Upsert aired episodes only
@@ -1227,21 +1253,40 @@ async function runValidateStatusJob({
 
     let succeeded = 0
     let failed = 0
+    let skipped = 0
 
     for (const row of rows) {
       const showId = row.show_id as number
       const showStartMs = Date.now()
       try {
         console.log(`[validate-status:${runId}] show start`, { showId })
-        const tmdbShow = await upsertShowFromTmdb(showId)
+        // This job is what keeps our database current with TMDB, so it always
+        // goes to the source. Serving it a cached response would mean
+        // "refreshing" our source of truth with data we already had. The fresh
+        // results are written back to the cache, so read paths benefit too.
+        const tmdbShow = await upsertShowFromTmdb(showId, {
+          forceRefresh: true,
+        })
         if (tmdbShow?.number_of_seasons) {
-          const seasons = await Promise.all(
-            Array.from(
-              { length: tmdbShow.number_of_seasons },
-              (_, i) => i + 1
-            ).map((n) => getTVShowSeason(showId, n))
-          )
-          await cacheEpisodesInDatabase(showId, seasons)
+          // Show details are one cheap call and tell us whether anything can
+          // have changed. Refetching every season is the expensive part, so
+          // skip it for a finished show whose episode count already matches —
+          // nothing can move. Anything still running is always refetched,
+          // since air dates shift without the count changing.
+          if (await needsEpisodeRefresh(showId, tmdbShow)) {
+            const seasons = await Promise.all(
+              Array.from(
+                { length: tmdbShow.number_of_seasons },
+                (_, i) => i + 1
+              ).map((n) => getTVShowSeason(showId, n, { forceRefresh: true }))
+            )
+            await cacheEpisodesInDatabase(showId, seasons)
+          } else {
+            skipped += 1
+            console.log(`[validate-status:${runId}] episodes unchanged`, {
+              showId,
+            })
+          }
         }
         await updateInferredStatus(userId, showId)
         succeeded += 1
@@ -1263,6 +1308,7 @@ async function runValidateStatusJob({
       processed: rows.length,
       succeeded,
       failed,
+      seasonRefetchSkipped: skipped,
       elapsedMs: Date.now() - runStartMs,
     })
   } catch (err: any) {
@@ -1273,8 +1319,11 @@ async function runValidateStatusJob({
   }
 }
 
-async function upsertShowFromTmdb(showId: number) {
-  const tmdbShow = await getTVShowDetails(showId)
+async function upsertShowFromTmdb(
+  showId: number,
+  options: TmdbFetchOptions = {}
+) {
+  const tmdbShow = await getTVShowDetails(showId, options)
   const { error: showError } = await supabase.from("shows").upsert({
     id: tmdbShow.id,
     name: tmdbShow.name,
@@ -1415,7 +1464,9 @@ async function batchShowProgress(
         if (!watched.has(key)) {
           const airDate = ep.air_date ?? null
           const daysUntil = airDate
-            ? Math.ceil((new Date(airDate).getTime() - Date.now()) / 86400000)
+            ? Math.ceil(
+                (parseAirDate(airDate)!.getTime() - Date.now()) / 86400000
+              )
             : null
           nextEpisode = {
             season: ep.season_number,
@@ -1606,7 +1657,7 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
               const airDate = episode.air_date as string | null
               const daysUntil = airDate
                 ? Math.ceil(
-                    (new Date(airDate).getTime() - Date.now()) / 86400000
+                    (parseAirDate(airDate)!.getTime() - Date.now()) / 86400000
                   )
                 : null
               return {
@@ -1701,17 +1752,13 @@ async function markShowEpisodesWatched(
     const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> =
       []
 
-    const now = new Date()
     for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
           // Only mark aired episodes
           seasonData.episodes
-            .filter(
-              (episode: any) =>
-                episode.air_date && new Date(episode.air_date) <= now
-            )
+            .filter((episode: any) => isEpisodeAired(episode.air_date))
             .forEach((episode: any) => {
               allEpisodes.push({
                 seasonNumber: seasonNum,
@@ -1799,6 +1846,77 @@ async function getEpisodeAirDate(
     )
     return null
   }
+}
+
+// True when a show's episodes could have changed since we last cached them.
+// A finished show whose cached episode count already matches TMDB cannot have
+// moved, so its seasons don't need refetching — that's the bulk of a sweep's
+// cost. Anything still running always refreshes: air dates shift for upcoming
+// episodes without the episode count changing at all.
+async function needsEpisodeRefresh(
+  showId: number,
+  tmdbShow: { status?: string; number_of_episodes?: number }
+): Promise<boolean> {
+  const isEnded = tmdbShow.status === "Ended" || tmdbShow.status === "Canceled"
+  if (!isEnded) return true
+  if (!tmdbShow.number_of_episodes) return true
+
+  const { count, error } = await supabase
+    .from("episodes")
+    .select("*", { count: "exact", head: true })
+    .eq("show_id", showId)
+
+  if (error || count == null) return true
+  return count !== tmdbShow.number_of_episodes
+}
+
+// Rebuild the seasons payload from the episodes table. Returns null when the
+// cache can't stand in for TMDB — no rows at all, or a season missing entirely
+// (a newly announced season won't be there yet).
+async function readSeasonsFromCache(
+  showId: number,
+  seasonNums: number[]
+): Promise<any[] | null> {
+  const { data: rows, error } = await supabase
+    .from("episodes")
+    .select(
+      "season_number, episode_number, name, air_date, runtime, overview, still_path"
+    )
+    .eq("show_id", showId)
+    .order("season_number", { ascending: true })
+    .order("episode_number", { ascending: true })
+
+  if (error || !rows?.length) return null
+
+  const bySeason = new Map<number, any[]>()
+  for (const row of rows) {
+    const list = bySeason.get(row.season_number) ?? []
+    list.push({
+      id: `${showId}-${row.season_number}-${row.episode_number}`,
+      episode_number: row.episode_number,
+      season_number: row.season_number,
+      name: row.name,
+      overview: row.overview,
+      still_path: row.still_path,
+      air_date: row.air_date,
+      runtime: row.runtime,
+    })
+    bySeason.set(row.season_number, list)
+  }
+
+  // A partially cached show would silently hide seasons, so fall back instead.
+  if (seasonNums.some((n) => !bySeason.has(n))) return null
+
+  return seasonNums.map((n) => ({
+    id: `${showId}-${n}`,
+    season_number: n,
+    name: `Season ${n}`,
+    overview: "",
+    poster_path: null,
+    air_date: bySeason.get(n)![0]?.air_date ?? null,
+    episode_count: bySeason.get(n)!.length,
+    episodes: bySeason.get(n)!,
+  }))
 }
 
 // Ensure episodes are cached for a show (fetches from TMDB if missing). No-op if already cached.

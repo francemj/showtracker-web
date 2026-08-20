@@ -1,14 +1,15 @@
-import { useEffect, useRef } from "react"
-import { useLocation } from "wouter"
+import { useEffect } from "react"
 import { apiRequest, queryClient } from "@/lib/queryClient"
 
 const STORAGE_KEY_INITIAL = "statusValidationInitial"
-const STORAGE_KEY_NAV = "statusValidationNav"
+const STORAGE_KEY_FOCUS = "statusValidationFocus"
 const STORAGE_KEY_COMPLETED_RECHECK = "statusValidationCompletedRecheck"
-const THROTTLE_INITIAL_MS = 30 * 60 * 1000 // 30 minutes
-const THROTTLE_NAV_MS = 10 * 60 * 1000 // 10 minutes
+const THROTTLE_INITIAL_MS = 15 * 60 * 1000 // 15 minutes
+const THROTTLE_FOCUS_MS = 5 * 60 * 1000 // 5 minutes
 const THROTTLE_COMPLETED_RECHECK_MS = 24 * 60 * 60 * 1000 // 24 hours
-export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000 // 1 minute - give backend time to finish
+// Only used for the bulk sweeps, which are genuinely asynchronous. Anything
+// targeting a single show now finishes inline and invalidates on its result.
+export const STATUS_INVALIDATE_DELAY_MS = 60 * 1000
 
 export function invalidateStatusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["/api/stats"] })
@@ -16,9 +17,7 @@ export function invalidateStatusRelatedQueries() {
   queryClient.invalidateQueries({ queryKey: ["/api/shows/caught-up"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
   queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
-  queryClient.invalidateQueries({
-    queryKey: ["/api/shows/want-to-watch", "dashboard"],
-  })
+  queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
 }
 
 function tryRun(
@@ -35,37 +34,47 @@ function tryRun(
     .then((res) => {
       if (res.ok) {
         sessionStorage.setItem(storageKey, String(Date.now()))
-        // Invalidate after delay so UI refetches once backend has updated
+        // The bulk sweep runs in the background, so there is no result to wait
+        // on — refetch once, later, rather than polling.
         setTimeout(invalidateStatusRelatedQueries, STATUS_INVALIDATE_DELAY_MS)
       }
     })
     .catch(() => {})
 }
 
+/**
+ * Refreshes show metadata from TMDB and re-runs status inference, keeping the
+ * database current as the source of truth.
+ *
+ * This used to run on every route change, which meant a full library sweep for
+ * the simple act of navigating, and lists visibly reshuffling a minute later
+ * while the user was still reading. It now runs on session start and when the
+ * tab regains focus — the moment someone comes back is exactly when refreshed
+ * content is wanted, and it can't fire mid-interaction the way navigation did.
+ * A show you open validates itself on its own page, inline.
+ */
 export function StatusValidationTrigger() {
-  const [location] = useLocation()
-  const isFirstLocation = useRef(true)
-
-  // Initial load: refresh all non-completed shows (throttled 30 min)
   useEffect(() => {
     tryRun("all", STORAGE_KEY_INITIAL, THROTTLE_INITIAL_MS)
-    // Also periodically re-check completed shows in case one was renewed
-    // (throttled much longer since this rarely matters)
+    // Completed shows rarely change, but a renewal should eventually surface.
     tryRun(
       "completed_recheck",
       STORAGE_KEY_COMPLETED_RECHECK,
       THROTTLE_COMPLETED_RECHECK_MS
     )
-  }, [])
 
-  // On navigation: refresh all non-completed shows (throttled 10 min, separate from initial)
-  useEffect(() => {
-    if (isFirstLocation.current) {
-      isFirstLocation.current = false
-      return
+    const onFocus = () => {
+      if (document.visibilityState !== "visible") return
+      tryRun("all", STORAGE_KEY_FOCUS, THROTTLE_FOCUS_MS)
     }
-    tryRun("all", STORAGE_KEY_NAV, THROTTLE_NAV_MS)
-  }, [location])
+
+    document.addEventListener("visibilitychange", onFocus)
+    window.addEventListener("focus", onFocus)
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus)
+      window.removeEventListener("focus", onFocus)
+    }
+  }, [])
 
   return null
 }
