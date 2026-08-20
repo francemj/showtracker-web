@@ -31,7 +31,12 @@ export default function ProfileScreen() {
   const { user, logout, refreshUser } = useAuth()
   const destructive = STATUS_COLORS.stopped.light.solid
 
-  const [name, setName] = useState(user?.name ?? "")
+  // Auth0 seeds `name` with the email address when there's no real name, which
+  // then shows up twice — under the avatar and inside the field you're meant to
+  // fill in. Treat that seed as empty and let the placeholder do its job.
+  const [name, setName] = useState(
+    user?.name && user.name !== user.email ? user.name : ""
+  )
   const [picture, setPicture] = useState(user?.picture ?? "")
   const [pushEnabled, setPushEnabled] = useState<boolean | null>(null)
 
