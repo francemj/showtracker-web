@@ -23,6 +23,7 @@ import {
   ShowWithProgress,
   TMDBSeason,
   isEpisodeAired,
+  formatAirDate,
   isEpisodeWatched as isEpisodeWatchedShared,
   hasUnwatchedEpisodesBefore as hasUnwatchedEpisodesBeforeShared,
   buildEpisodesToMark,
@@ -800,7 +801,7 @@ export default function ShowDetail() {
                     <p className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
                       S{effectiveActiveSeason}·E{episode.episode_number}
                       {episode.air_date &&
-                        ` · ${new Date(episode.air_date).toLocaleDateString()}`}
+                        ` · ${formatAirDate(episode.air_date)}`}
                       {episode.runtime && ` · ${episode.runtime}m`}
                     </p>
                   </div>

@@ -10,7 +10,7 @@ import {
 } from "./lib/tmdb"
 import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
 import { scheduleBackgroundTask } from "./lib/background-task"
-import { isEpisodeAired } from "../packages/shared/episode-utils"
+import { isEpisodeAired, parseAirDate } from "../packages/shared/episode-utils"
 import { inferShowStatus } from "../packages/shared/episode-progress"
 
 interface AuthRequest extends Request {
@@ -1072,9 +1072,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Only mark aired episodes
-        const now = new Date()
-        const airedEpisodes = season.episodes.filter(
-          (ep: any) => ep.air_date && new Date(ep.air_date) <= now
+        const airedEpisodes = season.episodes.filter((ep: any) =>
+          isEpisodeAired(ep.air_date)
         )
 
         // Upsert aired episodes only
@@ -1465,7 +1464,9 @@ async function batchShowProgress(
         if (!watched.has(key)) {
           const airDate = ep.air_date ?? null
           const daysUntil = airDate
-            ? Math.ceil((new Date(airDate).getTime() - Date.now()) / 86400000)
+            ? Math.ceil(
+                (parseAirDate(airDate)!.getTime() - Date.now()) / 86400000
+              )
             : null
           nextEpisode = {
             season: ep.season_number,
@@ -1656,7 +1657,7 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
               const airDate = episode.air_date as string | null
               const daysUntil = airDate
                 ? Math.ceil(
-                    (new Date(airDate).getTime() - Date.now()) / 86400000
+                    (parseAirDate(airDate)!.getTime() - Date.now()) / 86400000
                   )
                 : null
               return {
@@ -1751,17 +1752,13 @@ async function markShowEpisodesWatched(
     const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> =
       []
 
-    const now = new Date()
     for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
           // Only mark aired episodes
           seasonData.episodes
-            .filter(
-              (episode: any) =>
-                episode.air_date && new Date(episode.air_date) <= now
-            )
+            .filter((episode: any) => isEpisodeAired(episode.air_date))
             .forEach((episode: any) => {
               allEpisodes.push({
                 seasonNumber: seasonNum,
