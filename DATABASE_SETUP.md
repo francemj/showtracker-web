@@ -1,31 +1,52 @@
-# Database Setup Instructions
+# Database Setup
 
-The app stores all application data in **Supabase (PostgreSQL)**. The API uses the Supabase client with your project URL and anon key; apply the SQL in this repo once per project.
+The app stores all application data in **PostgreSQL**, reached through
+[Drizzle](https://orm.drizzle.team/) over `postgres.js`. It is self-hosted —
+see the `postgres-host` repository for the box itself.
 
-## Apply the schema (Supabase SQL Editor)
+## Connecting
 
-1. Open your project in the [Supabase Dashboard](https://supabase.com/dashboard).
-2. Go to **SQL** → **New query**.
-3. Paste the full contents of [`database-schema.sql`](./database-schema.sql) from this repository.
-4. Run the query.
+Set `DATABASE_URL`:
 
-This creates tables, indexes, and RLS policies as defined in that file.
+```
+postgresql://showtracker:<password>@db.example.com:6432/showtracker?sslmode=verify-full
+```
 
-## Verify installation
+Port 6432 is PgBouncer, not Postgres directly. Two things follow from that, and
+both are already handled in [`server/lib/db.ts`](./server/lib/db.ts):
 
-In **Table Editor**, you should see (among others):
+- `prepare: false` — transaction pooling may hand each transaction a different
+  backend, so a prepared statement from one is not there for the next.
+- `max: 1` — each Vercel invocation is its own process, so a pool inside one
+  multiplies against the connection limit rather than sharing anything.
 
-- `users`
-- `user_credentials` (legacy rows for old local-password users; new Auth0-only users may not need rows here)
-- `shows`
-- `user_shows`
-- `seasons`
-- `episodes`
-- `watch_progress`
-- `import_history`
+Use `sslmode=verify-full`, not `require`: `require` encrypts the connection but
+does not authenticate the server.
 
-## Notes
+## Applying the schema
 
-- **Authentication in the app is Auth0**, not Supabase Auth. The `users` table links profiles to Auth0 via `auth0_id`. See [AUTH0_SETUP.md](./AUTH0_SETUP.md).
-- **RLS**: The bundled schema may use broad or public policies. For production, tighten policies so each user can only access their own rows (or enforce access solely in your API and lock down anon usage accordingly).
-- There is no `supabase/` migration folder in this repo; treat `database-schema.sql` as the source of truth unless you maintain your own migrations elsewhere.
+[`database-schema.sql`](./database-schema.sql) is the source of truth. It
+creates the tables, indexes, the two sort-support views and the
+`count_aired_watched_episodes` function.
+
+```bash
+psql "$DATABASE_URL_DIRECT" -f database-schema.sql
+```
+
+Apply it over a direct Postgres connection (an SSH tunnel to port 5432), not
+through PgBouncer.
+
+## Schema notes
+
+- **Authentication is Auth0**, not a database concern. The `users` table links
+  profiles to Auth0 via `auth0_id`. See [AUTH0_SETUP.md](./AUTH0_SETUP.md).
+- **`user_shows_with_last_watch` and `user_shows_with_next_air`** back the
+  "recent watch" and "next air date" sort modes. They existed only inside the
+  old hosted project until they were recovered from the catalog during the
+  migration; they are now in `database-schema.sql` and declared in
+  [`packages/shared/schema.ts`](./packages/shared/schema.ts) with `.existing()`.
+- **`count_aired_watched_episodes`** is retained by the schema file but no
+  longer called. It existed to work around PostgREST's default row cap, which
+  does not apply to direct SQL; `/api/stats` now does the join itself.
+- **`seasons` and `import_history`** were dropped. Both held zero rows and were
+  never read or written by any code path.

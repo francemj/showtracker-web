@@ -18,7 +18,7 @@ Monorepo for a TV show tracker — search shows via [The Movie Database](https:/
 | Forms | React Hook Form + Zod |
 | Backend | [Express](https://expressjs.com/) (TypeScript), routes in `server/` |
 | Entry | `api/index.ts` — local dev attaches Vite middleware for HMR; production serves `dist/public` |
-| Data | [Supabase](https://supabase.com/) (PostgreSQL) via `@supabase/supabase-js` |
+| Data | Self-hosted PostgreSQL via [Drizzle](https://orm.drizzle.team/) over `postgres.js`, behind PgBouncer |
 | Auth validation | Auth0 `/userinfo`; token → `sub` cache in [Upstash Redis](https://upstash.com/) (`server/lib/auth0.ts`) |
 | External API | TMDB for show metadata |
 
@@ -50,14 +50,14 @@ packages/
   api-client/         # Shared typed API client
   shared/             # Shared schemas and types
 api/index.ts          # Express app + Vercel serverless handler
-server/               # API routes, Supabase/TMDB/Auth0 helpers
-database-schema.sql   # Postgres schema for Supabase
+server/               # API routes, database/TMDB/Auth0 helpers
+database-schema.sql   # Postgres schema (source of truth)
 ```
 
 ## Prerequisites
 
 - **Node.js** 20+ recommended (aligned with `@types/node` and tooling in this repo)
-- A Supabase project and applied schema from `database-schema.sql`
+- A PostgreSQL database with `database-schema.sql` applied (see the `postgres-host` repo)
 - Auth0 SPA application and env vars (see [AUTH0_SETUP.md](./AUTH0_SETUP.md))
 - TMDB API key
 - Upstash Redis REST URL and token (required at server startup for auth token caching)
@@ -68,8 +68,7 @@ Config is loaded from **`.env.<NODE_ENV>`** (e.g. `.env.development`, `.env.prod
 
 | Variable | Where | Purpose |
 |----------|--------|---------|
-| `SUPABASE_URL` | Server | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Server | Supabase anon (public) key |
+| `DATABASE_URL` | Server | Postgres connection string, via PgBouncer, with `sslmode=verify-full` |
 | `AUTH0_DOMAIN` | Server | Auth0 tenant domain |
 | `TMDB_API_KEY` | Server | TMDB API v3 key |
 | `UPSTASH_REDIS_REST_URL` | Server | Upstash Redis REST endpoint |
@@ -117,13 +116,13 @@ This app uses native modules (`react-native-auth0`, `expo-notifications`), so it
 
 ## Documentation in this repo
 
-- [DATABASE_SETUP.md](./DATABASE_SETUP.md) — apply `database-schema.sql` in Supabase
+- [DATABASE_SETUP.md](./DATABASE_SETUP.md) — connecting, and applying `database-schema.sql`
 - [AUTH0_SETUP.md](./AUTH0_SETUP.md) — Auth0 SPA settings and env vars (including legacy user migration)
 - [design_guidelines.md](./design_guidelines.md) — UI palette, typography, and layout notes
 
 ## External services
 
 - **Auth0** — identity and access tokens for the API
-- **Supabase** — PostgreSQL and application data
+- **PostgreSQL** — application data, self-hosted
 - **TMDB** — TV search, details, seasons, episodes
 - **Upstash Redis** — short-lived cache for Auth0 token validation

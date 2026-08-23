@@ -94,7 +94,7 @@ UPSTASH_REDIS_REST_TOKEN=your_token
 If you had users created before this refactor with `auth0_id` starting with `local_`, they can still be migrated when they first sign in with Universal Login:
 
 1. They use **Create Account** (or Sign In with the same email) in the Auth0 popup.
-2. The backend finds their Supabase user by email and `auth0_id` like `local_%`, updates `auth0_id` to the new Auth0 `sub`, and removes their old `user_credentials` row.
+2. The backend finds their existing user by email and `auth0_id` like `local_%`, updates `auth0_id` to the new Auth0 `sub`, and removes their old `user_credentials` row.
 3. Future logins use the normal Auth0 path.
 
 No extra Auth0 or app changes are needed for this migration.

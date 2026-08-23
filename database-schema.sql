@@ -1,4 +1,9 @@
--- TV Tracker Database Schema for Supabase
+-- TV Tracker Database Schema (PostgreSQL)
+--
+-- Row-level security was removed with the move off Supabase. Every policy was
+-- USING (true), so it granted nothing, and the app now connects as the owning
+-- role, which bypasses RLS regardless. Authorization is enforced in the API:
+-- every query filters by the authenticated user's id.
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
@@ -48,19 +53,6 @@ CREATE TABLE IF NOT EXISTS user_shows (
   UNIQUE(user_id, show_id)
 );
 
--- Season information
-CREATE TABLE IF NOT EXISTS seasons (
-  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  show_id INTEGER NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
-  season_number INTEGER NOT NULL,
-  name TEXT,
-  overview TEXT,
-  poster_path TEXT,
-  air_date TEXT,
-  episode_count INTEGER,
-  UNIQUE(show_id, season_number)
-);
-
 -- Episode information
 CREATE TABLE IF NOT EXISTS episodes (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -87,40 +79,11 @@ CREATE TABLE IF NOT EXISTS watch_progress (
   UNIQUE(user_id, show_id, season_number, episode_number)
 );
 
--- Import history
-CREATE TABLE IF NOT EXISTS import_history (
-  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  source TEXT NOT NULL,
-  file_name TEXT,
-  total_shows INTEGER,
-  matched_shows INTEGER,
-  unmatched_shows INTEGER,
-  imported_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('processing', 'completed', 'failed'))
-);
-
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_user_shows_user_id ON user_shows(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_shows_status ON user_shows(status);
 CREATE INDEX IF NOT EXISTS idx_watch_progress_user_id ON watch_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_watch_progress_show_id ON watch_progress(show_id);
-CREATE INDEX IF NOT EXISTS idx_import_history_user_id ON import_history(user_id);
-
--- Enable Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_credentials ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_shows ENABLE ROW LEVEL SECURITY;
-ALTER TABLE watch_progress ENABLE ROW LEVEL SECURITY;
-ALTER TABLE import_history ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies (public access for now, can be restricted based on auth)
-CREATE POLICY "Public access to users" ON users FOR ALL USING (true);
-CREATE POLICY "Public access to user_credentials" ON user_credentials FOR ALL USING (true);
-CREATE POLICY "Public access to shows" ON shows FOR ALL USING (true);
-CREATE POLICY "Public access to user_shows" ON user_shows FOR ALL USING (true);
-CREATE POLICY "Public access to watch_progress" ON watch_progress FOR ALL USING (true);
-CREATE POLICY "Public access to import_history" ON import_history FOR ALL USING (true);
 
 -- Device tokens for push notifications (mobile app)
 CREATE TABLE IF NOT EXISTS device_tokens (
@@ -133,9 +96,6 @@ CREATE TABLE IF NOT EXISTS device_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
-
-ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public access to device_tokens" ON device_tokens FOR ALL USING (true);
 
 -- Counts a user's watched episodes that have aired, restricted to a set of shows.
 -- Does the watch_progress/episodes join and count in the DB so results aren't
@@ -162,4 +122,46 @@ AS $$
     AND e.air_date <= p_now
 $$;
 
-GRANT EXECUTE ON FUNCTION count_aired_watched_episodes(TEXT, INTEGER[], TEXT) TO anon, authenticated;
+-- Sort-support views for the library list.
+--
+-- These existed only in the previously hosted project and in no repo file until
+-- they were read back out of the catalog on 2026-08-22. server/routes.ts
+-- queries both, so losing them breaks the "recent watch" and "next air date"
+-- sort modes. Reproduced here verbatim from pg_dump.
+
+CREATE OR REPLACE VIEW user_shows_with_last_watch AS
+  SELECT id, user_id, show_id, status, rating, notes, added_at, updated_at,
+         (SELECT max(wp.watched_at)
+            FROM watch_progress wp
+           WHERE wp.user_id = us.user_id
+             AND wp.show_id = us.show_id
+             AND wp.watched = true) AS last_watch_at
+    FROM user_shows us;
+
+-- season_number <> 0 skips specials, which otherwise surface as the "next"
+-- episode. air_date is TEXT, so the comparison against now() is a string
+-- comparison that only holds because the values are ISO YYYY-MM-DD.
+CREATE OR REPLACE VIEW user_shows_with_next_air AS
+  SELECT us.id, us.user_id, us.show_id, us.status, us.rating, us.notes,
+         us.added_at, us.updated_at,
+         next_ep.next_air_date, next_ep.next_season_number, next_ep.next_episode_number
+    FROM user_shows us
+    LEFT JOIN LATERAL (
+      SELECT e.air_date AS next_air_date,
+             e.season_number AS next_season_number,
+             e.episode_number AS next_episode_number
+        FROM episodes e
+       WHERE e.show_id = us.show_id
+         AND e.season_number <> 0
+         AND e.air_date IS NOT NULL
+         AND e.air_date > ((now() AT TIME ZONE 'utc'))::text
+       ORDER BY e.air_date
+       LIMIT 1
+    ) next_ep ON true;
+
+-- Dropped 2026-08-22: seasons and import_history both held zero rows and were
+-- never read or written by any code path. The /api/shows/:id/seasons endpoint
+-- reads shows.number_of_seasons and falls back to TMDB or the episodes cache.
+-- On an existing database:
+--
+--   DROP TABLE IF EXISTS seasons, import_history;
