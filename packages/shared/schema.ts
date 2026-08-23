@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm"
 import {
   pgTable,
+  pgView,
   text,
   integer,
   timestamp,
@@ -60,20 +61,17 @@ export const userShows = pgTable("user_shows", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-// Season information
-export const seasons = pgTable("seasons", {
+// Credentials for users who predate Auth0. Not written any more; kept so those
+// accounts still resolve.
+export const userCredentials = pgTable("user_credentials", {
   id: text("id")
     .primaryKey()
     .default(sql`gen_random_uuid()::text`),
-  showId: integer("show_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => shows.id, { onDelete: "cascade" }),
-  seasonNumber: integer("season_number").notNull(),
-  name: text("name"),
-  overview: text("overview"),
-  posterPath: text("poster_path"),
-  airDate: text("air_date"),
-  episodeCount: integer("episode_count"),
+    .references(() => users.id, { onDelete: "cascade" }),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
 // Episode information
@@ -124,22 +122,42 @@ export const deviceTokens = pgTable("device_tokens", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-// Import history
-export const importHistory = pgTable("import_history", {
-  id: text("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()::text`),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  source: text("source").notNull(), // "tv_time", "trakt", etc.
-  fileName: text("file_name"),
-  totalShows: integer("total_shows"),
-  matchedShows: integer("matched_shows"),
-  unmatchedShows: integer("unmatched_shows"),
-  importedAt: timestamp("imported_at").defaultNow().notNull(),
-  status: text("status").notNull(), // "processing", "completed", "failed"
-})
+/**
+ * Sort-support views, declared with .existing() because their SQL lives in
+ * database-schema.sql rather than being generated from here.
+ *
+ * Both existed only inside the hosted project until they were read back out of
+ * the catalog during the migration; the shapes below come from those recovered
+ * definitions.
+ */
+export const userShowsWithLastWatch = pgView("user_shows_with_last_watch", {
+  id: text("id"),
+  userId: text("user_id"),
+  showId: integer("show_id"),
+  status: text("status"),
+  rating: integer("rating"),
+  notes: text("notes"),
+  addedAt: timestamp("added_at"),
+  updatedAt: timestamp("updated_at"),
+  lastWatchAt: timestamp("last_watch_at"),
+}).existing()
+
+export const userShowsWithNextAir = pgView("user_shows_with_next_air", {
+  id: text("id"),
+  userId: text("user_id"),
+  showId: integer("show_id"),
+  status: text("status"),
+  rating: integer("rating"),
+  notes: text("notes"),
+  addedAt: timestamp("added_at"),
+  updatedAt: timestamp("updated_at"),
+  // TEXT rather than a date, matching the episodes.air_date column the view
+  // reads. The view compares it to now() as a string, which holds only because
+  // the values are ISO YYYY-MM-DD.
+  nextAirDate: text("next_air_date"),
+  nextSeasonNumber: integer("next_season_number"),
+  nextEpisodeNumber: integer("next_episode_number"),
+}).existing()
 
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -154,15 +172,11 @@ export const insertUserShowSchema = createInsertSchema(userShows).omit({
   addedAt: true,
   updatedAt: true,
 })
-export const insertSeasonSchema = createInsertSchema(seasons).omit({ id: true })
 export const insertEpisodeSchema = createInsertSchema(episodes).omit({
   id: true,
 })
 export const insertWatchProgressSchema = createInsertSchema(watchProgress).omit(
   { id: true, watchedAt: true }
-)
-export const insertImportHistorySchema = createInsertSchema(importHistory).omit(
-  { id: true, importedAt: true }
 )
 
 // TypeScript types
@@ -175,17 +189,11 @@ export type InsertShow = z.infer<typeof insertShowSchema>
 export type UserShow = typeof userShows.$inferSelect
 export type InsertUserShow = z.infer<typeof insertUserShowSchema>
 
-export type Season = typeof seasons.$inferSelect
-export type InsertSeason = z.infer<typeof insertSeasonSchema>
-
 export type Episode = typeof episodes.$inferSelect
 export type InsertEpisode = z.infer<typeof insertEpisodeSchema>
 
 export type WatchProgress = typeof watchProgress.$inferSelect
 export type InsertWatchProgress = z.infer<typeof insertWatchProgressSchema>
-
-export type ImportHistory = typeof importHistory.$inferSelect
-export type InsertImportHistory = z.infer<typeof insertImportHistorySchema>
 
 export type DeviceToken = typeof deviceTokens.$inferSelect
 

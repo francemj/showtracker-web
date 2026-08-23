@@ -1,7 +1,31 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import rateLimit, { ipKeyGenerator } from "express-rate-limit"
-import { supabase } from "./lib/supabase"
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  like,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm"
+import { db } from "./lib/db"
+import {
+  deviceTokens,
+  episodes,
+  shows,
+  userCredentials,
+  users,
+  userShows,
+  userShowsWithLastWatch,
+  userShowsWithNextAir,
+  watchProgress,
+} from "../packages/shared/schema"
 import {
   searchTVShows,
   getTVShowDetails,
@@ -17,6 +41,32 @@ interface AuthRequest extends Request {
   userId?: string
 }
 
+type WatchProgressRecord = typeof watchProgress.$inferInsert
+
+/**
+ * The composite key is not declared in the Drizzle schema, only in the
+ * database, so every call site has to spell the conflict target out. Doing it
+ * in one place keeps them from drifting apart.
+ */
+async function upsertWatchProgress(records: WatchProgressRecord[]) {
+  if (records.length === 0) return
+  await db
+    .insert(watchProgress)
+    .values(records)
+    .onConflictDoUpdate({
+      target: [
+        watchProgress.userId,
+        watchProgress.showId,
+        watchProgress.seasonNumber,
+        watchProgress.episodeNumber,
+      ],
+      set: {
+        watched: sql`excluded.watched`,
+        watchedAt: sql`excluded.watched_at`,
+      },
+    })
+}
+
 const authMiddleware = async (
   req: AuthRequest,
   res: Response,
@@ -30,11 +80,11 @@ const authMiddleware = async (
   const token = authHeader.slice(7)
   try {
     const sub = await getSubFromToken(token)
-    const { data: user } = await supabase
-      .from("users")
-      .select("id")
-      .eq("auth0_id", sub)
-      .single()
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.auth0Id, sub))
+      .limit(1)
 
     if (!user) {
       return res.status(401).json({ message: "User not found" })
@@ -87,64 +137,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { sub, email, name, picture } = auth0User
 
       // 1) Find by auth0_id (existing Auth0 or migrated user)
-      const { data: existingByAuth0 } = await supabase
-        .from("users")
-        .select("*")
-        .eq("auth0_id", sub)
-        .single()
+      const [existingByAuth0] = await db
+        .select()
+        .from(users)
+        .where(eq(users.auth0Id, sub))
+        .limit(1)
 
       if (existingByAuth0) {
         return res.json({ user: existingByAuth0 })
       }
 
-      // 2) Legacy: same email with local_ auth0_id — link this Auth0 account to existing Supabase user
+      // 2) Legacy: same email with local_ auth0_id — link this Auth0 account to the existing user
       if (email) {
-        const { data: legacy } = await supabase
-          .from("users")
-          .select("*")
-          .eq("email", email)
-          .like("auth0_id", "local_%")
+        const [legacy] = await db
+          .select()
+          .from(users)
+          .where(and(eq(users.email, email), like(users.auth0Id, "local_%")))
           .limit(1)
-          .maybeSingle()
 
         if (legacy) {
-          const { error: updateErr } = await supabase
-            .from("users")
-            .update({ auth0_id: sub, picture: picture || legacy.picture })
-            .eq("id", legacy.id)
+          const [linked] = await db
+            .update(users)
+            .set({ auth0Id: sub, picture: picture || legacy.picture })
+            .where(eq(users.id, legacy.id))
+            .returning()
 
-          if (!updateErr) {
-            await supabase
-              .from("user_credentials")
-              .delete()
-              .eq("user_id", legacy.id)
-            return res.json({
-              user: {
-                ...legacy,
-                auth0_id: sub,
-                picture: picture || legacy.picture,
-              },
-            })
+          // returning() gives the updated row directly, so the response no
+          // longer has to reassemble it from the pre-update copy by hand.
+          if (linked) {
+            await db
+              .delete(userCredentials)
+              .where(eq(userCredentials.userId, legacy.id))
+            return res.json({ user: linked })
           }
         }
       }
 
       // 3) New user
-      const { data: newUser, error: insertErr } = await supabase
-        .from("users")
-        .insert({
+      const [newUser] = await db
+        .insert(users)
+        .values({
           email: email || `${sub.replace(/[^a-zA-Z0-9]/g, "_")}@auth0.local`,
           name: name || "User",
-          auth0_id: sub,
+          auth0Id: sub,
           picture:
             picture ||
             `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=6366F1&color=fff`,
         })
-        .select()
-        .single()
+        .returning()
 
-      if (insertErr || !newUser) {
-        console.error("Supabase insert failed:", insertErr)
+      if (!newUser) {
         return res.status(500).json({ message: "Failed to create user" })
       }
 
@@ -168,11 +210,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = authHeader.slice(7)
       const sub = await getSubFromToken(token)
 
-      const { data: user } = await supabase
-        .from("users")
-        .select("*")
-        .eq("auth0_id", sub)
-        .single()
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.auth0Id, sub))
+        .limit(1)
 
       if (!user) {
         return res.status(404).json({ message: "User not found" })
@@ -205,7 +247,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           picture?: string
         }
 
-        const updates: Record<string, string> = {}
+        const updates: { name?: string; picture?: string } = {}
         if (name !== undefined) {
           if (typeof name !== "string" || !name.trim()) {
             return res.status(400).json({ message: "Invalid name" })
@@ -224,14 +266,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "No fields to update" })
         }
 
-        const { data: user, error } = await supabase
-          .from("users")
-          .update(updates)
-          .eq("id", req.userId)
-          .select()
-          .single()
+        const [user] = await db
+          .update(users)
+          .set(updates)
+          .where(eq(users.id, req.userId!))
+          .returning()
 
-        if (error || !user) {
+        if (!user) {
           return res.status(500).json({ message: "Failed to update profile" })
         }
 
@@ -249,14 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { error } = await supabase
-          .from("users")
-          .delete()
-          .eq("id", req.userId)
-
-        if (error) {
-          return res.status(500).json({ message: "Failed to delete account" })
-        }
+        await db.delete(users).where(eq(users.id, req.userId!))
 
         res.json({ message: "Account deleted" })
       } catch (error) {
@@ -287,15 +321,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .json({ message: "platform must be 'ios' or 'android'" })
         }
 
-        await supabase.from("device_tokens").upsert(
-          {
-            user_id: req.userId,
-            token,
-            platform,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "token" }
-        )
+        await db
+          .insert(deviceTokens)
+          .values({ userId: req.userId!, token, platform })
+          .onConflictDoUpdate({
+            target: deviceTokens.token,
+            set: { userId: req.userId!, platform, updatedAt: new Date() },
+          })
 
         res.json({ message: "Device registered" })
       } catch (err) {
@@ -333,53 +365,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { data: userShows } = await supabase
-          .from("user_shows")
-          .select("status, show_id")
-          .eq("user_id", req.userId)
+        const rows = await db
+          .select({ status: userShows.status, showId: userShows.showId })
+          .from(userShows)
+          .where(eq(userShows.userId, req.userId!))
 
-        const activeShows = (userShows || []).filter(
-          (s: { status: string }) => s.status !== "stopped"
-        )
-        const activeShowIds = activeShows.map(
-          (s: { show_id: number }) => s.show_id
-        )
+        const activeShows = rows.filter((s) => s.status !== "stopped")
+        const activeShowIds = activeShows.map((s) => s.showId)
 
+        // Was an RPC to count_aired_watched_episodes(). That function existed
+        // only to do the join server-side and dodge PostgREST's default row cap
+        // on the underlying tables — a constraint that does not apply here.
         let episodesWatched = 0
         if (activeShowIds.length > 0) {
-          const { data: count } = await supabase.rpc(
-            "count_aired_watched_episodes",
-            {
-              p_user_id: req.userId,
-              p_show_ids: activeShowIds,
-              p_now: new Date().toISOString(),
-            }
-          )
-          episodesWatched = count || 0
+          const [row] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(watchProgress)
+            .innerJoin(
+              episodes,
+              and(
+                eq(episodes.showId, watchProgress.showId),
+                eq(episodes.seasonNumber, watchProgress.seasonNumber),
+                eq(episodes.episodeNumber, watchProgress.episodeNumber)
+              )
+            )
+            .where(
+              and(
+                eq(watchProgress.userId, req.userId!),
+                eq(watchProgress.watched, true),
+                inArray(watchProgress.showId, activeShowIds),
+                isNotNull(episodes.airDate),
+                lte(episodes.airDate, new Date().toISOString())
+              )
+            )
+          episodesWatched = row?.count ?? 0
         }
 
         const stats = {
           totalShows: activeShows.length,
-          watchingShows:
-            activeShows.filter(
-              (s: { status: string }) => s.status === "watching"
-            ).length || 0,
-          completedShows:
-            activeShows.filter(
-              (s: { status: string }) => s.status === "completed"
-            ).length || 0,
-          wantToWatchShows:
-            activeShows.filter(
-              (s: { status: string }) => s.status === "want_to_watch"
-            ).length || 0,
-          caughtUpShows:
-            activeShows.filter(
-              (s: { status: string }) => s.status === "caught_up"
-            ).length || 0,
-          stoppedShows:
-            (userShows || []).filter(
-              (s: { status: string }) => s.status === "stopped"
-            ).length || 0,
+          watchingShows: activeShows.filter((s) => s.status === "watching")
+            .length,
+          completedShows: activeShows.filter((s) => s.status === "completed")
+            .length,
+          wantToWatchShows: activeShows.filter(
+            (s) => s.status === "want_to_watch"
+          ).length,
+          caughtUpShows: activeShows.filter((s) => s.status === "caught_up")
+            .length,
+          stoppedShows: rows.filter((s) => s.status === "stopped").length,
           episodesWatched,
         }
 
@@ -397,18 +430,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authMiddleware,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { data: userShows } = await supabase
-          .from("user_shows")
-          .select("show_id, status")
-          .eq("user_id", req.userId)
+        // Drizzle already returns camelCase, so the hand-written mapping
+        // this replaced is no longer needed.
+        const rows = await db
+          .select({ showId: userShows.showId, status: userShows.status })
+          .from(userShows)
+          .where(eq(userShows.userId, req.userId!))
 
-        // Map snake_case to camelCase for frontend
-        const mappedShows = (userShows || []).map((us: any) => ({
-          showId: us.show_id,
-          status: us.status,
-        }))
-
-        res.json(mappedShows)
+        res.json(rows)
       } catch (error) {
         console.error("Get user shows error:", error)
         res.status(500).json({ message: "Failed to get user shows" })
@@ -493,17 +522,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add to user's collection
         // Default to want_to_watch if no initialStatus provided
         // If initialStatus is 'completed', mark all episodes as watched
-        const { data: userShow, error } = await supabase
-          .from("user_shows")
-          .insert({
-            user_id: req.userId,
-            show_id: showId,
+        const [userShow] = await db
+          .insert(userShows)
+          .values({
+            userId: req.userId!,
+            showId,
             status: initialStatus || "want_to_watch",
           })
-          .select()
-          .single()
+          .returning()
 
-        if (error) {
+        if (!userShow) {
           return res.status(500).json({ message: "Failed to add show" })
         }
 
@@ -512,14 +540,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // the default status there means the client renders "Want to Watch"
         // next to a real completion percentage, which is a state inference can
         // never produce. Recompute before responding so the two agree.
-        const { count: priorWatched } = await supabase
-          .from("watch_progress")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", req.userId!)
-          .eq("show_id", showId)
-          .eq("watched", true)
+        const [prior] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(watchProgress)
+          .where(
+            and(
+              eq(watchProgress.userId, req.userId!),
+              eq(watchProgress.showId, showId),
+              eq(watchProgress.watched, true)
+            )
+          )
+        const priorWatched = prior?.count ?? 0
 
-        if (priorWatched && priorWatched > 0 && !initialStatus) {
+        if (priorWatched > 0 && !initialStatus) {
           const inferred = await updateInferredStatus(req.userId!, showId)
           if (inferred) userShow.status = inferred
         }
@@ -588,20 +621,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid status" })
         }
 
-        const { data, error } = await supabase
-          .from("user_shows")
-          .update({ status, updated_at: new Date().toISOString() })
-          .eq("user_id", req.userId!)
-          .eq("show_id", showId)
-          .select()
-          .single()
+        const [updated] = await db
+          .update(userShows)
+          .set({ status, updatedAt: new Date() })
+          .where(
+            and(eq(userShows.userId, req.userId!), eq(userShows.showId, showId))
+          )
+          .returning()
 
-        if (error) {
-          console.error("Update show status error:", error)
-          return res.status(500).json({ message: "Failed to update status" })
+        if (!updated) {
+          return res.status(404).json({ message: "Show not in collection" })
         }
 
-        res.json(data)
+        res.json(updated)
       } catch (error) {
         console.error("Update show status error:", error)
         res.status(500).json({ message: "Failed to update status" })
@@ -622,12 +654,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid show ID" })
         }
 
-        const { data: userShow } = await supabase
-          .from("user_shows")
-          .select("status")
-          .eq("user_id", req.userId!)
-          .eq("show_id", showId)
-          .maybeSingle()
+        const [userShow] = await db
+          .select({ status: userShows.status })
+          .from(userShows)
+          .where(
+            and(eq(userShows.userId, req.userId!), eq(userShows.showId, showId))
+          )
+          .limit(1)
 
         if (!userShow) {
           return res.status(404).json({ message: "Show not in your library" })
@@ -659,16 +692,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid show ID" })
         }
 
-        const { error: updateError } = await supabase
-          .from("user_shows")
-          .update({ status: "stopped", updated_at: new Date().toISOString() })
-          .eq("user_id", req.userId!)
-          .eq("show_id", showId)
-
-        if (updateError) {
-          console.error("Remove show: user_shows update error", updateError)
-          return res.status(500).json({ message: "Failed to remove show" })
-        }
+        await db
+          .update(userShows)
+          .set({ status: "stopped", updatedAt: new Date() })
+          .where(
+            and(eq(userShows.userId, req.userId!), eq(userShows.showId, showId))
+          )
 
         res.status(204).send()
       } catch (error) {
@@ -798,11 +827,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid show ID" })
         }
 
-        const { data: show } = await supabase
-          .from("shows")
-          .select("*")
-          .eq("id", showId)
-          .single()
+        const [show] = await db
+          .select()
+          .from(shows)
+          .where(eq(shows.id, showId))
+          .limit(1)
 
         if (!show) {
           const tmdbShow = await getTVShowDetails(showId).catch(() => null)
@@ -832,62 +861,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (show.status == null) {
-          const tmdbShow = await getTVShowDetails(parseInt(id))
-          await supabase.from("shows").upsert({
-            id: tmdbShow.id,
-            name: tmdbShow.name,
-            overview: tmdbShow.overview,
-            poster_path: tmdbShow.poster_path,
-            backdrop_path: tmdbShow.backdrop_path,
-            first_air_date: tmdbShow.first_air_date,
-            vote_average: tmdbShow.vote_average?.toString(),
-            number_of_seasons: tmdbShow.number_of_seasons,
-            number_of_episodes: tmdbShow.number_of_episodes,
-            status: tmdbShow.status,
-            genres: tmdbShow.genres?.map((g: any) => g.name),
-            tmdb_data: tmdbShow,
-          })
+          // upsertShowFromTmdb both refreshes the row and returns the TMDB
+          // payload, so this is one fetch rather than the two the inline
+          // version did.
+          const tmdbShow = await upsertShowFromTmdb(showId)
           show.status = tmdbShow.status
         }
 
-        const { data: userShow } = await supabase
-          .from("user_shows")
-          .select("*")
-          .eq("user_id", req.userId)
-          .eq("show_id", parseInt(id))
-          .single()
+        const [userShow] = await db
+          .select()
+          .from(userShows)
+          .where(
+            and(eq(userShows.userId, req.userId!), eq(userShows.showId, showId))
+          )
+          .limit(1)
 
         const progress = await calculateShowProgress(req.userId!, parseInt(id))
 
-        // Map snake_case database fields to camelCase for frontend
-        res.json({
-          id: show.id,
-          name: show.name,
-          overview: show.overview,
-          posterPath: show.poster_path,
-          backdropPath: show.backdrop_path,
-          firstAirDate: show.first_air_date,
-          voteAverage: show.vote_average,
-          numberOfSeasons: show.number_of_seasons,
-          numberOfEpisodes: show.number_of_episodes,
-          status: show.status,
-          genres: show.genres,
-          tmdbData: show.tmdb_data,
-          lastUpdated: show.last_updated,
-          userShow: userShow
-            ? {
-                id: userShow.id,
-                userId: userShow.user_id,
-                showId: userShow.show_id,
-                status: userShow.status,
-                rating: userShow.rating,
-                notes: userShow.notes,
-                addedAt: userShow.added_at,
-                updatedAt: userShow.updated_at,
-              }
-            : null,
-          ...progress,
-        })
+        // Drizzle already returns camelCase, so the row goes out as-is
+        // rather than being copied field by field.
+        res.json({ ...show, userShow: userShow ?? null, ...progress })
       } catch (error) {
         console.error("Get show error:", error)
         res.status(500).json({ message: "Failed to get show" })
@@ -907,13 +900,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid show ID" })
         }
 
-        const { data: show } = await supabase
-          .from("shows")
-          .select("number_of_seasons")
-          .eq("id", parsedId)
-          .single()
+        const [show] = await db
+          .select({ numberOfSeasons: shows.numberOfSeasons })
+          .from(shows)
+          .where(eq(shows.id, parsedId))
+          .limit(1)
 
-        let numberOfSeasons = show?.number_of_seasons
+        let numberOfSeasons = show?.numberOfSeasons
         if (!numberOfSeasons) {
           // Show hasn't been cached locally yet (e.g. viewed before being
           // added to a collection) — fall back to TMDB, same as /api/shows/:id
@@ -978,20 +971,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const { id } = req.params
 
-        const { data: progress } = await supabase
-          .from("watch_progress")
-          .select("season_number, episode_number, watched")
-          .eq("user_id", req.userId)
-          .eq("show_id", parseInt(id))
+        // season/episode rather than seasonNumber/episodeNumber: this is a
+        // reshape the client expects, not just a case conversion.
+        const progress = await db
+          .select({
+            season: watchProgress.seasonNumber,
+            episode: watchProgress.episodeNumber,
+            watched: watchProgress.watched,
+          })
+          .from(watchProgress)
+          .where(
+            and(
+              eq(watchProgress.userId, req.userId!),
+              eq(watchProgress.showId, parseInt(id))
+            )
+          )
 
-        // Map snake_case to camelCase for frontend
-        const mappedProgress = (progress || []).map((p: any) => ({
-          season: p.season_number,
-          episode: p.episode_number,
-          watched: p.watched,
-        }))
-
-        res.json(mappedProgress)
+        res.json(progress)
       } catch (error) {
         console.error("Get progress error:", error)
         res.status(500).json({ message: "Failed to get progress" })
@@ -1018,23 +1014,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const { error } = await supabase.from("watch_progress").upsert(
+        await upsertWatchProgress([
           {
-            user_id: req.userId,
-            show_id: showId,
-            season_number: season,
-            episode_number: episode,
+            userId: req.userId!,
+            showId,
+            seasonNumber: season,
+            episodeNumber: episode,
             watched,
-            watched_at: watched ? new Date().toISOString() : null,
+            watchedAt: watched ? new Date() : null,
           },
-          {
-            onConflict: "user_id,show_id,season_number,episode_number",
-          }
-        )
-
-        if (error) {
-          return res.status(500).json({ message: "Failed to update progress" })
-        }
+        ])
 
         if (watched) {
           await ensureUserShow(req.userId!, showId)
@@ -1083,23 +1072,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Upsert aired episodes only
         const progressRecords = airedEpisodes.map((ep: any) => ({
-          user_id: req.userId,
-          show_id: parseInt(id),
-          season_number: parseInt(seasonNumber),
-          episode_number: ep.episode_number,
+          userId: req.userId!,
+          showId: parseInt(id),
+          seasonNumber: parseInt(seasonNumber),
+          episodeNumber: ep.episode_number,
           watched,
-          watched_at: watched ? new Date().toISOString() : null,
+          watchedAt: watched ? new Date() : null,
         }))
 
-        const { error } = await supabase
-          .from("watch_progress")
-          .upsert(progressRecords, {
-            onConflict: "user_id,show_id,season_number,episode_number",
-          })
-
-        if (error) {
-          return res.status(500).json({ message: "Failed to update season" })
-        }
+        await upsertWatchProgress(progressRecords)
 
         if (watched && progressRecords.length > 0) {
           await ensureUserShow(req.userId!, parseInt(id))
@@ -1129,17 +1110,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: AuthRequest, res: Response) => {
       try {
         const { id } = req.params
-        const { episodes } = req.body
+        // Named episodeInputs, not episodes: the request body would otherwise
+        // shadow the imported episodes table for the rest of this handler.
+        const { episodes: episodeInputs } = req.body
         const showId = parseInt(id)
 
-        if (!Array.isArray(episodes) || episodes.length === 0) {
+        if (!Array.isArray(episodeInputs) || episodeInputs.length === 0) {
           return res.status(400).json({ message: "Episodes array is required" })
         }
 
         // Drop watched=true entries for episodes that haven't aired; unwatching
         // is always allowed. Only fetch air dates for the entries that need one.
         const validEpisodes = await Promise.all(
-          episodes.map(async (ep: any) => {
+          episodeInputs.map(async (ep: any) => {
             if (!ep.watched) return ep
             const airDate = await getEpisodeAirDate(
               showId,
@@ -1152,28 +1135,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create progress records for the valid episodes
         const progressRecords = validEpisodes.map((ep: any) => ({
-          user_id: req.userId,
-          show_id: showId,
-          season_number: ep.season,
-          episode_number: ep.episode,
+          userId: req.userId!,
+          showId,
+          seasonNumber: ep.season,
+          episodeNumber: ep.episode,
           watched: ep.watched,
-          watched_at: ep.watched ? new Date().toISOString() : null,
+          watchedAt: ep.watched ? new Date() : null,
         }))
 
         if (progressRecords.length > 0) {
-          // Batch upsert all episodes (specify composite key for conflict resolution)
-          const { error } = await supabase
-            .from("watch_progress")
-            .upsert(progressRecords, {
-              onConflict: "user_id,show_id,season_number,episode_number",
-            })
-
-          if (error) {
-            console.error("Bulk progress update error:", error)
-            return res
-              .status(500)
-              .json({ message: "Failed to update progress" })
-          }
+          await upsertWatchProgress(progressRecords)
 
           if (progressRecords.some((record) => record.watched)) {
             await ensureUserShow(req.userId!, showId)
@@ -1192,7 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({
           success: true,
           count: progressRecords.length,
-          skipped: episodes.length - progressRecords.length,
+          skipped: episodeInputs.length - progressRecords.length,
         })
       } catch (error) {
         console.error("Bulk update progress error:", error)
@@ -1222,36 +1193,31 @@ async function runValidateStatusJob({
 
     const isTargetedShow = targetShowId !== undefined
 
-    let query = supabase
-      .from("user_shows")
-      .select("show_id")
-      .eq("user_id", userId)
-      .neq("status", "stopped")
+    const filters = [
+      eq(userShows.userId, userId),
+      ne(userShows.status, "stopped"),
+    ]
 
     if (scope === "caught_up_only") {
-      query = query.eq("status", "caught_up")
+      filters.push(eq(userShows.status, "caught_up"))
     } else if (scope === "completed_recheck") {
-      query = query.eq("status", "completed")
+      filters.push(eq(userShows.status, "completed"))
     } else if (!isTargetedShow) {
       // Bulk "all" sweeps skip completed shows (they rarely change); a
       // targeted single-show check (e.g. from the show detail page) still
       // re-validates a completed show in case it was renewed.
-      query = query.neq("status", "completed")
+      filters.push(ne(userShows.status, "completed"))
     }
     if (isTargetedShow) {
-      query = query.eq("show_id", targetShowId)
+      filters.push(eq(userShows.showId, targetShowId!))
     }
 
-    const { data: rows, error } = await query
+    const rows = await db
+      .select({ showId: userShows.showId })
+      .from(userShows)
+      .where(and(...filters))
 
-    if (error) {
-      console.error(`[validate-status:${runId}] fetch user_shows failed`, {
-        error,
-      })
-      return
-    }
-
-    if (!rows?.length) {
+    if (!rows.length) {
       console.log(`[validate-status:${runId}] no matching shows`, {
         userId,
         scope,
@@ -1269,7 +1235,7 @@ async function runValidateStatusJob({
     let skipped = 0
 
     for (const row of rows) {
-      const showId = row.show_id as number
+      const showId = row.showId
       const showStartMs = Date.now()
       try {
         console.log(`[validate-status:${runId}] show start`, { showId })
@@ -1337,22 +1303,28 @@ async function upsertShowFromTmdb(
   options: TmdbFetchOptions = {}
 ) {
   const tmdbShow = await getTVShowDetails(showId, options)
-  const { error: showError } = await supabase.from("shows").upsert({
+  const values = {
     id: tmdbShow.id,
     name: tmdbShow.name,
     overview: tmdbShow.overview,
-    poster_path: tmdbShow.poster_path,
-    backdrop_path: tmdbShow.backdrop_path,
-    first_air_date: tmdbShow.first_air_date,
-    vote_average: tmdbShow.vote_average?.toString(),
-    number_of_seasons: tmdbShow.number_of_seasons,
-    number_of_episodes: tmdbShow.number_of_episodes,
+    posterPath: tmdbShow.poster_path,
+    backdropPath: tmdbShow.backdrop_path,
+    firstAirDate: tmdbShow.first_air_date,
+    voteAverage: tmdbShow.vote_average?.toString(),
+    numberOfSeasons: tmdbShow.number_of_seasons,
+    numberOfEpisodes: tmdbShow.number_of_episodes,
     status: tmdbShow.status,
     genres: tmdbShow.genres?.map((g: any) => g.name),
-    tmdb_data: tmdbShow,
-  })
-  if (showError) {
-    console.error("Show upsert error:", showError)
+    tmdbData: tmdbShow,
+    lastUpdated: new Date(),
+  }
+  try {
+    await db
+      .insert(shows)
+      .values(values)
+      .onConflictDoUpdate({ target: shows.id, set: values })
+  } catch (error) {
+    console.error("Show upsert error:", error)
   }
   return tmdbShow
 }
@@ -1366,90 +1338,89 @@ type GetShowsWithProgressOptions = {
 
 type UserShowRow = {
   id: string
-  user_id: string
-  show_id: number
+  userId: string
+  showId: number
   status: string
   rating: number | null
   notes: string | null
-  added_at: string
-  updated_at: string
-  shows?: Record<string, unknown> | null
-  last_watch_at?: string | null
-  next_air_date?: string | null
-  next_season_number?: number | null
-  next_episode_number?: number | null
+  addedAt: Date
+  updatedAt: Date
+  show?: Record<string, unknown> | null
+  lastWatchAt?: Date | null
+  nextAirDate?: string | null
+  nextSeasonNumber?: number | null
+  nextEpisodeNumber?: number | null
 }
 
 async function batchShowProgress(
   userId: string,
-  userShows: UserShowRow[],
+  rows: UserShowRow[],
   showsById: Record<number, Record<string, unknown>>
 ) {
-  const showIds = userShows.map((us) => us.show_id)
+  const showIds = rows.map((us) => us.showId)
 
-  const [{ data: watchProgressRows }, { data: episodeRows }] =
-    await Promise.all([
-      supabase
-        .from("watch_progress")
-        .select("show_id, season_number, episode_number")
-        .eq("user_id", userId)
-        .in("show_id", showIds)
-        .eq("watched", true),
-      supabase
-        .from("episodes")
-        .select("show_id, season_number, episode_number, air_date, name")
-        .in("show_id", showIds)
-        .order("show_id", { ascending: true })
-        .order("season_number", { ascending: true })
-        .order("episode_number", { ascending: true }),
-    ])
+  const [watchProgressRows, episodeRows] = await Promise.all([
+    db
+      .select({
+        showId: watchProgress.showId,
+        seasonNumber: watchProgress.seasonNumber,
+        episodeNumber: watchProgress.episodeNumber,
+      })
+      .from(watchProgress)
+      .where(
+        and(
+          eq(watchProgress.userId, userId),
+          inArray(watchProgress.showId, showIds),
+          eq(watchProgress.watched, true)
+        )
+      ),
+    db
+      .select({
+        showId: episodes.showId,
+        seasonNumber: episodes.seasonNumber,
+        episodeNumber: episodes.episodeNumber,
+        airDate: episodes.airDate,
+        name: episodes.name,
+      })
+      .from(episodes)
+      .where(inArray(episodes.showId, showIds))
+      .orderBy(
+        asc(episodes.showId),
+        asc(episodes.seasonNumber),
+        asc(episodes.episodeNumber)
+      ),
+  ])
 
-  // Group watch progress by show_id
+  // Group watch progress by show
   const watchedByShow: Record<number, Set<string>> = {}
-  for (const row of watchProgressRows ?? []) {
-    const sid = row.show_id as number
-    if (!watchedByShow[sid]) watchedByShow[sid] = new Set()
-    watchedByShow[sid].add(`${row.season_number}-${row.episode_number}`)
+  for (const row of watchProgressRows) {
+    if (!watchedByShow[row.showId]) watchedByShow[row.showId] = new Set()
+    watchedByShow[row.showId].add(`${row.seasonNumber}-${row.episodeNumber}`)
   }
 
-  // Group episodes by show_id (already ordered asc)
-  const episodesByShow: Record<
-    number,
-    Array<{
-      season_number: number
-      episode_number: number
-      air_date: string | null
-      name: string | null
-    }>
-  > = {}
-  for (const ep of episodeRows ?? []) {
-    const sid = ep.show_id as number
-    if (!episodesByShow[sid]) episodesByShow[sid] = []
-    episodesByShow[sid].push(
-      ep as {
-        season_number: number
-        episode_number: number
-        air_date: string | null
-        name: string | null
-      }
-    )
+  // Group episodes by show (already ordered asc)
+  type EpisodeRow = (typeof episodeRows)[number]
+  const episodesByShow: Record<number, EpisodeRow[]> = {}
+  for (const ep of episodeRows) {
+    if (!episodesByShow[ep.showId]) episodesByShow[ep.showId] = []
+    episodesByShow[ep.showId].push(ep)
   }
 
   const now = new Date().toISOString()
 
-  return userShows.map((us) => {
-    const show = us.shows ?? showsById[us.show_id] ?? {}
-    const watched = watchedByShow[us.show_id] ?? new Set()
+  return rows.map((us) => {
+    const show = us.show ?? showsById[us.showId] ?? {}
+    const watched = watchedByShow[us.showId] ?? new Set()
 
-    const episodes = episodesByShow[us.show_id]
-    const airedKeys = episodes
+    // showEpisodes, not episodes: that name is the imported table here.
+    const showEpisodes = episodesByShow[us.showId]
+    const airedKeys = showEpisodes
       ? new Set(
-          episodes
+          showEpisodes
             .filter(
-              (ep) =>
-                ep.season_number !== 0 && ep.air_date && ep.air_date <= now
+              (ep) => ep.seasonNumber !== 0 && ep.airDate && ep.airDate <= now
             )
-            .map((ep) => `${ep.season_number}-${ep.episode_number}`)
+            .map((ep) => `${ep.seasonNumber}-${ep.episodeNumber}`)
         )
       : null
 
@@ -1460,7 +1431,7 @@ async function batchShowProgress(
       : watched.size
     const totalEpisodes = airedKeys
       ? airedKeys.size || 1
-      : (show.number_of_episodes as number) || 1
+      : (show.numberOfEpisodes as number) || 1
     const progress = (watchedEpisodes / totalEpisodes) * 100
 
     let nextEpisode: {
@@ -1471,19 +1442,17 @@ async function batchShowProgress(
       name: string | null
     } | null = null
 
-    if (episodes) {
-      for (const ep of episodes) {
-        const key = `${ep.season_number}-${ep.episode_number}`
+    if (showEpisodes) {
+      for (const ep of showEpisodes) {
+        const key = `${ep.seasonNumber}-${ep.episodeNumber}`
         if (!watched.has(key)) {
-          const airDate = ep.air_date ?? null
+          const airDate = ep.airDate ?? null
           const daysUntil = airDate
-            ? Math.ceil(
-                (parseAirDate(airDate)!.getTime() - Date.now()) / 86400000
-              )
+            ? Math.ceil((new Date(airDate).getTime() - Date.now()) / 86400000)
             : null
           nextEpisode = {
-            season: ep.season_number,
-            episode: ep.episode_number,
+            season: ep.seasonNumber,
+            episode: ep.episodeNumber,
             airDate,
             daysUntil,
             name: ep.name ?? null,
@@ -1508,119 +1477,135 @@ async function getShowsWithProgress(
   const search = options.search
   const offset = (page - 1) * limit
 
-  let userShows: UserShowRow[] | null
-  let count: number | null
+  // shows.id is a NOT NULL foreign key on user_shows, so an inner join matches
+  // the same rows a left join would and lets the name filter act as a plain
+  // WHERE. Under PostgREST this needed the !inner hint, and the two view paths
+  // below needed an entirely separate round trip to resolve matching ids first,
+  // because a view could not be joined to a table at all.
+  const nameFilter = search ? ilike(shows.name, `%${search}%`) : undefined
 
-  if (sortBy === "updated_at") {
-    // Use !inner join when filtering so the ilike acts as a WHERE on the parent rows
-    const selectClause = search ? "*, shows!inner(*)" : "*, shows(*)"
-    let q = supabase
-      .from("user_shows")
-      .select(selectClause, { count: "exact" })
-      .eq("user_id", userId)
-      .eq("status", status)
-    if (search) q = q.ilike("shows.name", `%${search}%`)
-    const { data, count: c } = await q
-      .order("updated_at", { ascending: false })
-      .range(offset, offset + limit - 1)
-    userShows = data
-    count = c
-  } else if (sortBy === "recent_watch") {
-    let q = supabase
-      .from("user_shows_with_last_watch")
-      .select("*", { count: "exact" })
-      .eq("user_id", userId)
-      .eq("status", status)
-    if (search) {
-      const { data: matched } = await supabase
-        .from("user_shows")
-        .select("show_id, shows!inner(name)")
-        .eq("user_id", userId)
-        .eq("status", status)
-        .ilike("shows.name", `%${search}%`)
-      const ids = matched?.map((r) => r.show_id) ?? []
-      q = q.in("show_id", ids)
-    }
-    const { data, count: c } = await q
-      .order("last_watch_at", { ascending: false, nullsFirst: false })
-      .range(offset, offset + limit - 1)
-    userShows = data
-    count = c
-  } else {
-    // sortBy === "next_air_date"
-    let q = supabase
-      .from("user_shows_with_next_air")
-      .select("*", { count: "exact" })
-      .eq("user_id", userId)
-      .eq("status", status)
-    if (search) {
-      const { data: matched } = await supabase
-        .from("user_shows")
-        .select("show_id, shows!inner(name)")
-        .eq("user_id", userId)
-        .eq("status", status)
-        .ilike("shows.name", `%${search}%`)
-      const ids = matched?.map((r) => r.show_id) ?? []
-      q = q.in("show_id", ids)
-    }
-    const { data, count: c } = await q
-      .order("next_air_date", { ascending: true, nullsFirst: false })
-      .range(offset, offset + limit - 1)
-    userShows = data
-    count = c
+  let rows: UserShowRow[]
+  let count: number
+
+  const countOf = async (
+    from:
+      | typeof userShows
+      | typeof userShowsWithLastWatch
+      | typeof userShowsWithNextAir,
+    joinCol: any,
+    where: any
+  ) => {
+    const [row] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(from as any)
+      .innerJoin(shows, eq(shows.id, joinCol))
+      .where(where)
+    return row?.value ?? 0
   }
 
-  if (!userShows || userShows.length === 0) {
+  if (sortBy === "updated_at") {
+    const where = and(
+      eq(userShows.userId, userId),
+      eq(userShows.status, status),
+      nameFilter
+    )
+    const [total, joined] = await Promise.all([
+      countOf(userShows, userShows.showId, where),
+      db
+        .select({ us: userShows, show: shows })
+        .from(userShows)
+        .innerJoin(shows, eq(shows.id, userShows.showId))
+        .where(where)
+        .orderBy(desc(userShows.updatedAt))
+        .limit(limit)
+        .offset(offset),
+    ])
+    rows = joined.map((r) => ({ ...r.us, show: r.show })) as UserShowRow[]
+    count = total
+  } else if (sortBy === "recent_watch") {
+    const v = userShowsWithLastWatch
+    const where = and(eq(v.userId, userId), eq(v.status, status), nameFilter)
+    const [total, joined] = await Promise.all([
+      countOf(v, v.showId, where),
+      db
+        // Views need their columns listed individually; Drizzle will not take a
+        // whole pgView as a selection the way it takes a pgTable.
+        .select({
+          id: v.id,
+          userId: v.userId,
+          showId: v.showId,
+          status: v.status,
+          rating: v.rating,
+          notes: v.notes,
+          addedAt: v.addedAt,
+          updatedAt: v.updatedAt,
+          lastWatchAt: v.lastWatchAt,
+          show: shows,
+        })
+        .from(v)
+        .innerJoin(shows, eq(shows.id, v.showId))
+        .where(where)
+        .orderBy(sql`${v.lastWatchAt} desc nulls last`)
+        .limit(limit)
+        .offset(offset),
+    ])
+    rows = joined as unknown as UserShowRow[]
+    count = total
+  } else {
+    const v = userShowsWithNextAir
+    const where = and(eq(v.userId, userId), eq(v.status, status), nameFilter)
+    const [total, joined] = await Promise.all([
+      countOf(v, v.showId, where),
+      db
+        .select({
+          id: v.id,
+          userId: v.userId,
+          showId: v.showId,
+          status: v.status,
+          rating: v.rating,
+          notes: v.notes,
+          addedAt: v.addedAt,
+          updatedAt: v.updatedAt,
+          nextAirDate: v.nextAirDate,
+          nextSeasonNumber: v.nextSeasonNumber,
+          nextEpisodeNumber: v.nextEpisodeNumber,
+          show: shows,
+        })
+        .from(v)
+        .innerJoin(shows, eq(shows.id, v.showId))
+        .where(where)
+        .orderBy(sql`${v.nextAirDate} asc nulls last`)
+        .limit(limit)
+        .offset(offset),
+    ])
+    rows = joined as unknown as UserShowRow[]
+    count = total
+  }
+
+  if (rows.length === 0) {
     return { shows: [], total: 0, page, totalPages: 0 }
   }
 
-  // When using a view we don't have shows(*) embedded; fetch shows for this page
-  const showsById: Record<number, Record<string, unknown>> = {}
-  if (sortBy !== "updated_at") {
-    const showIds = userShows.map((r) => r.show_id)
-    const { data: showsData } = await supabase
-      .from("shows")
-      .select("*")
-      .in("id", showIds)
-    if (showsData) {
-      for (const s of showsData) {
-        showsById[s.id as number] = s
-      }
-    }
-  }
+  const totalPages = Math.ceil(count / limit)
+  const progressResults = await batchShowProgress(userId, rows, {})
 
-  const totalPages = Math.ceil((count ?? 0) / limit)
-
-  const progressResults = await batchShowProgress(userId, userShows, showsById)
-
-  const shows = userShows.map((us: UserShowRow, i: number) => {
-    const show = us.shows ?? showsById[us.show_id] ?? {}
+  const result = rows.map((us, i) => {
     const { watchedEpisodes, totalEpisodes, progress, nextEpisode } =
       progressResults[i]
 
+    // Drizzle already returns camelCase, so the show row and the user_show row
+    // both go out as-is rather than being copied field by field.
     return {
-      id: show.id,
-      name: show.name,
-      overview: show.overview,
-      posterPath: show.poster_path,
-      backdropPath: show.backdrop_path,
-      firstAirDate: show.first_air_date,
-      voteAverage: show.vote_average,
-      numberOfSeasons: show.number_of_seasons,
-      numberOfEpisodes: show.number_of_episodes,
-      status: show.status,
-      genres: show.genres,
-      tmdbData: show.tmdb_data,
-      lastUpdated: show.last_updated,
+      ...(us.show as Record<string, unknown>),
       userShow: {
         id: us.id,
-        userId: us.user_id,
-        showId: us.show_id,
+        userId: us.userId,
+        showId: us.showId,
         status: us.status,
         rating: us.rating,
         notes: us.notes,
-        addedAt: us.added_at,
-        updatedAt: us.updated_at,
+        addedAt: us.addedAt,
+        updatedAt: us.updatedAt,
       },
       watchedEpisodes,
       totalEpisodes,
@@ -1629,38 +1614,43 @@ async function getShowsWithProgress(
     }
   })
 
-  return { shows, total: count ?? 0, page, totalPages }
+  return { shows: result, total: count, page, totalPages }
 }
 
 async function findNextUnwatchedEpisode(userId: string, showId: number) {
   try {
     // Get show details to know how many seasons
-    const { data: show } = await supabase
-      .from("shows")
-      .select("number_of_seasons")
-      .eq("id", showId)
-      .single()
+    const [show] = await db
+      .select({ numberOfSeasons: shows.numberOfSeasons })
+      .from(shows)
+      .where(eq(shows.id, showId))
+      .limit(1)
 
-    if (!show || !show.number_of_seasons) {
+    if (!show || !show.numberOfSeasons) {
       return null
     }
 
     // Get all watched episodes for this show
-    const { data: watchedProgress } = await supabase
-      .from("watch_progress")
-      .select("season_number, episode_number")
-      .eq("user_id", userId)
-      .eq("show_id", showId)
-      .eq("watched", true)
+    const watchedProgress = await db
+      .select({
+        seasonNumber: watchProgress.seasonNumber,
+        episodeNumber: watchProgress.episodeNumber,
+      })
+      .from(watchProgress)
+      .where(
+        and(
+          eq(watchProgress.userId, userId),
+          eq(watchProgress.showId, showId),
+          eq(watchProgress.watched, true)
+        )
+      )
 
     const watchedSet = new Set(
-      (watchedProgress || []).map(
-        (w: any) => `${w.season_number}-${w.episode_number}`
-      )
+      watchedProgress.map((w) => `${w.seasonNumber}-${w.episodeNumber}`)
     )
 
     // Iterate through seasons to find first unwatched episode
-    for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
+    for (let seasonNum = 1; seasonNum <= show.numberOfSeasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
@@ -1701,33 +1691,46 @@ async function findNextUnwatchedEpisode(userId: string, showId: number) {
 async function calculateShowProgress(userId: string, showId: number) {
   const now = new Date().toISOString()
   const fetchAiredEpisodes = () =>
-    supabase
-      .from("episodes")
-      .select("season_number, episode_number")
-      .eq("show_id", showId)
-      .neq("season_number", 0)
-      .lte("air_date", now)
-      .not("air_date", "is", null)
+    db
+      .select({
+        seasonNumber: episodes.seasonNumber,
+        episodeNumber: episodes.episodeNumber,
+      })
+      .from(episodes)
+      .where(
+        and(
+          eq(episodes.showId, showId),
+          ne(episodes.seasonNumber, 0),
+          isNotNull(episodes.airDate),
+          lte(episodes.airDate, now)
+        )
+      )
 
-  let { data: airedEpisodes } = await fetchAiredEpisodes()
-  if (!airedEpisodes || airedEpisodes.length === 0) {
+  let airedEpisodes = await fetchAiredEpisodes()
+  if (airedEpisodes.length === 0) {
     await ensureEpisodesCached(showId)
-    const r = await fetchAiredEpisodes()
-    airedEpisodes = r.data
+    airedEpisodes = await fetchAiredEpisodes()
   }
 
-  const { data: progress } = await supabase
-    .from("watch_progress")
-    .select("season_number, episode_number")
-    .eq("user_id", userId)
-    .eq("show_id", showId)
-    .eq("watched", true)
+  const progress = await db
+    .select({
+      seasonNumber: watchProgress.seasonNumber,
+      episodeNumber: watchProgress.episodeNumber,
+    })
+    .from(watchProgress)
+    .where(
+      and(
+        eq(watchProgress.userId, userId),
+        eq(watchProgress.showId, showId),
+        eq(watchProgress.watched, true)
+      )
+    )
 
   const airedKeys = new Set(
-    (airedEpisodes || []).map((e) => `${e.season_number}-${e.episode_number}`)
+    airedEpisodes.map((e) => `${e.seasonNumber}-${e.episodeNumber}`)
   )
-  const watchedEpisodes = (progress || []).filter((p) =>
-    airedKeys.has(`${p.season_number}-${p.episode_number}`)
+  const watchedEpisodes = progress.filter((p) =>
+    airedKeys.has(`${p.seasonNumber}-${p.episodeNumber}`)
   ).length
   const totalEpisodes = airedKeys.size || 1
   const progressPercent = (watchedEpisodes / totalEpisodes) * 100
@@ -1750,13 +1753,13 @@ async function markShowEpisodesWatched(
 ) {
   try {
     // Get show details including number of seasons
-    const { data: show } = await supabase
-      .from("shows")
-      .select("number_of_seasons")
-      .eq("id", showId)
-      .single()
+    const [show] = await db
+      .select({ numberOfSeasons: shows.numberOfSeasons })
+      .from(shows)
+      .where(eq(shows.id, showId))
+      .limit(1)
 
-    if (!show || !show.number_of_seasons) {
+    if (!show || !show.numberOfSeasons) {
       console.warn(`Show ${showId} has no season data`)
       return
     }
@@ -1765,7 +1768,7 @@ async function markShowEpisodesWatched(
     const allEpisodes: Array<{ seasonNumber: number; episodeNumber: number }> =
       []
 
-    for (let seasonNum = 1; seasonNum <= show.number_of_seasons; seasonNum++) {
+    for (let seasonNum = 1; seasonNum <= show.numberOfSeasons; seasonNum++) {
       try {
         const seasonData = await getTVShowSeason(showId, seasonNum)
         if (seasonData.episodes && seasonData.episodes.length > 0) {
@@ -1794,27 +1797,20 @@ async function markShowEpisodesWatched(
 
     // Prepare watch_progress records for bulk upsert
     const watchProgressRecords = allEpisodes.map((ep) => ({
-      user_id: userId,
-      show_id: showId,
-      season_number: ep.seasonNumber,
-      episode_number: ep.episodeNumber,
+      userId,
+      showId,
+      seasonNumber: ep.seasonNumber,
+      episodeNumber: ep.episodeNumber,
       watched,
-      watched_at: watched ? new Date().toISOString() : null,
+      watchedAt: watched ? new Date() : null,
     }))
 
-    // Batch upsert in chunks of 100 to respect Supabase limits
+    // Chunked to keep any single statement from carrying thousands of rows
     const CHUNK_SIZE = 100
     for (let i = 0; i < watchProgressRecords.length; i += CHUNK_SIZE) {
       const chunk = watchProgressRecords.slice(i, i + CHUNK_SIZE)
 
-      const { error } = await supabase.from("watch_progress").upsert(chunk, {
-        onConflict: "user_id,show_id,season_number,episode_number",
-      })
-
-      if (error) {
-        console.error(`Failed to upsert watch progress chunk:`, error)
-        throw error
-      }
+      await upsertWatchProgress(chunk)
     }
 
     console.log(
@@ -1835,15 +1831,19 @@ async function getEpisodeAirDate(
   seasonNumber: number,
   episodeNumber: number
 ): Promise<string | null> {
-  const { data: cached } = await supabase
-    .from("episodes")
-    .select("air_date")
-    .eq("show_id", showId)
-    .eq("season_number", seasonNumber)
-    .eq("episode_number", episodeNumber)
-    .maybeSingle()
+  const [cached] = await db
+    .select({ airDate: episodes.airDate })
+    .from(episodes)
+    .where(
+      and(
+        eq(episodes.showId, showId),
+        eq(episodes.seasonNumber, seasonNumber),
+        eq(episodes.episodeNumber, episodeNumber)
+      )
+    )
+    .limit(1)
 
-  if (cached) return cached.air_date
+  if (cached) return cached.airDate
 
   try {
     const season = await getTVShowSeason(showId, seasonNumber)
@@ -1874,13 +1874,15 @@ async function needsEpisodeRefresh(
   if (!isEnded) return true
   if (!tmdbShow.number_of_episodes) return true
 
-  const { count, error } = await supabase
-    .from("episodes")
-    .select("*", { count: "exact", head: true })
-    .eq("show_id", showId)
-
-  if (error || count == null) return true
-  return count !== tmdbShow.number_of_episodes
+  try {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(episodes)
+      .where(eq(episodes.showId, showId))
+    return row.count !== tmdbShow.number_of_episodes
+  } catch {
+    return true
+  }
 }
 
 // Rebuild the seasons payload from the episodes table. Returns null when the
@@ -1890,31 +1892,51 @@ async function readSeasonsFromCache(
   showId: number,
   seasonNums: number[]
 ): Promise<any[] | null> {
-  const { data: rows, error } = await supabase
-    .from("episodes")
-    .select(
-      "season_number, episode_number, name, air_date, runtime, overview, still_path"
-    )
-    .eq("show_id", showId)
-    .order("season_number", { ascending: true })
-    .order("episode_number", { ascending: true })
+  // The rows come back camelCase, but this payload stands in for TMDB's, so
+  // the output stays snake_case to match TMDBSeason.
+  let rows: {
+    seasonNumber: number
+    episodeNumber: number
+    name: string | null
+    airDate: string | null
+    runtime: number | null
+    overview: string | null
+    stillPath: string | null
+  }[]
+  try {
+    rows = await db
+      .select({
+        seasonNumber: episodes.seasonNumber,
+        episodeNumber: episodes.episodeNumber,
+        name: episodes.name,
+        airDate: episodes.airDate,
+        runtime: episodes.runtime,
+        overview: episodes.overview,
+        stillPath: episodes.stillPath,
+      })
+      .from(episodes)
+      .where(eq(episodes.showId, showId))
+      .orderBy(asc(episodes.seasonNumber), asc(episodes.episodeNumber))
+  } catch {
+    return null
+  }
 
-  if (error || !rows?.length) return null
+  if (!rows.length) return null
 
   const bySeason = new Map<number, any[]>()
   for (const row of rows) {
-    const list = bySeason.get(row.season_number) ?? []
+    const list = bySeason.get(row.seasonNumber) ?? []
     list.push({
-      id: `${showId}-${row.season_number}-${row.episode_number}`,
-      episode_number: row.episode_number,
-      season_number: row.season_number,
+      id: `${showId}-${row.seasonNumber}-${row.episodeNumber}`,
+      episode_number: row.episodeNumber,
+      season_number: row.seasonNumber,
       name: row.name,
       overview: row.overview,
-      still_path: row.still_path,
-      air_date: row.air_date,
+      still_path: row.stillPath,
+      air_date: row.airDate,
       runtime: row.runtime,
     })
-    bySeason.set(row.season_number, list)
+    bySeason.set(row.seasonNumber, list)
   }
 
   // A partially cached show would silently hide seasons, so fall back instead.
@@ -1934,29 +1956,29 @@ async function readSeasonsFromCache(
 
 // Ensure episodes are cached for a show (fetches from TMDB if missing). No-op if already cached.
 async function ensureEpisodesCached(showId: number): Promise<void> {
-  const { count } = await supabase
-    .from("episodes")
-    .select("*", { count: "exact", head: true })
-    .eq("show_id", showId)
-  if ((count ?? 0) > 0) return
+  const [cachedCount] = await db
+    .select({ value: sql<number>`count(*)::int` })
+    .from(episodes)
+    .where(eq(episodes.showId, showId))
+  if (cachedCount.value > 0) return
 
-  let { data: show } = await supabase
-    .from("shows")
-    .select("number_of_seasons")
-    .eq("id", showId)
-    .single()
-
-  if (!show?.number_of_seasons) {
-    await upsertShowFromTmdb(showId)
-    const r = await supabase
-      .from("shows")
-      .select("number_of_seasons")
-      .eq("id", showId)
-      .single()
-    show = r.data
+  const selectSeasonCount = async () => {
+    const [row] = await db
+      .select({ numberOfSeasons: shows.numberOfSeasons })
+      .from(shows)
+      .where(eq(shows.id, showId))
+      .limit(1)
+    return row
   }
 
-  const n = show?.number_of_seasons
+  let show = await selectSeasonCount()
+
+  if (!show?.numberOfSeasons) {
+    await upsertShowFromTmdb(showId)
+    show = await selectSeasonCount()
+  }
+
+  const n = show?.numberOfSeasons
   if (!n) return
 
   const seasons = await Promise.all(
@@ -1970,21 +1992,23 @@ async function ensureEpisodesCached(showId: number): Promise<void> {
 // Cache episodes in the database for faster lookups
 async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
   try {
-    const episodesToCache: any[] = []
+    // Typed rather than any[]: these are column names now, and an any[] here
+    // silently hid the snake_case keys this used to push.
+    const episodesToCache: (typeof episodes.$inferInsert)[] = []
 
     for (const season of seasons) {
       if (!season.episodes || season.season_number === 0) continue
 
       for (const episode of season.episodes) {
         episodesToCache.push({
-          show_id: showId,
-          season_number: season.season_number,
-          episode_number: episode.episode_number,
+          showId,
+          seasonNumber: season.season_number,
+          episodeNumber: episode.episode_number,
           name: episode.name,
-          air_date: episode.air_date,
+          airDate: episode.air_date,
           runtime: episode.runtime,
           overview: episode.overview,
-          still_path: episode.still_path,
+          stillPath: episode.still_path,
         })
       }
     }
@@ -1995,17 +2019,23 @@ async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
       for (let i = 0; i < episodesToCache.length; i += CHUNK_SIZE) {
         const chunk = episodesToCache.slice(i, i + CHUNK_SIZE)
 
-        const { error } = await supabase.from("episodes").upsert(chunk, {
-          onConflict: "show_id,season_number,episode_number",
-        })
-
-        if (error) {
-          console.error(
-            `Failed to cache episodes chunk for show ${showId}:`,
-            error
-          )
-          throw error
-        }
+        await db
+          .insert(episodes)
+          .values(chunk)
+          .onConflictDoUpdate({
+            target: [
+              episodes.showId,
+              episodes.seasonNumber,
+              episodes.episodeNumber,
+            ],
+            set: {
+              name: sql`excluded.name`,
+              overview: sql`excluded.overview`,
+              stillPath: sql`excluded.still_path`,
+              airDate: sql`excluded.air_date`,
+              runtime: sql`excluded.runtime`,
+            },
+          })
       }
       console.log(
         `✓ Cached ${episodesToCache.length} episodes for show ${showId}`
@@ -2024,24 +2054,16 @@ async function cacheEpisodesInDatabase(showId: number, seasons: any[]) {
 // zero rows and silently does nothing. Adding the show later then inherits that
 // orphaned progress, arriving with a status that contradicts it.
 async function ensureUserShow(userId: string, showId: number): Promise<void> {
-  const { data: existing } = await supabase
-    .from("user_shows")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("show_id", showId)
-    .maybeSingle()
-
-  if (existing) return
-
   // Seeded, not decided: updateInferredStatus runs immediately after every
   // caller and replaces this with the status the progress actually implies.
-  const { error } = await supabase.from("user_shows").insert({
-    user_id: userId,
-    show_id: showId,
-    status: "watching",
-  })
-
-  if (error) {
+  // onConflictDoNothing replaces a select-then-insert that could double-insert
+  // when two episodes were ticked at once.
+  try {
+    await db
+      .insert(userShows)
+      .values({ userId, showId, status: "watching" })
+      .onConflictDoNothing({ target: [userShows.userId, userShows.showId] })
+  } catch (error) {
     console.error(`Error creating user_shows row for show ${showId}:`, error)
   }
 }
@@ -2055,11 +2077,11 @@ async function updateInferredStatus(
 ): Promise<string | null> {
   try {
     // Get show status
-    const { data: show } = await supabase
-      .from("shows")
-      .select("status")
-      .eq("id", showId)
-      .single()
+    const [show] = await db
+      .select({ status: shows.status })
+      .from(shows)
+      .where(eq(shows.id, showId))
+      .limit(1)
 
     if (!show) {
       console.log(`⚠ Show ${showId} not found, skipping status update`)
@@ -2067,46 +2089,41 @@ async function updateInferredStatus(
     }
 
     // Count watched episodes
-    const { data: watchedProgress } = await supabase
-      .from("watch_progress")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("show_id", showId)
-      .eq("watched", true)
-
-    const watchedCount = watchedProgress?.length || 0
+    const [watched] = await db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(watchProgress)
+      .where(
+        and(
+          eq(watchProgress.userId, userId),
+          eq(watchProgress.showId, showId),
+          eq(watchProgress.watched, true)
+        )
+      )
+    const watchedCount = watched?.value ?? 0
 
     // Count aired episodes from cached episodes table
     const now = new Date().toISOString()
-    const { count: airedCount, error: countError } = await supabase
-      .from("episodes")
-      .select("*", { count: "exact" })
-      .eq("show_id", showId)
-      .neq("season_number", 0) // Skip special seasons
-      .lte("air_date", now) // Only count aired episodes
-      .not("air_date", "is", null)
-
-    if (countError) {
-      console.error(
-        `Error counting aired episodes for show ${showId}:`,
-        countError
-      )
-      return null
+    const countAired = async () => {
+      const [row] = await db
+        .select({ value: sql<number>`count(*)::int` })
+        .from(episodes)
+        .where(
+          and(
+            eq(episodes.showId, showId),
+            ne(episodes.seasonNumber, 0), // Skip special seasons
+            isNotNull(episodes.airDate),
+            lte(episodes.airDate, now) // Only count aired episodes
+          )
+        )
+      return row?.value ?? 0
     }
 
-    let totalAiredEpisodes = airedCount || 0
+    let totalAiredEpisodes = await countAired()
 
     // If no episodes cached yet, try to fetch and cache from TMDB, then re-query
     if (totalAiredEpisodes === 0) {
       await ensureEpisodesCached(showId)
-      const { count: airedCount2, error: countError2 } = await supabase
-        .from("episodes")
-        .select("*", { count: "exact", head: true })
-        .eq("show_id", showId)
-        .neq("season_number", 0)
-        .lte("air_date", now)
-        .not("air_date", "is", null)
-      if (!countError2) totalAiredEpisodes = airedCount2 ?? 0
+      totalAiredEpisodes = await countAired()
       if (totalAiredEpisodes === 0) {
         console.log(
           `⚠ No cached episodes for show ${showId}, skipping status update`
@@ -2123,13 +2140,12 @@ async function updateInferredStatus(
     })
 
     // Update the status in the database
-    const { error: updateError } = await supabase
-      .from("user_shows")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .eq("show_id", showId)
-
-    if (updateError) {
+    try {
+      await db
+        .update(userShows)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(and(eq(userShows.userId, userId), eq(userShows.showId, showId)))
+    } catch (updateError) {
       console.error(
         `Error updating user_shows status for show ${showId}:`,
         updateError
