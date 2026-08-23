@@ -61,19 +61,6 @@ export const userShows = pgTable("user_shows", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-// Credentials for users who predate Auth0. Not written any more; kept so those
-// accounts still resolve.
-export const userCredentials = pgTable("user_credentials", {
-  id: text("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()::text`),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  passwordHash: text("password_hash").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-})
-
 // Episode information
 export const episodes = pgTable("episodes", {
   id: text("id")

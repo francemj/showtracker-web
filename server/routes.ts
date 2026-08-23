@@ -19,13 +19,13 @@ import {
   deviceTokens,
   episodes,
   shows,
-  userCredentials,
   users,
   userShows,
   userShowsWithLastWatch,
   userShowsWithNextAir,
   watchProgress,
 } from "../packages/shared/schema"
+import { userCredentials } from "./lib/schema"
 import {
   searchTVShows,
   getTVShowDetails,
