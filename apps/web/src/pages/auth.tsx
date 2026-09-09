@@ -1,121 +1,255 @@
 import { useState } from "react"
-import { useAuth } from "@/lib/auth"
+import { KeyRound, Loader2 } from "lucide-react"
+import { useAuth, browserSupportsWebAuthn } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { AuthLayout } from "@/components/auth-layout"
+
+type Mode = "signIn" | "signUp" | "forgot"
+
+const COPY: Record<Mode, { eyebrow: string; heading: string; blurb: string }> =
+  {
+    signIn: {
+      eyebrow: "Welcome back",
+      heading: "Pick up where\nyou left off.",
+      blurb: "Sign in to see what's next in every show you're watching.",
+    },
+    signUp: {
+      eyebrow: "Create an account",
+      heading: "Never lose\nyour place again.",
+      blurb: "Track every series, season and episode in one place.",
+    },
+    forgot: {
+      eyebrow: "Reset password",
+      heading: "Let's get you\nback in.",
+      blurb: "We'll email you a link. It works once and expires in an hour.",
+    },
+  }
 
 export default function AuthPage() {
-  const [isLoading, setIsLoading] = useState<"login" | "signup" | null>(null)
-  const { login } = useAuth()
-  const { toast } = useToast()
+  const { login, register, loginWithPasskey, requestPasswordReset } = useAuth()
 
-  const handleLogin = async () => {
-    setIsLoading("login")
+  const [mode, setMode] = useState<Mode>("signIn")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [name, setName] = useState("")
+  const [pending, setPending] = useState<null | "form" | "passkey">(null)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const copy = COPY[mode]
+  const busy = pending !== null
+
+  const switchTo = (next: Mode) => {
+    setMode(next)
+    setError(null)
+    setNotice(null)
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    setNotice(null)
+    setPending("form")
     try {
-      await login({ signUp: false })
-    } catch (error: any) {
-      toast({
-        title: "Login Failed",
-        description: error.message || "Could not sign in. Please try again.",
-        variant: "destructive",
-      })
+      if (mode === "signIn") {
+        await login(email, password)
+      } else if (mode === "signUp") {
+        await register(email, password, name.trim() || undefined)
+      } else {
+        await requestPasswordReset(email)
+        setNotice("If that account exists, a reset link is on its way.")
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Try again."
+      )
     } finally {
-      setIsLoading(null)
+      setPending(null)
     }
   }
 
-  const handleSignup = async () => {
-    setIsLoading("signup")
+  const handlePasskey = async () => {
+    setError(null)
+    setNotice(null)
+    setPending("passkey")
     try {
-      await login({ signUp: true })
-    } catch (error: any) {
-      toast({
-        title: "Sign Up Failed",
-        description:
-          error.message || "Could not create account. Please try again.",
-        variant: "destructive",
-      })
+      await loginWithPasskey()
+    } catch (err) {
+      // Cancelling the system prompt is a deliberate "not now", not a failure.
+      if (err instanceof Error && err.name === "NotAllowedError") return
+      setError(
+        err instanceof Error ? err.message : "That passkey didn't work here."
+      )
     } finally {
-      setIsLoading(null)
+      setPending(null)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div
-              className="flex items-center justify-center w-12 h-12 rounded-xl"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.55 0.16 155) 0%, oklch(0.55 0.16 305) 100%)",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "'Instrument Serif', serif",
-                  fontStyle: "italic",
-                  color: "#fff",
-                  fontSize: 28,
-                  lineHeight: 1,
-                }}
-              >
-                S
-              </span>
-            </div>
-            <h1 className="text-4xl font-serif italic text-foreground">
-              Showtracker
-            </h1>
+    <AuthLayout
+      eyebrow={copy.eyebrow}
+      heading={copy.heading}
+      blurb={copy.blurb}
+    >
+      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+        {mode === "signUp" && (
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              autoComplete="name"
+              placeholder="Optional"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+            />
           </div>
-          <p className="text-muted-foreground">
-            Track your favorite TV shows and never miss an episode
-          </p>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            // Lets the browser offer a saved passkey inline, which is the
+            // whole appeal of conditional UI.
+            autoComplete={mode === "signIn" ? "username webauthn" : "email"}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={busy}
+            data-testid="input-email"
+          />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-serif">Welcome</CardTitle>
-            <CardDescription>
-              Sign in or create an account to get started
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button
+        {mode !== "forgot" && (
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between">
+              <Label htmlFor="password">Password</Label>
+              {mode === "signIn" && (
+                <button
+                  type="button"
+                  onClick={() => switchTo("forgot")}
+                  className="font-sans text-[12px] text-muted-foreground hover:text-foreground"
+                >
+                  Forgot?
+                </button>
+              )}
+            </div>
+            <Input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete={
+                mode === "signIn" ? "current-password" : "new-password"
+              }
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+              data-testid="input-password"
+            />
+            {mode === "signUp" && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                At least 8 characters
+              </p>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            className="font-sans text-[13px] text-destructive"
+            data-testid="text-auth-error"
+          >
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="font-sans text-[13px] text-foreground">{notice}</p>
+        )}
+
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={busy}
+          data-testid="button-submit"
+        >
+          {pending === "form" && (
+            <Loader2 className="animate-spin" aria-hidden />
+          )}
+          {mode === "signIn"
+            ? "Sign in"
+            : mode === "signUp"
+              ? "Create account"
+              : "Email me a link"}
+        </Button>
+      </form>
+
+      {mode === "signIn" && browserSupportsWebAuthn() && (
+        <>
+          <div className="my-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              or
+            </span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handlePasskey}
+            disabled={busy}
+            data-testid="button-passkey"
+          >
+            {pending === "passkey" ? (
+              <Loader2 className="animate-spin" aria-hidden />
+            ) : (
+              <KeyRound aria-hidden />
+            )}
+            Use a passkey
+          </Button>
+        </>
+      )}
+
+      <p className="mt-8 font-sans text-[13px] text-muted-foreground">
+        {mode === "signUp" ? (
+          <>
+            Already have an account?{" "}
+            <button
               type="button"
-              className="w-full"
-              onClick={handleLogin}
-              disabled={!!isLoading}
-              data-testid="button-login"
+              onClick={() => switchTo("signIn")}
+              className="font-semibold text-foreground hover:underline"
             >
-              {isLoading === "login" ? "Signing in..." : "Sign In"}
-            </Button>
-            <Button
+              Sign in
+            </button>
+          </>
+        ) : mode === "forgot" ? (
+          <button
+            type="button"
+            onClick={() => switchTo("signIn")}
+            className="font-semibold text-foreground hover:underline"
+          >
+            ← Back to sign in
+          </button>
+        ) : (
+          <>
+            New here?{" "}
+            <button
               type="button"
-              variant="outline"
-              className="w-full"
-              onClick={handleSignup}
-              disabled={!!isLoading}
-              data-testid="button-signup"
+              onClick={() => switchTo("signUp")}
+              className="font-semibold text-foreground hover:underline"
+              data-testid="button-show-signup"
             >
-              {isLoading === "signup"
-                ? "Creating account..."
-                : "Create Account"}
-            </Button>
-          </CardContent>
-          <CardFooter className="text-xs text-center text-muted-foreground">
-            You’ll sign in or sign up securely in a popup. Your password is
-            never shared with this app.
-          </CardFooter>
-        </Card>
-      </div>
-    </div>
+              Create an account
+            </button>
+          </>
+        )}
+      </p>
+    </AuthLayout>
   )
 }

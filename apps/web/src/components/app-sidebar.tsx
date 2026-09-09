@@ -55,9 +55,9 @@ function StatusDot({ status }: { status: StatusKey }) {
 export function AppSidebar() {
   const [location] = useLocation()
   const { user, logout } = useAuth()
-  // Auth0 email signup sets `name` to the email address. Showing both lines
-  // then prints the same string twice — and truncated at this width they look
-  // identical — so collapse to the email alone when there's no real name.
+  // Accounts carried over from Auth0 can have `name` set to the email address.
+  // Showing both lines then prints the same string twice — and truncated at
+  // this width they look identical — so collapse to the email alone.
   const hasRealName = !!user?.name && user.name !== user?.email
   const displayName = hasRealName ? user!.name : user?.email
   const { closeSidebar, open } = useSidebar()
@@ -217,7 +217,10 @@ export function AppSidebar() {
               data-testid="link-profile"
             >
               <Avatar className="w-8 h-8">
-                <AvatarImage src={user?.picture} alt={user?.name} />
+                <AvatarImage
+                  src={user?.picture ?? undefined}
+                  alt={user?.name ?? undefined}
+                />
                 <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
                   {displayName?.charAt(0).toUpperCase() || (
                     <User className="w-4 h-4" />
@@ -249,7 +252,10 @@ export function AppSidebar() {
           <div className="flex flex-col items-center gap-2">
             <Link href="/profile" data-testid="link-profile">
               <Avatar className="w-8 h-8">
-                <AvatarImage src={user?.picture} alt={user?.name} />
+                <AvatarImage
+                  src={user?.picture ?? undefined}
+                  alt={user?.name ?? undefined}
+                />
                 <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
                   {displayName?.charAt(0).toUpperCase() || (
                     <User className="w-4 h-4" />
