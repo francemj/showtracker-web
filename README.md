@@ -4,7 +4,7 @@ Monorepo for a TV show tracker — search shows via [The Movie Database](https:/
 
 ## What it does
 
-- **Auth**: Sign in with [Auth0](https://auth0.com/) Universal Login (popup). The API accepts a **Bearer access token** on protected routes; there is no password auth in the app itself. Users who previously had local accounts can be linked on first Auth0 login when the email matches (see [AUTH0_SETUP.md](./AUTH0_SETUP.md)).
+- **Auth**: Email and password, or a passkey (Face ID / Touch ID / Windows Hello), on our own screens — no identity provider, no redirect, no popup. Web holds its session in an httpOnly cookie; mobile holds a bearer token in SecureStore. See [AUTH.md](./AUTH.md).
 - **Shows**: Search TMDB, add shows with a status (want to watch, watching, completed), and see posters, seasons, and episodes cached in the database.
 - **Progress**: Mark episodes watched, with logic for bulk watch/unwatch, status ↔ progress sync, and air-date–aware status for ongoing shows.
 
@@ -19,7 +19,7 @@ Monorepo for a TV show tracker — search shows via [The Movie Database](https:/
 | Backend | [Express](https://expressjs.com/) (TypeScript), routes in `server/` |
 | Entry | `api/index.ts` — local dev attaches Vite middleware for HMR; production serves `dist/public` |
 | Data | Self-hosted PostgreSQL via [Drizzle](https://orm.drizzle.team/) over `postgres.js`, behind PgBouncer |
-| Auth validation | Auth0 `/userinfo`; token → `sub` cache in [Upstash Redis](https://upstash.com/) (`server/lib/auth0.ts`) |
+| Auth | Own sessions in Postgres, passkeys via [SimpleWebAuthn](https://simplewebauthn.dev) (`server/lib/auth.ts`) |
 | External API | TMDB for show metadata |
 
 ### Mobile (`apps/mobile`)
@@ -29,7 +29,7 @@ Monorepo for a TV show tracker — search shows via [The Movie Database](https:/
 | Framework | [Expo](https://expo.dev/) ~54, React Native 0.81, [Expo Router](https://expo.github.io/router/) v6 |
 | UI | React Native Paper, Expo Linear Gradient, custom cinematic dark theme |
 | Data fetching | TanStack Query with AsyncStorage persistence |
-| Auth | Auth0 via `react-native-auth0`, tokens stored in Expo SecureStore |
+| Auth | Email/password and passkeys via `react-native-passkey`, session token in Expo SecureStore |
 | Notifications | Expo Notifications |
 | Distribution | [EAS Build](https://expo.dev/eas) (`eas.json`), bundle IDs `dev.matt.showtracker` |
 
@@ -50,7 +50,7 @@ packages/
   api-client/         # Shared typed API client
   shared/             # Shared schemas and types
 api/index.ts          # Express app + Vercel serverless handler
-server/               # API routes, database/TMDB/Auth0 helpers
+server/               # API routes, database/TMDB/auth helpers
 database-schema.sql   # Postgres schema (source of truth)
 ```
 
@@ -58,9 +58,9 @@ database-schema.sql   # Postgres schema (source of truth)
 
 - **Node.js** 20+ recommended (aligned with `@types/node` and tooling in this repo)
 - A PostgreSQL database with `database-schema.sql` applied (see the `postgres-host` repo)
-- Auth0 SPA application and env vars (see [AUTH0_SETUP.md](./AUTH0_SETUP.md))
 - TMDB API key
-- Upstash Redis REST URL and token (required at server startup for auth token caching)
+- Upstash Redis REST URL and token (required at server startup; caches TMDB responses)
+- A [Resend](https://resend.com/) API key for password-reset email, and — for mobile passkeys — the app-association values in [AUTH.md](./AUTH.md)
 
 ## Environment variables
 
@@ -69,13 +69,15 @@ Config is loaded from **`.env.<NODE_ENV>`** (e.g. `.env.development`, `.env.prod
 | Variable | Where | Purpose |
 |----------|--------|---------|
 | `DATABASE_URL` | Server | Postgres connection string, via PgBouncer, with `sslmode=verify-full` |
-| `AUTH0_DOMAIN` | Server | Auth0 tenant domain |
+| `APP_URL` | Server | Public origin; the passkey relying party and the base for reset links |
 | `TMDB_API_KEY` | Server | TMDB API v3 key |
 | `UPSTASH_REDIS_REST_URL` | Server | Upstash Redis REST endpoint |
 | `UPSTASH_REDIS_REST_TOKEN` | Server | Upstash Redis token |
 | `PORT` | Server | Optional; default **3000** locally |
-| `VITE_AUTH0_DOMAIN` | Client (build-time) | Same as `AUTH0_DOMAIN` |
-| `VITE_AUTH0_CLIENT_ID` | Client (build-time) | Auth0 SPA client ID |
+| `RESEND_API_KEY` | Server | Transactional email for password reset |
+| `EMAIL_FROM` | Server | Sender address for that email |
+
+Passkey app-association variables (`IOS_TEAM_ID`, `ANDROID_SHA256_FINGERPRINT`, `ANDROID_APK_KEY_HASH`, …) are documented in [AUTH.md](./AUTH.md).
 
 On [Vercel](https://vercel.com/), `VERCEL` is set automatically; the app exports a serverless handler from `api/index.ts` (see [`vercel.json`](./vercel.json)).
 
@@ -106,7 +108,7 @@ EAS builds are configured in [`apps/mobile/eas.json`](./apps/mobile/eas.json). R
 
 #### Native dev client vs. Metro-only, especially when using git worktrees
 
-This app uses native modules (`react-native-auth0`, `expo-notifications`), so it needs a compiled **dev client** on the simulator/device — Expo Go alone won't work (`TurboModuleRegistry.getEnforcing(...): 'A0Auth0' could not be found` means you're on Expo Go or a stale dev client).
+This app uses native modules (`react-native-passkey`, `expo-notifications`), so it needs a compiled **dev client** on the simulator/device — Expo Go alone won't work (a `TurboModuleRegistry.getEnforcing(...)` failure naming one of those modules means you're on Expo Go or a stale dev client).
 
 `ios/` and `android/` are gitignored and regenerated on demand by `expo prebuild` (which `expo run:ios`/`run:android` call automatically). That means:
 
@@ -117,12 +119,12 @@ This app uses native modules (`react-native-auth0`, `expo-notifications`), so it
 ## Documentation in this repo
 
 - [DATABASE_SETUP.md](./DATABASE_SETUP.md) — connecting, and applying `database-schema.sql`
-- [AUTH0_SETUP.md](./AUTH0_SETUP.md) — Auth0 SPA settings and env vars (including legacy user migration)
+- [AUTH.md](./AUTH.md) — the auth model, env vars, passkey domain setup, and migrating pre-existing accounts
 - [design_guidelines.md](./design_guidelines.md) — UI palette, typography, and layout notes
 
 ## External services
 
-- **Auth0** — identity and access tokens for the API
-- **PostgreSQL** — application data, self-hosted
+- **PostgreSQL** — application data, and every session and credential, self-hosted
 - **TMDB** — TV search, details, seasons, episodes
-- **Upstash Redis** — short-lived cache for Auth0 token validation
+- **Upstash Redis** — short-lived cache for TMDB responses
+- **Resend** — password-reset email

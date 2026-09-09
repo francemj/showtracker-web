@@ -38,8 +38,12 @@ through PgBouncer.
 
 ## Schema notes
 
-- **Authentication is Auth0**, not a database concern. The `users` table links
-  profiles to Auth0 via `auth0_id`. See [AUTH0_SETUP.md](./AUTH0_SETUP.md).
+- **Authentication now lives in this database.** `user_credentials`,
+  `sessions`, `webauthn_credentials`, `webauthn_challenges` and
+  `password_reset_tokens` hold everything auth writes; their Drizzle
+  definitions are in `server/lib/schema.ts` rather than `packages/shared` so
+  credential column names stay out of the mobile bundle. `users.auth0_id` is a
+  nullable leftover from the Auth0 era. See [AUTH.md](./AUTH.md).
 - **`user_shows_with_last_watch` and `user_shows_with_next_air`** back the
   "recent watch" and "next air date" sort modes. They existed only inside the
   old hosted project until they were recovered from the catalog during the

@@ -185,6 +185,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use(apiLimiter)
 
+  // Domain association for passkeys. Generated from env rather than checked in
+  // as static files, so an unconfigured deployment is visibly missing its team
+  // id instead of serving a plausible-looking file that silently fails to
+  // associate. vercel.json routes /.well-known here; without that rewrite the
+  // SPA catch-all swallows both of these.
+  app.get(
+    "/.well-known/apple-app-site-association",
+    (_req: Request, res: Response) => {
+      const teamId = process.env.IOS_TEAM_ID
+      const bundleId = process.env.IOS_BUNDLE_ID ?? "dev.matt.showtracker"
+      if (!teamId) {
+        return res
+          .status(404)
+          .json({ message: "iOS app association not configured" })
+      }
+      // Must be served as application/json, and without a .json extension.
+      res.type("application/json").json({
+        webcredentials: { apps: [`${teamId}.${bundleId}`] },
+      })
+    }
+  )
+
+  app.get("/.well-known/assetlinks.json", (_req: Request, res: Response) => {
+    const fingerprint = process.env.ANDROID_SHA256_FINGERPRINT
+    const packageName = process.env.ANDROID_PACKAGE ?? "dev.matt.showtracker"
+    if (!fingerprint) {
+      return res
+        .status(404)
+        .json({ message: "Android app association not configured" })
+    }
+    res.type("application/json").json([
+      {
+        relation: ["delegate_permission/common.get_login_creds"],
+        target: {
+          namespace: "android_app",
+          package_name: packageName,
+          sha256_cert_fingerprints: fingerprint.split(",").map((f) => f.trim()),
+        },
+      },
+    ])
+  })
+
   // Auth routes
   //
   // Tighter than the global limiter and keyed on IP+email: the global one keys

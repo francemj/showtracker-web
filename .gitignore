@@ -9,3 +9,7 @@ vite.config.ts.*
 .env*.local
 
 .gstack/
+
+# Expo prebuild output — generated from app.json, never committed
+apps/mobile/ios/
+apps/mobile/android/

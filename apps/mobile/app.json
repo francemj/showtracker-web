@@ -18,7 +18,10 @@
       "bundleIdentifier": "dev.matt.showtracker",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": [
+        "webcredentials:showtracker-web.vercel.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -39,12 +42,6 @@
       "expo-router",
       "expo-secure-store",
       [
-        "react-native-auth0",
-        {
-          "domain": "showtracker.ca.auth0.com"
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
@@ -57,8 +54,6 @@
         "projectId": "9012472e-03f5-4184-9cda-ee4b35517e63"
       },
       "apiUrl": "https://showtracker-web.vercel.app",
-      "auth0Domain": "showtracker.ca.auth0.com",
-      "auth0ClientId": "AViXvnyWSKOt1mAVt52oDpDTjFu3QSQO",
       "router": {}
     },
     "owner": "francemj-organization"

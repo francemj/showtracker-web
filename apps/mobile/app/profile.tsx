@@ -29,21 +29,48 @@ export default function ProfileScreen() {
   const router = useRouter()
   const t = useAppTheme()
   const insets = useSafeAreaInsets()
-  const { user, logout, refreshUser } = useAuth()
+  const {
+    user,
+    logout,
+    refreshUser,
+    addPasskey,
+    passkeysSupported,
+    hasLocalPasskey,
+  } = useAuth()
   const destructive = STATUS_COLORS.stopped.light.solid
 
-  // Auth0 seeds `name` with the email address when there's no real name, which
-  // then shows up twice — under the avatar and inside the field you're meant to
-  // fill in. Treat that seed as empty and let the placeholder do its job.
+  // Accounts carried over from Auth0 can have `name` set to the email address,
+  // which then shows up twice — under the avatar and inside the field you're
+  // meant to fill in. Treat that as empty and let the placeholder do its job.
   const [name, setName] = useState(
     user?.name && user.name !== user.email ? user.name : ""
   )
   const [picture, setPicture] = useState(user?.picture ?? "")
   const [pushEnabled, setPushEnabled] = useState<boolean | null>(null)
+  const [enrolling, setEnrolling] = useState(false)
 
   useEffect(() => {
     hasPushPermission().then(setPushEnabled)
   }, [])
+
+  const enrollPasskey = async () => {
+    setEnrolling(true)
+    try {
+      await addPasskey()
+      Alert.alert(
+        "Face ID is ready",
+        "Next time you sign in you can use Face ID instead of your password."
+      )
+    } catch (e) {
+      // Dismissing the system sheet is a deliberate "not now", not a failure.
+      const message = e instanceof Error ? e.message : ""
+      if (!/cancel|abort|UserCancelled|NotAllowed/i.test(message)) {
+        Alert.alert("Couldn't add a passkey", message || "Please try again.")
+      }
+    } finally {
+      setEnrolling(false)
+    }
+  }
 
   const enablePush = async () => {
     const granted = await requestPushPermission()
@@ -180,6 +207,23 @@ export default function ProfileScreen() {
             </Text>
             <Text style={[styles.notifyBtnHint, { color: t.fgMuted }]}>
               Get told when a show you follow airs something new.
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {passkeysSupported && !hasLocalPasskey && (
+          <TouchableOpacity
+            style={[styles.notifyBtn, { borderColor: t.border }]}
+            onPress={enrollPasskey}
+            disabled={enrolling}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.notifyBtnText, { color: t.fg }]}>
+              {enrolling ? "Waiting for your device…" : "Sign in with Face ID"}
+            </Text>
+            <Text style={[styles.notifyBtnHint, { color: t.fgMuted }]}>
+              Use Face ID or your device passcode instead of typing a password.
+              Your password still works as a fallback.
             </Text>
           </TouchableOpacity>
         )}

@@ -12,6 +12,10 @@
   },
   "rewrites": [
     {
+      "source": "/.well-known/(.*)",
+      "destination": "/api"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api"
     },
