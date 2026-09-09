@@ -6,9 +6,13 @@ import { eq } from "drizzle-orm"
 
 import { db } from "./db"
 import { users } from "../../packages/shared/schema"
-import { sessions, passwordResetTokens } from "./schema"
+import { sessions, passwordResetTokens, webauthnChallenges } from "./schema"
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server"
+
 import {
   consumePasswordResetToken,
+  finishPasskeyAuthentication,
+  startPasskeyAuthentication,
   createPasswordResetToken,
   createSession,
   hashPassword,
@@ -149,5 +153,32 @@ describe("password reset", () => {
 
   test("an unknown token is refused", async () => {
     assert.equal(await consumePasswordResetToken("not-a-real-token"), null)
+  })
+})
+
+describe("passkeys", () => {
+  test("a challenge does not survive an attempt, successful or not", async () => {
+    const { challengeId } = await startPasskeyAuthentication()
+
+    const pending = async () =>
+      (
+        await db
+          .select({ id: webauthnChallenges.id })
+          .from(webauthnChallenges)
+          .where(eq(webauthnChallenges.id, challengeId))
+      ).length
+
+    assert.equal(await pending(), 1)
+
+    // An unknown credential id — the point is what happens to the challenge,
+    // not the assertion, which cannot be forged here anyway.
+    const response = {
+      id: "not-a-real-credential",
+    } as AuthenticationResponseJSON
+    assert.equal(await finishPasskeyAuthentication(challengeId, response), null)
+
+    // Gone on first use, so the same challenge can never be presented twice.
+    assert.equal(await pending(), 0)
+    assert.equal(await finishPasskeyAuthentication(challengeId, response), null)
   })
 })

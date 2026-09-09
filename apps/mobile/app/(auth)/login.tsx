@@ -139,18 +139,14 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Same recipe as the Home hero: dark artwork up top fading into the
-              themed surface the content sits on. */}
+          {/* The Home hero fades into the page background, but it does that over
+              artwork. Fading a flat dark panel into a cream one just ramps
+              through grey, so this keeps the crisp split the web login has. */}
           <View style={[styles.band, { paddingTop: insets.top + 28 }]}>
             <LinearGradient
               colors={["#0d3d28", "#121a17", "#0E0F12"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <LinearGradient
-              colors={["transparent", t.bg]}
-              locations={[0.55, 1]}
               style={StyleSheet.absoluteFill}
             />
             <View style={styles.bandInner}>
