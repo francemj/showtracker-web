@@ -6,22 +6,98 @@
 -- every query filters by the authenticated user's id.
 
 -- Users table
+--
+-- auth0_id is nullable: accounts created since auth moved in-house have no
+-- Auth0 subject. It is kept only so pre-existing rows stay identifiable during
+-- the migration, and is droppable once every account has signed in again.
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  auth0_id TEXT NOT NULL UNIQUE,
+  auth0_id TEXT UNIQUE,
   email TEXT NOT NULL UNIQUE,
   name TEXT,
   picture TEXT,
+  email_verified BOOLEAN DEFAULT FALSE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+-- Password credentials.
+--
+-- Predates Auth0, and is the store again now that auth is in-house — the shape
+-- was already right, so it is reused rather than replaced. One row per user;
+-- accounts that only use passkeys have none.
+CREATE TABLE IF NOT EXISTS user_credentials (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+-- Sessions.
+--
+-- Only the SHA-256 of the session token is stored, never the token itself, so a
+-- leaked dump (or backup, or logged row) yields nothing that can be presented
+-- as a session. Web receives the token as an httpOnly cookie, mobile as a
+-- bearer token held in SecureStore.
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- Registered passkeys. `id` is the authenticator's own credential ID
+-- (base64url); `counter` is the signature counter used to detect cloned
+-- authenticators.
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  public_key BYTEA NOT NULL,
+  counter BIGINT DEFAULT 0 NOT NULL,
+  transports TEXT[],
+  device_type TEXT,
+  backed_up BOOLEAN DEFAULT FALSE NOT NULL,
+  name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+  last_used_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id ON webauthn_credentials(user_id);
+
+-- In-flight WebAuthn challenges, held between the options and verify legs.
+-- Single-use and short-lived: a challenge that could be replayed is a
+-- replayable login. user_id is null for sign-in, where the account is not known
+-- until the authenticator answers.
+CREATE TABLE IF NOT EXISTS webauthn_challenges (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  challenge TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('registration', 'authentication')),
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
--- User credentials table (for simplified auth)
-CREATE TABLE IF NOT EXISTS user_credentials (
+CREATE INDEX IF NOT EXISTS idx_webauthn_challenges_expires_at ON webauthn_challenges(expires_at);
+
+-- Password reset tokens. Hashed at rest for the same reason as sessions, and
+-- single-use via used_at — a reset link that works twice is an account takeover
+-- primitive sitting in an inbox.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  password_hash TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  used_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
 
 -- TV Shows table
 CREATE TABLE IF NOT EXISTS shows (
@@ -165,3 +241,20 @@ CREATE OR REPLACE VIEW user_shows_with_next_air AS
 -- On an existing database:
 --
 --   DROP TABLE IF EXISTS seasons, import_history;
+
+-- Auth moved in-house 2026-09-09 (Auth0 removed). The CREATE TABLE statements
+-- above cover a fresh database; on an existing one, apply:
+--
+--   ALTER TABLE users ALTER COLUMN auth0_id DROP NOT NULL;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE NOT NULL;
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL;
+--   ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL;
+--   ALTER TABLE user_credentials ADD CONSTRAINT user_credentials_user_id_key UNIQUE (user_id);
+--
+-- then the four CREATE TABLE / CREATE INDEX blocks for sessions,
+-- webauthn_credentials, webauthn_challenges and password_reset_tokens.
+--
+-- Existing Auth0 accounts need no data migration: users.email is already
+-- UNIQUE, so setting a password writes a user_credentials row against the same
+-- users.id and the library comes with it. Once every account has signed in
+-- again, auth0_id can be dropped.

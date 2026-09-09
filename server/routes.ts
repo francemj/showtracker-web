@@ -1,6 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express"
 import { createServer, type Server } from "http"
 import rateLimit, { ipKeyGenerator } from "express-rate-limit"
+import { z } from "zod"
 import {
   and,
   asc,
@@ -9,7 +10,6 @@ import {
   ilike,
   inArray,
   isNotNull,
-  like,
   lte,
   ne,
   sql,
@@ -25,14 +25,31 @@ import {
   userShowsWithNextAir,
   watchProgress,
 } from "../packages/shared/schema"
-import { userCredentials } from "./lib/schema"
 import {
   searchTVShows,
   getTVShowDetails,
   getTVShowSeason,
   type TmdbFetchOptions,
 } from "./lib/tmdb"
-import { getUserFromAccessToken, getSubFromToken } from "./lib/auth0"
+import {
+  APP_URL,
+  consumePasswordResetToken,
+  createPasswordResetToken,
+  createSession,
+  deletePasskey,
+  finishPasskeyAuthentication,
+  finishPasskeyRegistration,
+  listPasskeys,
+  resolveSession,
+  revokeAllSessions,
+  revokeSession,
+  setPassword,
+  startPasskeyAuthentication,
+  startPasskeyRegistration,
+  verifyCredentials,
+  type AuthUser,
+} from "./lib/auth"
+import { sendPasswordResetEmail } from "./lib/email"
 import { scheduleBackgroundTask } from "./lib/background-task"
 import { isEpisodeAired, parseAirDate } from "../packages/shared/episode-utils"
 import { inferShowStatus } from "../packages/shared/episode-progress"
@@ -67,33 +84,76 @@ async function upsertWatchProgress(records: WatchProgressRecord[]) {
     })
 }
 
+const SESSION_COOKIE = "st_session"
+
+/**
+ * Web holds its session in an httpOnly cookie, which script cannot read — that
+ * is the point of it. Mobile has no cookie jar and carries a bearer token from
+ * SecureStore instead.
+ */
+function readSessionToken(req: Request): {
+  token: string | null
+  fromCookie: boolean
+} {
+  const header = req.headers.authorization
+  if (header?.startsWith("Bearer ")) {
+    return { token: header.slice(7), fromCookie: false }
+  }
+  for (const part of req.headers.cookie?.split(";") ?? []) {
+    const [name, ...value] = part.trim().split("=")
+    if (name === SESSION_COOKIE) {
+      return { token: decodeURIComponent(value.join("=")), fromCookie: true }
+    }
+  }
+  return { token: null, fromCookie: false }
+}
+
+function setSessionCookie(res: Response, token: string, expiresAt: Date) {
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    expires: expiresAt,
+    path: "/",
+  })
+}
+
+/** Only a client that asks gets the raw token; browsers are meant to use the cookie. */
+const wantsRawToken = (req: Request) => req.get("X-Auth-Mode") === "token"
+
+async function respondWithSession(req: Request, res: Response, user: AuthUser) {
+  const { token, expiresAt } = await createSession(user.id)
+  setSessionCookie(res, token, expiresAt)
+  res.json({ user, ...(wantsRawToken(req) ? { token } : {}) })
+}
+
 const authMiddleware = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Missing authorization token" })
+  const { token, fromCookie } = readSessionToken(req)
+  if (!token) {
+    return res.status(401).json({ message: "Not authenticated" })
   }
 
-  const token = authHeader.slice(7)
-  try {
-    const sub = await getSubFromToken(token)
-    const [user] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.auth0Id, sub))
-      .limit(1)
-
-    if (!user) {
-      return res.status(401).json({ message: "User not found" })
+  // SameSite=Lax already keeps the cookie off cross-site POSTs; this is the
+  // belt to that pair of braces, and only applies to cookie auth because a
+  // bearer token cannot be attached by a browser the user didn't ask.
+  if (fromCookie && req.method !== "GET") {
+    const origin = req.get("origin")
+    if (origin && origin !== APP_URL) {
+      return res.status(403).json({ message: "Cross-origin request refused" })
     }
-    req.userId = user.id
-    next()
-  } catch {
-    return res.status(401).json({ message: "Invalid token" })
   }
+
+  const user = await resolveSession(token)
+  if (!user) {
+    return res.status(401).json({ message: "Session expired" })
+  }
+
+  req.userId = user.id
+  next()
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -126,115 +186,324 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(apiLimiter)
 
   // Auth routes
-  app.post("/api/auth/callback", async (req: Request, res: Response) => {
-    try {
-      const { access_token } = req.body
-      if (!access_token || typeof access_token !== "string") {
-        return res.status(400).json({ message: "Missing access_token" })
+  //
+  // Tighter than the global limiter and keyed on IP+email: the global one keys
+  // on a bearer prefix, which by definition does not exist yet at sign-in, so
+  // without this the password endpoints are unthrottled.
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    keyGenerator: (req: Request) => {
+      const email =
+        typeof req.body?.email === "string" ? req.body.email.toLowerCase() : ""
+      return `${ipKeyGenerator(req.ip ?? "anonymous")}:${email}`
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+
+  const credentialsSchema = z.object({
+    email: z.string().email().max(254),
+    password: z.string().min(8).max(200),
+    name: z.string().trim().min(1).max(100).optional(),
+  })
+
+  app.post(
+    "/api/auth/register",
+    authLimiter,
+    async (req: Request, res: Response) => {
+      const parsed = credentialsSchema.safeParse(req.body)
+      if (!parsed.success) {
+        return res.status(400).json({
+          message:
+            "Enter an email address and a password of at least 8 characters",
+        })
       }
 
-      const auth0User = await getUserFromAccessToken(access_token)
-      const { sub, email, name, picture } = auth0User
-
-      // 1) Find by auth0_id (existing Auth0 or migrated user)
-      const [existingByAuth0] = await db
-        .select()
-        .from(users)
-        .where(eq(users.auth0Id, sub))
-        .limit(1)
-
-      if (existingByAuth0) {
-        return res.json({ user: existingByAuth0 })
-      }
-
-      // 2) Legacy: same email with local_ auth0_id — link this Auth0 account to the existing user
-      if (email) {
-        const [legacy] = await db
-          .select()
+      const email = parsed.data.email.toLowerCase()
+      try {
+        const [existing] = await db
+          .select({ id: users.id })
           .from(users)
-          .where(and(eq(users.email, email), like(users.auth0Id, "local_%")))
+          .where(eq(users.email, email))
           .limit(1)
 
-        if (legacy) {
-          const [linked] = await db
-            .update(users)
-            .set({ auth0Id: sub, picture: picture || legacy.picture })
-            .where(eq(users.id, legacy.id))
-            .returning()
-
-          // returning() gives the updated row directly, so the response no
-          // longer has to reassemble it from the pre-update copy by hand.
-          if (linked) {
-            await db
-              .delete(userCredentials)
-              .where(eq(userCredentials.userId, legacy.id))
-            return res.json({ user: linked })
-          }
+        if (existing) {
+          return res
+            .status(409)
+            .json({ message: "An account already exists for that email" })
         }
+
+        const [user] = await db
+          .insert(users)
+          .values({ email, name: parsed.data.name ?? email.split("@")[0] })
+          .returning()
+
+        await setPassword(user.id, parsed.data.password)
+        await respondWithSession(req, res, user)
+      } catch (error) {
+        console.error("Register error:", error)
+        res.status(500).json({ message: "Could not create your account" })
       }
-
-      // 3) New user
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          email: email || `${sub.replace(/[^a-zA-Z0-9]/g, "_")}@auth0.local`,
-          name: name || "User",
-          auth0Id: sub,
-          picture:
-            picture ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=6366F1&color=fff`,
-        })
-        .returning()
-
-      if (!newUser) {
-        return res.status(500).json({ message: "Failed to create user" })
-      }
-
-      res.json({ user: newUser })
-    } catch (error: any) {
-      console.error("Auth callback error:", error)
-      const status = error.message?.includes("Invalid or expired") ? 401 : 500
-      res
-        .status(status)
-        .json({ message: error.message || "Authentication failed" })
     }
+  )
+
+  app.post(
+    "/api/auth/login",
+    authLimiter,
+    async (req: Request, res: Response) => {
+      const parsed = credentialsSchema
+        .pick({ email: true, password: true })
+        .safeParse(req.body)
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ message: "Enter your email and password" })
+      }
+
+      try {
+        const user = await verifyCredentials(
+          parsed.data.email,
+          parsed.data.password
+        )
+        if (!user) {
+          return res
+            .status(401)
+            .json({ message: "That email and password don't match" })
+        }
+        await respondWithSession(req, res, user)
+      } catch (error) {
+        console.error("Login error:", error)
+        res.status(500).json({ message: "Could not sign you in" })
+      }
+    }
+  )
+
+  app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    // Revoking server-side is the whole job. Clearing the cookie alone would
+    // leave a token that still works anywhere it had been copied.
+    const { token } = readSessionToken(req)
+    if (token) await revokeSession(token)
+    res.clearCookie(SESSION_COOKIE, { path: "/" })
+    res.json({ message: "Logged out" })
   })
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
+    const { token } = readSessionToken(req)
+    if (!token) {
+      return res.status(401).json({ message: "Not authenticated" })
+    }
+
     try {
-      const authHeader = req.headers.authorization
-      if (!authHeader?.startsWith("Bearer ")) {
-        return res.status(401).json({ message: "Not authenticated" })
-      }
-
-      const token = authHeader.slice(7)
-      const sub = await getSubFromToken(token)
-
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.auth0Id, sub))
-        .limit(1)
-
+      const user = await resolveSession(token)
       if (!user) {
-        return res.status(404).json({ message: "User not found" })
+        return res.status(401).json({ message: "Session expired" })
       }
-
       res.json({ user })
     } catch (error) {
       console.error("Auth check error:", error)
-      const isAuthError = (error as Error)?.message?.includes(
-        "Invalid or expired"
-      )
-      res.status(isAuthError ? 401 : 500).json({
-        message: isAuthError ? "Invalid token" : "Internal server error",
-      })
+      res.status(500).json({ message: "Internal server error" })
     }
   })
 
-  app.post("/api/auth/logout", (_req: Request, res: Response) => {
-    res.json({ message: "Logged out" })
-  })
+  app.post(
+    "/api/auth/forgot-password",
+    authLimiter,
+    async (req: Request, res: Response) => {
+      const parsed = z
+        .object({ email: z.string().email().max(254) })
+        .safeParse(req.body)
+
+      // Always the same answer, whether or not the address has an account —
+      // otherwise this endpoint is a free account-existence oracle.
+      const acknowledge = () =>
+        res.json({
+          message: "If that account exists, a reset link is on its way",
+        })
+
+      if (!parsed.success) return acknowledge()
+
+      try {
+        const [user] = await db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(eq(users.email, parsed.data.email.toLowerCase()))
+          .limit(1)
+
+        if (user) {
+          const token = await createPasswordResetToken(user.id)
+          await sendPasswordResetEmail(
+            user.email,
+            `${APP_URL}/reset-password?token=${encodeURIComponent(token)}`
+          )
+        }
+        acknowledge()
+      } catch (error) {
+        console.error("Forgot password error:", error)
+        acknowledge()
+      }
+    }
+  )
+
+  app.post(
+    "/api/auth/reset-password",
+    authLimiter,
+    async (req: Request, res: Response) => {
+      const parsed = z
+        .object({
+          token: z.string().min(1),
+          password: z.string().min(8).max(200),
+        })
+        .safeParse(req.body)
+
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ message: "Choose a password of at least 8 characters" })
+      }
+
+      try {
+        const userId = await consumePasswordResetToken(parsed.data.token)
+        if (!userId) {
+          return res.status(400).json({
+            message: "That reset link has expired or already been used",
+          })
+        }
+
+        await setPassword(userId, parsed.data.password)
+        // Resetting a password you believe is compromised has to evict whoever
+        // else is holding a session, or it achieves nothing.
+        await revokeAllSessions(userId)
+
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1)
+
+        await respondWithSession(req, res, user)
+      } catch (error) {
+        console.error("Reset password error:", error)
+        res.status(500).json({ message: "Could not reset your password" })
+      }
+    }
+  )
+
+  // Passkeys. Enrolment happens while signed in; sign-in is unauthenticated and
+  // discovers the account from the credential the authenticator returns.
+  app.post(
+    "/api/auth/passkey/register/options",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, req.userId!))
+          .limit(1)
+        res.json(await startPasskeyRegistration(user))
+      } catch (error) {
+        console.error("Passkey register options error:", error)
+        res.status(500).json({ message: "Could not start passkey setup" })
+      }
+    }
+  )
+
+  app.post(
+    "/api/auth/passkey/register/verify",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      const { challengeId, response, name } = req.body ?? {}
+      if (typeof challengeId !== "string" || !response) {
+        return res.status(400).json({ message: "Invalid passkey response" })
+      }
+
+      try {
+        const ok = await finishPasskeyRegistration(
+          req.userId!,
+          challengeId,
+          response,
+          typeof name === "string" ? name.slice(0, 100) : undefined
+        )
+        if (!ok) {
+          return res
+            .status(400)
+            .json({ message: "Could not verify that passkey" })
+        }
+        res.json({ message: "Passkey added" })
+      } catch (error) {
+        console.error("Passkey register verify error:", error)
+        res.status(500).json({ message: "Could not add that passkey" })
+      }
+    }
+  )
+
+  app.post(
+    "/api/auth/passkey/login/options",
+    authLimiter,
+    async (_req: Request, res: Response) => {
+      try {
+        res.json(await startPasskeyAuthentication())
+      } catch (error) {
+        console.error("Passkey login options error:", error)
+        res.status(500).json({ message: "Could not start passkey sign-in" })
+      }
+    }
+  )
+
+  app.post(
+    "/api/auth/passkey/login/verify",
+    authLimiter,
+    async (req: Request, res: Response) => {
+      const { challengeId, response } = req.body ?? {}
+      if (typeof challengeId !== "string" || !response) {
+        return res.status(400).json({ message: "Invalid passkey response" })
+      }
+
+      try {
+        const user = await finishPasskeyAuthentication(challengeId, response)
+        if (!user) {
+          return res
+            .status(401)
+            .json({ message: "That passkey wasn't recognised" })
+        }
+        await respondWithSession(req, res, user)
+      } catch (error) {
+        console.error("Passkey login verify error:", error)
+        res.status(500).json({ message: "Could not sign you in" })
+      }
+    }
+  )
+
+  app.get(
+    "/api/auth/passkeys",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        res.json({ passkeys: await listPasskeys(req.userId!) })
+      } catch (error) {
+        console.error("List passkeys error:", error)
+        res.status(500).json({ message: "Could not load your passkeys" })
+      }
+    }
+  )
+
+  app.delete(
+    "/api/auth/passkeys/:id",
+    authMiddleware,
+    async (req: AuthRequest, res: Response) => {
+      try {
+        const removed = await deletePasskey(req.userId!, req.params.id)
+        if (!removed) {
+          return res.status(404).json({ message: "Passkey not found" })
+        }
+        res.json({ message: "Passkey removed" })
+      } catch (error) {
+        console.error("Delete passkey error:", error)
+        res.status(500).json({ message: "Could not remove that passkey" })
+      }
+    }
+  )
 
   // Update profile details (name, avatar)
   app.patch(

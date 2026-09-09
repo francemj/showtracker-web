@@ -56,6 +56,35 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  auth-tests:
+    name: Auth tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: showtracker_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:test@localhost:5432/showtracker_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply schema
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f database-schema.sql
+      - run: npm test
+
   build-mobile-bundle:
     name: Build mobile JS bundle
     runs-on: ubuntu-latest
