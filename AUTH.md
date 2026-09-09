@@ -23,7 +23,11 @@ for why that matters).
 gets a bearer token** in Expo SecureStore, requested explicitly with the header
 `X-Auth-Mode: token` — without that header the raw token is never in a response
 body. `authMiddleware` accepts either, and refuses cookie-authenticated
-mutations carrying a foreign `Origin`.
+mutations carrying a foreign `Origin`. CORS is an allowlist of `APP_URL` rather
+than an origin reflector — with a cookie in play, reflecting arbitrary origins
+would leave `SameSite=Lax` as the only lock. Requests with no `Origin` are
+allowed through: that is the native app, which carries a bearer token and is
+authorised on that basis.
 
 ## Environment
 

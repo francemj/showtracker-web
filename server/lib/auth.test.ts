@@ -99,6 +99,25 @@ describe("sessions", () => {
     assert.ok(rows.every((r) => r.tokenHash !== token))
   })
 
+  test("expiry survives the database's timezone", async () => {
+    // Drizzle's plain timestamp() drops the offset when reading a TIMESTAMPTZ
+    // back, reinterpreting the server's local wall clock as UTC. Nothing else
+    // in the suite notices: a session skewed by a few hours is still valid for
+    // 60 days. Left alone it expires sessions early on any non-UTC database.
+    await revokeAllSessions(userId)
+    const { expiresAt } = await createSession(userId)
+    const [row] = await db
+      .select({ expiresAt: sessions.expiresAt })
+      .from(sessions)
+      .where(eq(sessions.userId, userId))
+
+    assert.equal(
+      row.expiresAt.getTime(),
+      expiresAt.getTime(),
+      "stored expiry drifted from the instant it was written"
+    )
+  })
+
   test("logout revokes server-side, not just on the client", async () => {
     const { token } = await createSession(userId)
     await revokeSession(token)

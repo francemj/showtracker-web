@@ -102,7 +102,14 @@ function readSessionToken(req: Request): {
   for (const part of req.headers.cookie?.split(";") ?? []) {
     const [name, ...value] = part.trim().split("=")
     if (name === SESSION_COOKIE) {
-      return { token: decodeURIComponent(value.join("=")), fromCookie: true }
+      try {
+        return { token: decodeURIComponent(value.join("=")), fromCookie: true }
+      } catch {
+        // A malformed percent-escape is a broken cookie, not a session. Letting
+        // decodeURIComponent throw here escapes the async handlers as an
+        // unhandled rejection rather than a 401.
+        return { token: null, fromCookie: false }
+      }
     }
   }
   return { token: null, fromCookie: false }

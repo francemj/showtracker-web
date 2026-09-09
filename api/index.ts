@@ -27,10 +27,23 @@ declare module "http" {
 // Create and configure Express app
 const app = express()
 
-// CORS middleware
+// CORS middleware.
+//
+// This used to reflect any origin, which was harmless while every request
+// carried a bearer token. Now that web sessions ride in a cookie, reflecting
+// arbitrary origins with credentials:true would leave SameSite=Lax as the only
+// thing standing between a hostile page and an authenticated response — so the
+// allowlist is the second lock.
+//
+// A request with no Origin is allowed through: that is the native mobile app,
+// where CORS is not a control that exists. It carries a bearer token and is
+// authorised on that basis, not on its origin.
+const allowedOrigins = new Set([process.env.APP_URL ?? "http://localhost:3000"])
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) =>
+      callback(null, !origin || allowedOrigins.has(origin)),
     credentials: true,
   })
 )

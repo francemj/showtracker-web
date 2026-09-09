@@ -23,6 +23,13 @@ import { users } from "../../packages/shared/schema"
  *
  * Everything auth writes lives here for that reason: credentials, sessions,
  * passkeys and reset tokens.
+ *
+ * Every timestamp here is declared `withTimezone`, unlike the display
+ * timestamps in packages/shared. These are compared as absolute instants —
+ * session and token expiry — and Drizzle's plain `timestamp()` drops the
+ * offset when reading a TIMESTAMPTZ back, reinterpreting the database's local
+ * wall clock as UTC. On a Postgres running America/New_York that silently
+ * expires every session five hours early.
  */
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -39,8 +46,12 @@ export const userCredentials = pgTable("user_credentials", {
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
   passwordHash: text("password_hash").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 })
 
 /**
@@ -55,9 +66,13 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  lastUsedAt: timestamp("last_used_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 })
 
 /** Registered passkeys. `id` is the authenticator's own credential ID. */
@@ -74,8 +89,10 @@ export const webauthnCredentials = pgTable("webauthn_credentials", {
   deviceType: text("device_type"),
   backedUp: boolean("backed_up").default(false).notNull(),
   name: text("name"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 })
 
 /**
@@ -90,8 +107,10 @@ export const webauthnChallenges = pgTable("webauthn_challenges", {
   challenge: text("challenge").notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
   kind: text("kind").$type<"registration" | "authentication">().notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 })
 
 /** Hashed at rest like sessions, and single-use via usedAt. */
@@ -103,7 +122,9 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull().unique(),
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
 })

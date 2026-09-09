@@ -65,6 +65,11 @@ jobs:
         env:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: showtracker_test
+          # Deliberately not UTC: session and token expiry are compared as
+          # absolute instants, and a Drizzle column declared without
+          # `withTimezone` silently reads them back shifted by the server's
+          # offset. On UTC that bug is invisible.
+          TZ: America/New_York
         ports:
           - 5432:5432
         options: >-
