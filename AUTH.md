@@ -98,9 +98,25 @@ Both accept a comma-separated list. An app signed by Google Play has a
 different certificate from the one EAS uses for internal builds, so list both
 or passkeys will work in testing and fail in production.
 
-`app.json` must carry the matching `ios.associatedDomains` entry
+`app.json` carries the matching `ios.associatedDomains` entry
 (`webcredentials:<domain>`), and `vercel.json` routes `/.well-known/*` to the
 API — the SPA catch-all would otherwise answer both with `index.html`.
+
+`app.config.js` appends `?mode=developer` to that entry for every build profile
+except `production`. iOS fetches the association file through Apple's CDN and
+caches it, so a correction can take hours to reach a device; developer mode
+fetches straight from the domain. It must not ship — the device has to be in
+Developer Mode for the entry to resolve at all — which is why the profile
+decides rather than a note asking someone to remember.
+
+Once deployed, the endpoints are the verification. They echo the configured
+values back, which is more use than reading the environment variables (Vercel
+stores them as sensitive and will not return them):
+
+```bash
+curl -s https://<domain>/.well-known/apple-app-site-association
+curl -s https://<domain>/.well-known/assetlinks.json
+```
 
 > **Changing the domain invalidates every enrolled passkey.** The relying-party
 > id is part of the credential. Settle the domain before anyone enrols.
