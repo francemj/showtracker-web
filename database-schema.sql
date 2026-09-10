@@ -6,13 +6,8 @@
 -- every query filters by the authenticated user's id.
 
 -- Users table
---
--- auth0_id is nullable: accounts created since auth moved in-house have no
--- Auth0 subject. It is kept only so pre-existing rows stay identifiable during
--- the migration, and is droppable once every account has signed in again.
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-  auth0_id TEXT UNIQUE,
   email TEXT NOT NULL UNIQUE,
   name TEXT,
   picture TEXT,
@@ -261,7 +256,14 @@ CREATE OR REPLACE VIEW user_shows_with_next_air AS
 --
 -- That block is idempotent as a whole, so a partial run can simply be repeated.
 --
--- Existing Auth0 accounts need no data migration: users.email is already
+-- Existing Auth0 accounts needed no data migration: users.email is already
 -- UNIQUE, so setting a password writes a user_credentials row against the same
--- users.id and the library comes with it. Once every account has signed in
--- again, auth0_id can be dropped.
+-- users.id and the library comes with it.
+--
+-- auth0_id was dropped on 2026-09-10, once nothing read it. Note the ordering
+-- that requires: Drizzle expands a bare .select() into an explicit column list,
+-- so the column must stop being declared in packages/shared/schema.ts and that
+-- code must be deployed *before* the column goes, or every query touching users
+-- fails with "column auth0_id does not exist".
+--
+--   ALTER TABLE users DROP COLUMN IF EXISTS auth0_id;

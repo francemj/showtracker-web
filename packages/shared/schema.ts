@@ -15,15 +15,10 @@ export * from "./episode-utils"
 export * from "./episode-progress"
 
 // Users table.
-//
-// auth0Id is nullable: accounts created since auth moved in-house have no Auth0
-// subject, and the column survives only to identify pre-existing rows during
-// the migration.
 export const users = pgTable("users", {
   id: text("id")
     .primaryKey()
     .default(sql`gen_random_uuid()::text`),
-  auth0Id: text("auth0_id").unique(),
   email: text("email").notNull().unique(),
   name: text("name"),
   picture: text("picture"),
