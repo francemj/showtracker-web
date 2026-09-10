@@ -11,8 +11,14 @@
  * would reject every cookie-authenticated write with a 403 and break passkeys
  * on exactly the deployments used to test them.
  */
+// A preview deployment answers on two hostnames: VERCEL_URL, unique per
+// deployment, and VERCEL_BRANCH_URL, stable per branch and the one Vercel links
+// from the pull request — so it is the one a person actually opens. Preferring
+// it matters because a passkey's relying-party id must be a suffix of the
+// origin in the address bar: pick the wrong hostname of the two and the browser
+// refuses the ceremony outright, on a deployment that otherwise looks healthy.
+const vercelHost = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL
+
 export const APP_URL =
   process.env.APP_URL ??
-  (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000")
+  (vercelHost ? `https://${vercelHost}` : "http://localhost:3000")
