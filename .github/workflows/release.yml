@@ -55,7 +55,8 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          # eas-cli 24 pulls @oclif/plugin-autocomplete, which requires node >= 22.
+          node-version: 22
           cache: npm
 
       - uses: expo/expo-github-action@v9
