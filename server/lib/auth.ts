@@ -308,6 +308,11 @@ export async function startPasskeyRegistration(user: AuthUser) {
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
     rpID: RP_ID,
+    // Without this the library invents a random handle per enrolment, so the
+    // same person registering a second device would appear in their password
+    // manager as a second, unrelated account. The handle is stored inside the
+    // credential and cannot be corrected afterwards.
+    userID: new TextEncoder().encode(user.id),
     userName: user.email,
     userDisplayName: user.name ?? user.email,
     attestationType: "none",
