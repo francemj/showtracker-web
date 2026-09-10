@@ -348,6 +348,17 @@ export async function finishPasskeyRegistration(
     expectedChallenge: pending.challenge,
     expectedOrigin: EXPECTED_ORIGINS,
     expectedRPID: RP_ID,
+    // Both ceremonies request user verification as "preferred", so refusing a
+    // credential that lacks it contradicts what was asked for. The library
+    // defaults this to true, which is where that contradiction came from: the
+    // browser completed enrolment happily and the server then rejected it with
+    // "user could not be verified".
+    //
+    // Platform authenticators — Face ID, Touch ID, Windows Hello, and what the
+    // mobile app uses — verify anyway, so this loosens what is accepted from a
+    // security key or password manager that cannot, without weakening the
+    // biometric path the UI actually offers.
+    requireUserVerification: false,
   })
 
   if (!verification.verified) return false
@@ -413,6 +424,9 @@ export async function finishPasskeyAuthentication(
       counter: stored.credential.counter,
       transports: stored.credential.transports ?? undefined,
     },
+    // Same reasoning as registration above: requested as "preferred", so it
+    // must not be enforced as required.
+    requireUserVerification: false,
   })
 
   if (!verification.verified) return null
