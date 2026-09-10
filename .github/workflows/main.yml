@@ -1,0 +1,74 @@
+name: Deploy main
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  mobile:
+    name: Update or rebuild preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # continuous-deploy-fingerprint diffs against history to decide whether
+          # the native fingerprint moved; a shallow clone hides that.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # Most merges only touch JS, which reaches an already-installed preview
+      # build as an over-the-air update in about a minute and costs no build
+      # credit. A new APK is compiled only when the native fingerprint moves,
+      # because an update cannot cross that boundary. Building unconditionally
+      # would not fit the free plan: main takes ~16 commits a month against an
+      # allowance of 15 Android builds.
+      - uses: expo/expo-github-action/continuous-deploy-fingerprint@v9
+        id: deploy
+        with:
+          profile: preview
+          branch: preview
+          platform: android
+          working-directory: apps/mobile
+
+      - name: Explain what shipped
+        env:
+          NEW_BUILD: ${{ steps.deploy.outputs.android-did-start-new-build }}
+        run: |
+          if [ "$NEW_BUILD" = "true" ]; then
+            {
+              echo "### New preview APK building"
+              echo
+              echo "The native fingerprint changed, so this could not ship as an update."
+              echo "Install the APK once it finishes:"
+              echo
+              echo "<https://expo.dev/accounts/francemj-organization/projects/showtracker/builds>"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Shipped as an over-the-air update"
+              echo
+              echo "JS-only change, published to the \`preview\` channel."
+              echo "Relaunch the app on your phone to pick it up — no new APK needed."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

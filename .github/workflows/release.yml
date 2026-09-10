@@ -41,12 +41,13 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-  build-apk:
-    name: Build Android APK
+  build-android:
+    name: Build Android (EAS)
     if: |
       startsWith(github.ref, 'refs/tags/mobile/v') ||
       startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
@@ -57,62 +58,39 @@ jobs:
           node-version: 20
           cache: npm
 
-      - uses: actions/setup-java@v5
+      - uses: expo/expo-github-action@v9
         with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Cache Gradle
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('apps/mobile/**/*.gradle*', 'apps/mobile/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: gradle-
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
       - run: npm ci
 
-      - name: Decode keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > apps/mobile/showtracker.keystore
-
-      - name: Expo prebuild (Android)
+      # Signing keys live in EAS, not in this repo. `eas credentials -p android`
+      # is the only place the release keystore is managed, and the fingerprint it
+      # reports has to match the one served at /.well-known/assetlinks.json or
+      # every Android passkey fails origin validation. See AUTH.md.
+      - name: Build APK on EAS
+        id: build
         working-directory: apps/mobile
-        run: npx expo prebuild --platform android --clean
-
-      - name: Configure Gradle signing
-        working-directory: apps/mobile/android
         run: |
-          cat >> gradle.properties << 'EOF'
-          MYAPP_UPLOAD_STORE_FILE=../../showtracker.keystore
-          MYAPP_UPLOAD_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
-          MYAPP_UPLOAD_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          MYAPP_UPLOAD_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+          eas build --platform android --profile production \
+            --non-interactive --wait --json > build.json
+          url=$(node -e "
+            const b = require('./build.json')[0]
+            if (b.status !== 'FINISHED') throw new Error('build ' + b.status)
+            const url = b.artifacts && b.artifacts.applicationArchiveUrl
+            if (!url) throw new Error('build produced no application archive')
+            console.log(url)
+          ")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Patch release signing config
-        working-directory: apps/mobile/android/app
-        run: |
-          # expo prebuild leaves release builds pointing to signingConfigs.debug as a placeholder;
-          # redirect to the release config and inject keystore properties.
-          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' build.gradle
-          sed -i '/signingConfigs {/a\        release {\n            if (project.hasProperty("MYAPP_UPLOAD_STORE_FILE")) {\n                storeFile file(MYAPP_UPLOAD_STORE_FILE)\n                storePassword MYAPP_UPLOAD_STORE_PASSWORD\n                keyAlias MYAPP_UPLOAD_KEY_ALIAS\n                keyPassword MYAPP_UPLOAD_KEY_PASSWORD\n            }\n        }' build.gradle
-
-      - name: Build release APK
-        working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease --no-daemon
+      - name: Attach APK to release
         env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
-
-      - name: Find APK
-        id: apk
+          URL: ${{ steps.build.outputs.url }}
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          src=$(find apps/mobile/android/app/build/outputs/apk/release -name "*.apk" | head -1)
-          dest="$(dirname "$src")/ShowTracker-${{ github.ref_name }}.apk"
-          mv "$src" "$dest"
-          echo "path=$dest" >> $GITHUB_OUTPUT
-
-      - name: Upload APK to release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: ${{ steps.apk.outputs.path }}
+          # Tags may contain a slash (mobile/v1.2.3), which is not a legal filename.
+          name="ShowTracker-${TAG//\//-}.apk"
+          curl -fsSL -o "$name" "$URL"
+          gh release upload "$TAG" "$name" --clobber

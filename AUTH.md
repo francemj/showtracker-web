@@ -126,6 +126,19 @@ curl -s https://<domain>/.well-known/apple-app-site-association
 curl -s https://<domain>/.well-known/assetlinks.json
 ```
 
+Those endpoints say what the server trusts; `apksigner` says what the app actually
+presents. Nothing checks that they agree, so check it by hand whenever the signing
+key may have moved:
+
+```bash
+apksigner verify --print-certs -v ShowTracker-v1.2.3.apk | grep "certificate SHA-256"
+```
+
+Reformat that digest as colon-separated uppercase hex and compare it with
+`sha256_cert_fingerprints` in `assetlinks.json`. A mismatch fails silently in the
+worst way: iOS and web passkeys keep working while every Android one fails origin
+validation.
+
 > **Changing the domain invalidates every enrolled passkey.** The relying-party
 > id is part of the credential. Settle the domain before anyone enrols.
 
