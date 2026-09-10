@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import { db } from "./db"
 import { users } from "../../packages/shared/schema"
 import { sessions, passwordResetTokens, webauthnChallenges } from "./schema"
+import { canSendEmail } from "./email"
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server"
 
 import {
@@ -199,5 +200,56 @@ describe("passkeys", () => {
     // Gone on first use, so the same challenge can never be presented twice.
     assert.equal(await pending(), 0)
     assert.equal(await finishPasskeyAuthentication(challengeId, response), null)
+  })
+})
+
+describe("email configuration", () => {
+  // This is the gate that stops a misconfigured deployment from reporting
+  // "a reset link is on its way" and sending nothing. It happened on a preview
+  // deployment, where the Resend variables were scoped to production only, and
+  // the blanket anti-enumeration catch turned a total outage into a success
+  // message on the one flow that recovers an account.
+  const saved = { ...process.env }
+  const set = (env: Record<string, string | undefined>) => {
+    for (const [k, v] of Object.entries(env)) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
+
+  after(() => {
+    process.env = { ...saved }
+  })
+
+  test("deployed and configured: can send", () => {
+    set({ NODE_ENV: "production", RESEND_API_KEY: "re_x", EMAIL_FROM: "a@b.c" })
+    assert.equal(canSendEmail(), true)
+  })
+
+  test("deployed with no api key: refuses", () => {
+    set({
+      NODE_ENV: "production",
+      RESEND_API_KEY: undefined,
+      EMAIL_FROM: "a@b.c",
+    })
+    assert.equal(canSendEmail(), false)
+  })
+
+  test("deployed with no sender: refuses", () => {
+    set({
+      NODE_ENV: "production",
+      RESEND_API_KEY: "re_x",
+      EMAIL_FROM: undefined,
+    })
+    assert.equal(canSendEmail(), false)
+  })
+
+  test("local development: deliverable, because it prints to the console", () => {
+    set({
+      NODE_ENV: "development",
+      RESEND_API_KEY: undefined,
+      EMAIL_FROM: undefined,
+    })
+    assert.equal(canSendEmail(), true)
   })
 })

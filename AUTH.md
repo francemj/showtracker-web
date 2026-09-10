@@ -60,10 +60,18 @@ RESEND_API_KEY=re_…
 EMAIL_FROM=Showtracker <no-reply@your-domain.com>
 ```
 
-Password reset is the only account-recovery path, so the server treats a missing
-sender in production as an error rather than a degraded feature. In development
-the email is printed to the console instead, so the flow is testable without
-signing up for anything.
+Password reset is the only account-recovery path, so a missing sender is an
+outage, not a degraded feature. `/api/auth/forgot-password` checks deliverability
+*before* looking the account up and answers 503 when it cannot send — identical
+for every address, so it reveals nothing, and it is the difference between a
+visible failure and a button that reports success and sends nothing. Failures
+after that point can only happen for an account that exists, so they stay
+swallowed and are logged loudly instead.
+
+**Scope these to Preview as well as Production.** Vercel sets
+`NODE_ENV=production` on previews too, so an unscoped preview does not fall back
+to console output — it refuses to send. In local development the mail is printed
+to the console, which counts as deliverable.
 
 ### Passkeys on mobile
 

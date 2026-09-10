@@ -49,7 +49,7 @@ import {
   verifyCredentials,
   type AuthUser,
 } from "./lib/auth"
-import { sendPasswordResetEmail } from "./lib/email"
+import { canSendEmail, sendPasswordResetEmail } from "./lib/email"
 import { scheduleBackgroundTask } from "./lib/background-task"
 import { isEpisodeAired, parseAirDate } from "../packages/shared/episode-utils"
 import { inferShowStatus } from "../packages/shared/episode-progress"
@@ -370,6 +370,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "If that account exists, a reset link is on its way",
         })
 
+      // Checked before the lookup, so the answer is identical for every
+      // address and leaks nothing. Anything after this point can only fail for
+      // an account that exists, so those failures have to stay swallowed —
+      // which is exactly why this one must not be.
+      if (!canSendEmail()) {
+        console.error(
+          "[auth] password reset requested but email is not configured — refusing rather than reporting success"
+        )
+        return res.status(503).json({
+          message: "Password reset is unavailable right now. Please try later.",
+        })
+      }
+
       if (!parsed.success) return acknowledge()
 
       try {
@@ -388,7 +401,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         acknowledge()
       } catch (error) {
-        console.error("Forgot password error:", error)
+        // The account existed, so surfacing this would confirm that. It stays
+        // swallowed and loud in the logs: the user was told a link was sent.
+        console.error(
+          "[auth] password reset FAILED after the account was found — a success message was returned but no mail was sent:",
+          error
+        )
         acknowledge()
       }
     }
