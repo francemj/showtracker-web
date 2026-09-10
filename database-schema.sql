@@ -243,16 +243,23 @@ CREATE OR REPLACE VIEW user_shows_with_next_air AS
 --   DROP TABLE IF EXISTS seasons, import_history;
 
 -- Auth moved in-house 2026-09-09 (Auth0 removed). The CREATE TABLE statements
--- above cover a fresh database; on an existing one, apply:
+-- above cover a fresh database. On an existing one, re-running this whole file
+-- is safe -- every statement is IF NOT EXISTS or CREATE OR REPLACE, so it adds
+-- the four new auth tables and leaves the rest alone -- and then apply the
+-- column changes below, which re-running this file cannot make:
 --
 --   ALTER TABLE users ALTER COLUMN auth0_id DROP NOT NULL;
 --   ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE NOT NULL;
---   ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL;
---   ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL;
---   ALTER TABLE user_credentials ADD CONSTRAINT user_credentials_user_id_key UNIQUE (user_id);
+--   ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL;
+--   ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL;
 --
--- then the four CREATE TABLE / CREATE INDEX blocks for sessions,
--- webauthn_credentials, webauthn_challenges and password_reset_tokens.
+--   -- Postgres has no IF NOT EXISTS for ADD CONSTRAINT, so swallow the retry.
+--   DO $$ BEGIN
+--     ALTER TABLE user_credentials ADD CONSTRAINT user_credentials_user_id_key UNIQUE (user_id);
+--   EXCEPTION WHEN duplicate_object THEN NULL;
+--   END $$;
+--
+-- That block is idempotent as a whole, so a partial run can simply be repeated.
 --
 -- Existing Auth0 accounts need no data migration: users.email is already
 -- UNIQUE, so setting a password writes a user_credentials row against the same
