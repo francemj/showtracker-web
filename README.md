@@ -31,7 +31,7 @@ Monorepo for a TV show tracker — search shows via [The Movie Database](https:/
 | Data fetching | TanStack Query with AsyncStorage persistence |
 | Auth | Email/password and passkeys via `react-native-passkey`, session token in Expo SecureStore |
 | Notifications | Expo Notifications |
-| Distribution | [EAS Build](https://expo.dev/eas) (`eas.json`), bundle IDs `dev.matt.showtracker` |
+| Distribution | [EAS Build](https://expo.dev/eas) + [EAS Update](https://docs.expo.dev/eas-update/introduction/) (`eas.json`), bundle IDs `dev.matt.showtracker` |
 
 The mobile app connects to the same hosted API (`https://showtracker-web.vercel.app`).
 
@@ -104,7 +104,43 @@ npx expo run:android    # Run on Android emulator
 npx tsc --noEmit        # TypeScript check
 ```
 
-EAS builds are configured in [`apps/mobile/eas.json`](./apps/mobile/eas.json). Run `eas build` to produce a production build via Expo Application Services.
+#### Build profiles
+
+Builds go through [EAS](https://expo.dev/eas); the profiles live in [`apps/mobile/eas.json`](./apps/mobile/eas.json).
+
+| Profile | Produces | Use it for |
+| --- | --- | --- |
+| `development` | Debug build with `expo-dev-client` | Install once on a device, then iterate over Metro |
+| `preview` | Release-mode APK, internal distribution | Testing a release candidate |
+| `production` | Signed release APK, auto-incremented `versionCode` | Tagged releases, built in CI |
+
+```bash
+cd apps/mobile
+eas build --profile development --platform android   # install once, then stop rebuilding
+eas build --profile preview --platform android       # release-mode test build
+```
+
+`production` runs in CI on a `v*` or `mobile/v*` tag and attaches the APK to the GitHub
+release, so there is normally no reason to run that profile by hand.
+
+Signing keys are managed by EAS (`eas credentials -p android`) rather than stored in this
+repo or in GitHub secrets, and `appVersionSource: remote` means EAS owns the `versionCode`.
+The keystore fingerprint has to match the one served at `/.well-known/assetlinks.json` or
+every Android passkey fails origin validation — see [AUTH.md](./AUTH.md).
+
+#### Shipping JS-only changes without a rebuild
+
+`expo-updates` is configured with a channel per build profile and a `fingerprint` runtime
+version, so a JS/TS-only change can go out over the air instead of through a new binary:
+
+```bash
+cd apps/mobile
+eas update --branch production --message "fix episode counter"
+```
+
+The fingerprint policy is derived from the native dependency set, so an update that needs a
+different native shell will not be served to a build that cannot run it; that case needs a
+new `production` build instead.
 
 #### Native dev client vs. Metro-only, especially when using git worktrees
 
@@ -114,7 +150,7 @@ This app uses native modules (`react-native-passkey`, `expo-notifications`), so 
 
 - **Only rebuild the native shell (`npx expo run:ios` / `run:android`) when native dependencies or `app.json` config/plugins actually change.** A full rebuild takes several minutes and, per checkout, regenerates multi-GB `ios/`/`android/`/Pods/DerivedData directories.
 - **For everyday JS/TS-only changes, don't rebuild** — run `npx expo start --dev-client` and the already-installed dev client on the simulator will reconnect and load the new bundle in seconds.
-- **In a git worktree specifically**: `ios/`/`android/` won't exist there (gitignored, so a fresh worktree has none), so rebuilding native from inside a worktree means a full prebuild + Xcode/Gradle build every time, and a separate multi-GB native project per worktree. Prefer building the dev client once from a single canonical checkout (e.g. your main clone), installing it on the simulator, and then just pointing `expo start --dev-client` at it from whichever worktree you're actively editing — the dev client doesn't care which directory served its JS bundle.
+- **In a git worktree specifically**: `ios/`/`android/` won't exist there (gitignored, so a fresh worktree has none), so rebuilding native from inside a worktree means a full prebuild + Xcode/Gradle build every time, and a separate multi-GB native project per worktree. The cleanest way out is `eas build --profile development`, which builds the dev client on EAS and gives you an install link — no local native project at all. Failing that, build the dev client once from a single canonical checkout (e.g. your main clone). Either way, point `expo start --dev-client` at the installed client from whichever worktree you're actively editing — it doesn't care which directory served its JS bundle.
 
 ## Documentation in this repo
 
