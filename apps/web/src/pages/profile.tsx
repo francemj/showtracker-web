@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,13 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { User as UserIcon, LogOut } from "lucide-react"
-import { useAuth } from "@/lib/auth"
-import { apiRequest } from "@/lib/queryClient"
+import { User as UserIcon, LogOut, KeyRound, Trash2 } from "lucide-react"
+import { useAuth, browserSupportsWebAuthn } from "@/lib/auth"
+import { apiRequest, queryClient } from "@/lib/queryClient"
 import { useToast } from "@/hooks/use-toast"
 
 export default function Profile() {
-  const { user, logout, refreshUser } = useAuth()
+  const { user, logout, refreshUser, addPasskey } = useAuth()
   const { toast } = useToast()
   const [name, setName] = useState(user?.name ?? "")
   const [picture, setPicture] = useState(user?.picture ?? "")
@@ -48,6 +48,37 @@ export default function Profile() {
       toast({ title: "Failed to delete account", variant: "destructive" })
       setDeleteDialogOpen(false)
     },
+  })
+
+  const { data: passkeyData } = useQuery<{
+    passkeys: { id: string; name: string | null; createdAt: string }[]
+  }>({
+    queryKey: ["/api/auth/passkeys"],
+    enabled: browserSupportsWebAuthn(),
+  })
+
+  const enrollPasskey = useMutation({
+    mutationFn: () => addPasskey(navigator.platform || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/passkeys"] })
+      toast({ title: "Passkey added" })
+    },
+    onError: (error: Error) => {
+      // Dismissing the system prompt is a deliberate "not now", not a failure.
+      if (error.name === "NotAllowedError") return
+      toast({ title: "Could not add that passkey", variant: "destructive" })
+    },
+  })
+
+  const removePasskey = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest("DELETE", `/api/auth/passkeys/${encodeURIComponent(id)}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/passkeys"] })
+      toast({ title: "Passkey removed" })
+    },
+    onError: () =>
+      toast({ title: "Could not remove that passkey", variant: "destructive" }),
   })
 
   return (
@@ -105,6 +136,62 @@ export default function Profile() {
           </Button>
         </CardContent>
       </Card>
+
+      {browserSupportsWebAuthn() && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Passkeys</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Sign in with Face ID, Touch ID or your device PIN instead of
+              typing a password. Your password still works as a fallback.
+            </p>
+
+            {passkeyData?.passkeys.length ? (
+              <ul className="space-y-2">
+                {passkeyData.passkeys.map((passkey) => (
+                  <li
+                    key={passkey.id}
+                    className="flex items-center justify-between gap-3 rounded-md border border-card-border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-sans text-sm text-foreground">
+                        {passkey.name || "Passkey"}
+                      </p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        Added {new Date(passkey.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Remove passkey"
+                      onClick={() => removePasskey.mutate(passkey.id)}
+                      disabled={removePasskey.isPending}
+                      data-testid="button-remove-passkey"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <Button
+              variant="outline"
+              onClick={() => enrollPasskey.mutate()}
+              disabled={enrollPasskey.isPending}
+              data-testid="button-add-passkey"
+            >
+              <KeyRound className="w-4 h-4 mr-2" />
+              {enrollPasskey.isPending
+                ? "Waiting for device..."
+                : "Add a passkey"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sign out lives in the sidebar on desktop, which mobile doesn't show */}
       <Button

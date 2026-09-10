@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express"
 import fileUpload from "express-fileupload"
 import cors from "cors"
 import "../server/env-config"
+import { APP_URL } from "../server/lib/app-url"
 import { registerRoutes } from "../server/routes"
 
 // Detect if running on Vercel
@@ -27,10 +28,23 @@ declare module "http" {
 // Create and configure Express app
 const app = express()
 
-// CORS middleware
+// CORS middleware.
+//
+// This used to reflect any origin, which was harmless while every request
+// carried a bearer token. Now that web sessions ride in a cookie, reflecting
+// arbitrary origins with credentials:true would leave SameSite=Lax as the only
+// thing standing between a hostile page and an authenticated response — so the
+// allowlist is the second lock.
+//
+// A request with no Origin is allowed through: that is the native mobile app,
+// where CORS is not a control that exists. It carries a bearer token and is
+// authorised on that basis, not on its origin.
+const allowedOrigins = new Set([APP_URL])
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) =>
+      callback(null, !origin || allowedOrigins.has(origin)),
     credentials: true,
   })
 )

@@ -5,24 +5,17 @@ import React, {
   useState,
   useCallback,
 } from "react"
-import Auth0, { WebAuthErrorCodes } from "react-native-auth0"
-import type { WebAuthError } from "react-native-auth0"
-import { Alert } from "react-native"
+import * as SecureStore from "expo-secure-store"
+import { Passkey } from "react-native-passkey"
 import { setApiTokenGetter } from "@showtracker/api-client"
-import { AUTH0_DOMAIN, AUTH0_CLIENT_ID, API_URL } from "./config"
-import { apiRequest } from "@showtracker/api-client"
+import { API_URL } from "./config"
 
-const auth0 = new Auth0({ domain: AUTH0_DOMAIN, clientId: AUTH0_CLIENT_ID })
+const TOKEN_KEY = "showtracker.session"
+// Whether a passkey was enrolled from this device, so sign-in can lead with
+// Face ID instead of offering it to people who have never set one up.
+const PASSKEY_KEY = "showtracker.passkeyEnrolled"
 
-function isUserDismissal(error: unknown): boolean {
-  const type = (error as WebAuthError | undefined)?.type
-  return (
-    type === WebAuthErrorCodes.USER_CANCELLED ||
-    type === WebAuthErrorCodes.BROWSER_TERMINATED
-  )
-}
-
-type AuthUser = {
+export type AuthUser = {
   id: string
   email: string
   name: string | null
@@ -32,107 +25,180 @@ type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null
   isLoading: boolean
-  login: () => Promise<void>
+  passkeysSupported: boolean
+  hasLocalPasskey: boolean
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, name?: string) => Promise<void>
+  signInWithPasskey: () => Promise<void>
+  addPasskey: () => Promise<void>
+  requestPasswordReset: (email: string) => Promise<void>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+async function request<T>(
+  path: string,
+  {
+    method = "POST",
+    body,
+    token,
+  }: {
+    method?: string
+    body?: unknown
+    token?: string | null
+  } = {}
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      // There is no cookie jar here, so ask for the raw session token and keep
+      // it in SecureStore. Web gets an httpOnly cookie instead.
+      "X-Auth-Mode": "token",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new Error(data?.message ?? "Something went wrong. Please try again.")
+  }
+  return data as T
+}
+
+type SessionResponse = { user: AuthUser; token?: string }
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [hasLocalPasskey, setHasLocalPasskey] = useState(false)
 
-  const syncUser = useCallback(async () => {
+  const passkeysSupported = Passkey.isSupported()
+
+  const acceptSession = useCallback(async (data: SessionResponse) => {
+    if (data.token) await SecureStore.setItemAsync(TOKEN_KEY, data.token)
+    setUser(data.user)
+  }, [])
+
+  const refreshUser = useCallback(async () => {
+    const token = await SecureStore.getItemAsync(TOKEN_KEY)
+    if (!token) {
+      setUser(null)
+      return
+    }
     try {
-      const credentials = await auth0.credentialsManager.getCredentials()
-      if (!credentials?.accessToken) {
-        console.warn("[auth] syncUser: no access token in credentials manager")
-        setUser(null)
-        return
-      }
-      const res = await fetch(`${API_URL}/api/auth/callback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: credentials.accessToken }),
+      const data = await request<{ user: AuthUser }>("/api/auth/me", {
+        method: "GET",
+        token,
       })
-      if (res.ok) {
-        const data = await res.json()
-        setUser(data.user ?? data)
-      } else {
-        const body = await res.text().catch(() => "(unreadable)")
-        console.warn(`[auth] syncUser: API returned ${res.status}`, body)
-        setUser(null)
-      }
-    } catch (e) {
-      console.error("[auth] syncUser failed:", e)
+      setUser(data.user)
+    } catch {
+      // The session is gone or was revoked elsewhere; don't keep a token that
+      // no longer opens anything.
+      await SecureStore.deleteItemAsync(TOKEN_KEY)
       setUser(null)
     }
   }, [])
 
   useEffect(() => {
-    setApiTokenGetter(async () => {
-      try {
-        const credentials = await auth0.credentialsManager.getCredentials()
-        return credentials?.accessToken ?? null
-      } catch {
-        return null
-      }
+    setApiTokenGetter(() => SecureStore.getItemAsync(TOKEN_KEY))
+
+    let cancelled = false
+    void (async () => {
+      const enrolled = await SecureStore.getItemAsync(PASSKEY_KEY)
+      if (cancelled) return
+      setHasLocalPasskey(enrolled === "1")
+      await refreshUser()
+      if (!cancelled) setIsLoading(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [refreshUser])
+
+  const signIn = async (email: string, password: string) => {
+    acceptSession(
+      await request<SessionResponse>("/api/auth/login", {
+        body: { email, password },
+      })
+    )
+  }
+
+  const signUp = async (email: string, password: string, name?: string) => {
+    acceptSession(
+      await request<SessionResponse>("/api/auth/register", {
+        body: { email, password, ...(name ? { name } : {}) },
+      })
+    )
+  }
+
+  const signInWithPasskey = async () => {
+    const { challengeId, options } = await request<{
+      challengeId: string
+      options: Parameters<typeof Passkey.get>[0]
+    }>("/api/auth/passkey/login/options")
+
+    const response = await Passkey.get(options)
+
+    acceptSession(
+      await request<SessionResponse>("/api/auth/passkey/login/verify", {
+        body: { challengeId, response },
+      })
+    )
+  }
+
+  const addPasskey = async () => {
+    const token = await SecureStore.getItemAsync(TOKEN_KEY)
+    const { challengeId, options } = await request<{
+      challengeId: string
+      options: Parameters<typeof Passkey.create>[0]
+    }>("/api/auth/passkey/register/options", { token })
+
+    const response = await Passkey.create(options)
+
+    await request("/api/auth/passkey/register/verify", {
+      body: { challengeId, response, name: "This device" },
+      token,
     })
 
-    auth0.credentialsManager
-      .hasValidCredentials()
-      .then(async (hasCredentials) => {
-        if (hasCredentials) {
-          await syncUser()
-        }
-      })
-      .finally(() => setIsLoading(false))
-  }, [syncUser])
+    await SecureStore.setItemAsync(PASSKEY_KEY, "1")
+    setHasLocalPasskey(true)
+  }
 
-  const login = async () => {
-    setIsLoading(true)
-    try {
-      const credentials = await auth0.webAuth.authorize({
-        scope: "openid profile email",
-        audience: `https://${AUTH0_DOMAIN}/userinfo`,
-      })
-      await auth0.credentialsManager.saveCredentials(credentials)
-      await syncUser()
-    } catch (error) {
-      // Dismissing the browser is a deliberate "not now", not a failure, and on
-      // Android the back gesture makes it a routine one — so it stays silent.
-      // Everything else used to vanish too, leaving the button looking inert.
-      if (!isUserDismissal(error)) {
-        Alert.alert(
-          "Couldn't sign you in",
-          error instanceof Error ? error.message : "Please try again."
-        )
-      }
-    } finally {
-      setIsLoading(false)
-    }
+  const requestPasswordReset = async (email: string) => {
+    await request("/api/auth/forgot-password", { body: { email } })
   }
 
   const logout = async () => {
-    setIsLoading(true)
+    const token = await SecureStore.getItemAsync(TOKEN_KEY)
     try {
-      await auth0.webAuth.clearSession()
-      await auth0.credentialsManager.clearCredentials()
-      setUser(null)
-      await apiRequest("POST", "/api/auth/logout")
+      await request("/api/auth/logout", { token })
     } catch {
-      // clearSession can fail on simulators; still clear locally
-      await auth0.credentialsManager.clearCredentials()
-      setUser(null)
-    } finally {
-      setIsLoading(false)
+      // Revoking server-side is best effort; dropping the local token is not.
     }
+    await SecureStore.deleteItemAsync(TOKEN_KEY)
+    setUser(null)
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, logout, refreshUser: syncUser }}
+      value={{
+        user,
+        isLoading,
+        passkeysSupported,
+        hasLocalPasskey,
+        signIn,
+        signUp,
+        signInWithPasskey,
+        addPasskey,
+        requestPasswordReset,
+        logout,
+        refreshUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -130,7 +130,7 @@ export default [
 
   // CommonJS Node config files
   {
-    files: ["**/metro.config.js"],
+    files: ["**/metro.config.js", "**/app.config.js"],
     languageOptions: {
       sourceType: "commonjs",
       globals: {

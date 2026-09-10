@@ -1,6 +1,5 @@
 import { Switch, Route, useLocation } from "wouter"
 import { useEffect, useRef } from "react"
-import { Auth0Provider } from "@auth0/auth0-react"
 import { queryClient } from "./lib/queryClient"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { Toaster } from "@/components/ui/toaster"
@@ -12,6 +11,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { StatusValidationTrigger } from "@/components/status-validation-trigger"
 import AuthPage from "@/pages/auth"
+import ResetPassword from "@/pages/reset-password"
 import Dashboard from "@/pages/dashboard"
 import Search from "@/pages/search"
 import WantToWatch from "@/pages/want-to-watch"
@@ -22,9 +22,6 @@ import Stopped from "@/pages/stopped"
 import ShowDetail from "@/pages/show-detail"
 import Profile from "@/pages/profile"
 import NotFound from "@/pages/not-found"
-
-const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN as string
-const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID as string
 
 function Router() {
   return (
@@ -84,6 +81,12 @@ function AuthenticatedApp() {
     )
   }
 
+  // Reset arrives by email, so it has to render for a signed-out visitor —
+  // otherwise the link just shows the sign-in form it is meant to bypass.
+  if (location === "/reset-password") {
+    return <ResetPassword />
+  }
+
   if (!isAuthenticated) {
     return <AuthPage />
   }
@@ -115,23 +118,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <Auth0Provider
-            domain={auth0Domain}
-            clientId={auth0ClientId}
-            authorizationParams={{
-              redirect_uri:
-                typeof window !== "undefined"
-                  ? window.location.origin
-                  : undefined,
-              scope: "openid profile email",
-            }}
-            cacheLocation="localstorage"
-            useRefreshTokens
-          >
-            <AuthProvider>
-              <AuthenticatedApp />
-            </AuthProvider>
-          </Auth0Provider>
+          <AuthProvider>
+            <AuthenticatedApp />
+          </AuthProvider>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>
