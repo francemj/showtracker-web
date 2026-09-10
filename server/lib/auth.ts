@@ -43,10 +43,17 @@ const RP_ID = process.env.RP_ID ?? new URL(APP_URL).hostname
  * that exact string is listed, every Android passkey fails origin validation
  * while iOS and web work fine, which is a confusing way to find out.
  */
-const ANDROID_ORIGIN = process.env.ANDROID_APK_KEY_HASH
-  ? `android:apk-key-hash:${process.env.ANDROID_APK_KEY_HASH}`
-  : null
-const EXPECTED_ORIGINS = [APP_URL, ...(ANDROID_ORIGIN ? [ANDROID_ORIGIN] : [])]
+const ANDROID_ORIGINS = (process.env.ANDROID_APK_KEY_HASH ?? "")
+  .split(",")
+  .map((hash) => hash.trim())
+  .filter(Boolean)
+  // Comma-separated, to match ANDROID_SHA256_FINGERPRINT: an app signed by
+  // Google Play has a different certificate from the one EAS uses for internal
+  // builds, so both hashes have to be accepted or passkeys work in testing and
+  // break in production (or the reverse).
+  .map((hash) => `android:apk-key-hash:${hash}`)
+
+const EXPECTED_ORIGINS = [APP_URL, ...ANDROID_ORIGINS]
 
 const SESSION_TTL_MS = 60 * 24 * 60 * 60 * 1000
 const RESET_TTL_MS = 60 * 60 * 1000

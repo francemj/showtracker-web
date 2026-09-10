@@ -64,7 +64,7 @@ IOS_TEAM_ID=ABCDE12345              # Apple Developer team id
 IOS_BUNDLE_ID=dev.matt.showtracker  # optional, this is the default
 ANDROID_SHA256_FINGERPRINT=AA:BB:…  # from `eas credentials`; comma-separate several
 ANDROID_PACKAGE=dev.matt.showtracker
-ANDROID_APK_KEY_HASH=<base64url SHA-256 of the signing cert>
+ANDROID_APK_KEY_HASH=<base64url SHA-256 of the signing cert>  # comma-separate several
 ```
 
 Until they are set, `/.well-known/apple-app-site-association` and
@@ -75,6 +75,17 @@ fails to associate.
 `ANDROID_APK_KEY_HASH` is separate and easy to miss: Android does not send an
 https origin for an assertion, it sends `android:apk-key-hash:<hash>`. Without
 it, iOS and web passkeys work and every Android one fails origin validation.
+
+It is the *same certificate* as `ANDROID_SHA256_FINGERPRINT`, in a different
+encoding — base64url of the digest bytes rather than colon-separated hex:
+
+```bash
+echo "AB:CD:EF:..." | tr -d ':' | xxd -r -p | base64 | tr '+/' '-_' | tr -d '='
+```
+
+Both accept a comma-separated list. An app signed by Google Play has a
+different certificate from the one EAS uses for internal builds, so list both
+or passkeys will work in testing and fail in production.
 
 `app.json` must carry the matching `ios.associatedDomains` entry
 (`webcredentials:<domain>`), and `vercel.json` routes `/.well-known/*` to the
