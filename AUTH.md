@@ -38,9 +38,20 @@ DATABASE_URL=postgres://…
 APP_URL=https://your-domain.com     # also the passkey relying-party id
 ```
 
-`APP_URL` is load-bearing: it is the expected WebAuthn origin and the base for
-reset links. `RP_ID` defaults to its hostname and only needs setting if they
-differ.
+`APP_URL` is load-bearing: it is the expected WebAuthn origin, the passkey
+relying-party id, the CORS allowlist, and the base for reset links. It must be
+the origin the browser actually loaded — a host that merely reaches the same app
+is not enough, or cookie-authenticated writes get a 403.
+
+Set it on **production only**. Preview deployments each get their own generated
+hostname and fall back to Vercel's `VERCEL_URL`; pinning them to production's
+origin would 403 every write and break passkeys on exactly the deployments used
+to test them.
+
+`RP_ID` defaults to `APP_URL`'s hostname. Setting it to a parent domain
+(`example.com` for a page on `app.example.com`) makes enrolled passkeys survive a
+move to another subdomain — at the cost of letting every sibling subdomain use
+them.
 
 ### Email (required in production)
 

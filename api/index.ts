@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express"
 import fileUpload from "express-fileupload"
 import cors from "cors"
 import "../server/env-config"
+import { APP_URL } from "../server/lib/app-url"
 import { registerRoutes } from "../server/routes"
 
 // Detect if running on Vercel
@@ -38,7 +39,7 @@ const app = express()
 // A request with no Origin is allowed through: that is the native mobile app,
 // where CORS is not a control that exists. It carries a bearer token and is
 // authorised on that basis, not on its origin.
-const allowedOrigins = new Set([process.env.APP_URL ?? "http://localhost:3000"])
+const allowedOrigins = new Set([APP_URL])
 
 app.use(
   cors({

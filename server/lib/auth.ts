@@ -17,6 +17,7 @@ import type {
   AuthenticationResponseJSON,
 } from "@simplewebauthn/server"
 
+import { APP_URL } from "./app-url"
 import { db } from "./db"
 import { users } from "../../packages/shared/schema"
 import {
@@ -33,7 +34,8 @@ const scrypt = promisify(scryptCallback) as (
   keylen: number
 ) => Promise<Buffer>
 
-export const APP_URL = process.env.APP_URL ?? "http://localhost:3000"
+export { APP_URL }
+
 const RP_NAME = "Showtracker"
 const RP_ID = process.env.RP_ID ?? new URL(APP_URL).hostname
 

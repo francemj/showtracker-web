@@ -20,7 +20,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "associatedDomains": [
-        "webcredentials:showtracker-web.vercel.app"
+        "webcredentials:tracker.mfranceschini.dev"
       ]
     },
     "android": {
@@ -53,7 +53,7 @@
       "eas": {
         "projectId": "9012472e-03f5-4184-9cda-ee4b35517e63"
       },
-      "apiUrl": "https://showtracker-web.vercel.app",
+      "apiUrl": "https://tracker.mfranceschini.dev",
       "router": {}
     },
     "owner": "francemj-organization"
