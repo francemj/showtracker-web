@@ -151,19 +151,6 @@ Everything under `/api/auth` is rate limited separately from the rest of the
 API, keyed on IP + email, because the global limiter keys on a bearer prefix
 that by definition does not exist yet at sign-in.
 
-## Accounts that predate this
-
-No data migration is needed. `users.email` is unique, so an existing account
-that sets a password gets a `user_credentials` row against the same `users.id`
-and keeps its whole library. Those users have no password yet, so send them
-through "Forgot?" once.
-
-`users.auth0_id` has been dropped. It had to stop being declared in
-`packages/shared/schema.ts` and that code had to ship first: Drizzle expands a
-bare `.select()` into an explicit column list, so dropping the column under
-running code that still named it would have failed every query touching
-`users`.
-
 ## Tests
 
 ```bash

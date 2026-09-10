@@ -39,9 +39,9 @@ export default function ProfileScreen() {
   } = useAuth()
   const destructive = STATUS_COLORS.stopped.light.solid
 
-  // Accounts carried over from Auth0 can have `name` set to the email address,
-  // which then shows up twice — under the avatar and inside the field you're
-  // meant to fill in. Treat that as empty and let the placeholder do its job.
+  // A name equal to the email shows up twice — under the avatar and inside the
+  // field you're meant to fill in. Treat it as empty and let the placeholder
+  // do its job.
   const [name, setName] = useState(
     user?.name && user.name !== user.email ? user.name : ""
   )

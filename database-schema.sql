@@ -16,11 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
--- Password credentials.
---
--- Predates Auth0, and is the store again now that auth is in-house — the shape
--- was already right, so it is reused rather than replaced. One row per user;
--- accounts that only use passkeys have none.
+-- Password credentials. One row per user; accounts that only use passkeys
+-- have none.
 CREATE TABLE IF NOT EXISTS user_credentials (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
   user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -236,34 +233,3 @@ CREATE OR REPLACE VIEW user_shows_with_next_air AS
 -- On an existing database:
 --
 --   DROP TABLE IF EXISTS seasons, import_history;
-
--- Auth moved in-house 2026-09-09 (Auth0 removed). The CREATE TABLE statements
--- above cover a fresh database. On an existing one, re-running this whole file
--- is safe -- every statement is IF NOT EXISTS or CREATE OR REPLACE, so it adds
--- the four new auth tables and leaves the rest alone -- and then apply the
--- column changes below, which re-running this file cannot make:
---
---   ALTER TABLE users ALTER COLUMN auth0_id DROP NOT NULL;
---   ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE NOT NULL;
---   ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL;
---   ALTER TABLE user_credentials ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL;
---
---   -- Postgres has no IF NOT EXISTS for ADD CONSTRAINT, so swallow the retry.
---   DO $$ BEGIN
---     ALTER TABLE user_credentials ADD CONSTRAINT user_credentials_user_id_key UNIQUE (user_id);
---   EXCEPTION WHEN duplicate_object THEN NULL;
---   END $$;
---
--- That block is idempotent as a whole, so a partial run can simply be repeated.
---
--- Existing Auth0 accounts needed no data migration: users.email is already
--- UNIQUE, so setting a password writes a user_credentials row against the same
--- users.id and the library comes with it.
---
--- auth0_id was dropped on 2026-09-10, once nothing read it. Note the ordering
--- that requires: Drizzle expands a bare .select() into an explicit column list,
--- so the column must stop being declared in packages/shared/schema.ts and that
--- code must be deployed *before* the column goes, or every query touching users
--- fails with "column auth0_id does not exist".
---
---   ALTER TABLE users DROP COLUMN IF EXISTS auth0_id;
