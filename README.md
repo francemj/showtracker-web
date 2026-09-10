@@ -108,39 +108,43 @@ npx tsc --noEmit        # TypeScript check
 
 Builds go through [EAS](https://expo.dev/eas); the profiles live in [`apps/mobile/eas.json`](./apps/mobile/eas.json).
 
-| Profile | Produces | Use it for |
+| Profile | Produces | Runs |
 | --- | --- | --- |
-| `development` | Debug build with `expo-dev-client` | Install once on a device, then iterate over Metro |
-| `preview` | Release-mode APK, internal distribution | Testing a release candidate |
-| `production` | Signed release APK, auto-incremented `versionCode` | Tagged releases, built in CI |
+| `development` | Debug build with `expo-dev-client` | By hand, when native deps change |
+| `preview` | Release-mode APK, internal distribution | Automatically on every push to `main` |
+| `production` | Signed release APK, auto-incremented `versionCode` | Automatically on a `v*` or `mobile/v*` release tag |
+
+`development` is the only one you run yourself, and rarely:
 
 ```bash
 cd apps/mobile
 eas build --profile development --platform android   # install once, then stop rebuilding
-eas build --profile preview --platform android       # release-mode test build
 ```
 
-`production` runs in CI on a `v*` or `mobile/v*` tag and attaches the APK to the GitHub
-release, so there is normally no reason to run that profile by hand.
+#### How main reaches your phone
+
+[`main.yml`](./.github/workflows/main.yml) computes the app's native fingerprint on every
+push to `main` and takes one of two paths:
+
+- **Fingerprint unchanged** — most merges, since they are JS/TS only. Publishes an EAS
+  Update to the `preview` channel. Takes about a minute, costs no build credit, and the
+  installed app picks it up on next launch. Nothing to download.
+- **Fingerprint changed** — a native dependency, a config plugin, a native key in
+  `app.json`. Compiles a new `preview` APK, because an update cannot cross that boundary.
+  The job summary links you to the build to install.
+
+Building on every merge would not fit the free plan: `main` takes roughly 16 commits a
+month against an allowance of 15 Android builds. Routing JS-only changes through EAS
+Update keeps binary builds down to the few that genuinely need one.
+
+Release tags build `production` and attach the APK to the GitHub release. That attachment
+matters: EAS deletes build artifacts on the free plan after about a month, so the GitHub
+release is the durable copy — an Expo build link from two months ago returns a 404.
 
 Signing keys are managed by EAS (`eas credentials -p android`) rather than stored in this
 repo or in GitHub secrets, and `appVersionSource: remote` means EAS owns the `versionCode`.
 The keystore fingerprint has to match the one served at `/.well-known/assetlinks.json` or
 every Android passkey fails origin validation — see [AUTH.md](./AUTH.md).
-
-#### Shipping JS-only changes without a rebuild
-
-`expo-updates` is configured with a channel per build profile and a `fingerprint` runtime
-version, so a JS/TS-only change can go out over the air instead of through a new binary:
-
-```bash
-cd apps/mobile
-eas update --branch production --message "fix episode counter"
-```
-
-The fingerprint policy is derived from the native dependency set, so an update that needs a
-different native shell will not be served to a build that cannot run it; that case needs a
-new `production` build instead.
 
 #### Native dev client vs. Metro-only, especially when using git worktrees
 
