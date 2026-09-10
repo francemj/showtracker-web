@@ -151,16 +151,6 @@ Everything under `/api/auth` is rate limited separately from the rest of the
 API, keyed on IP + email, because the global limiter keys on a bearer prefix
 that by definition does not exist yet at sign-in.
 
-## Accounts that predate this
-
-No data migration is needed. `users.email` is unique, so an existing account
-that sets a password gets a `user_credentials` row against the same `users.id`
-and keeps its whole library. Those users have no password yet, so send them
-through "Forgot?" once.
-
-`users.auth0_id` is now nullable and unused; drop it once every account has
-signed in again.
-
 ## Tests
 
 ```bash

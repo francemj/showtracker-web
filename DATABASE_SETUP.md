@@ -42,8 +42,7 @@ through PgBouncer.
   `sessions`, `webauthn_credentials`, `webauthn_challenges` and
   `password_reset_tokens` hold everything auth writes; their Drizzle
   definitions are in `server/lib/schema.ts` rather than `packages/shared` so
-  credential column names stay out of the mobile bundle. `users.auth0_id` is a
-  nullable leftover from the Auth0 era. See [AUTH.md](./AUTH.md).
+  credential column names stay out of the mobile bundle. See [AUTH.md](./AUTH.md).
 - **`user_shows_with_last_watch` and `user_shows_with_next_air`** back the
   "recent watch" and "next air date" sort modes. They existed only inside the
   old hosted project until they were recovered from the catalog during the

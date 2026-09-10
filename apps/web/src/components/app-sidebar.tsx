@@ -55,9 +55,8 @@ function StatusDot({ status }: { status: StatusKey }) {
 export function AppSidebar() {
   const [location] = useLocation()
   const { user, logout } = useAuth()
-  // Accounts carried over from Auth0 can have `name` set to the email address.
-  // Showing both lines then prints the same string twice — and truncated at
-  // this width they look identical — so collapse to the email alone.
+  // A name equal to the email prints the same string twice, and truncated at
+  // this width the two lines look identical — so collapse to the email alone.
   const hasRealName = !!user?.name && user.name !== user?.email
   const displayName = hasRealName ? user!.name : user?.email
   const { closeSidebar, open } = useSidebar()
