@@ -52,6 +52,8 @@ jobs:
         with:
           profile: preview
           branch: preview
+          # `eas update` requires an EAS environment as of SDK 55.
+          environment: preview
           platform: android
           working-directory: apps/mobile
 
