@@ -18,7 +18,7 @@ import {
 } from "@tanstack/react-query"
 import { useRouter, useNavigation } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
+import { useBottomTabBarHeight } from "expo-router/js-tabs"
 import { apiRequest } from "@showtracker/api-client"
 import type { TMDBShow, UserShow, SearchResponse } from "@showtracker/shared"
 import {

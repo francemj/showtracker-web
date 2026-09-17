@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native"
 import { useRouter } from "expo-router"
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs"
+import { useBottomTabBarHeight } from "expo-router/js-tabs"
 import type { ShowWithProgress } from "@showtracker/shared"
 import {
   useAppTheme,

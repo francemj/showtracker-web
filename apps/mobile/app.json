@@ -7,17 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "showtracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "runtimeVersion": {
       "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/9012472e-03f5-4184-9cda-ee4b35517e63"
-    },
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
@@ -35,7 +29,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "dev.matt.showtracker",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
@@ -47,6 +40,15 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-status-bar",
       [
         "expo-notifications",
         {
