@@ -150,6 +150,28 @@ repo or in GitHub secrets, and `appVersionSource: remote` means EAS owns the `ve
 The keystore fingerprint has to match the one served at `/.well-known/assetlinks.json` or
 every Android passkey fails origin validation — see [AUTH.md](./AUTH.md).
 
+#### Why a flag in eas.json
+
+[`apps/mobile/app.config.js`](./apps/mobile/app.config.js) varies one field by build:
+every profile but `production` appends `?mode=developer` to the iOS `associatedDomains`
+entry, which skips Apple's CDN cache while debugging passkey setup and must never ship,
+since it only resolves on a device in Developer Mode.
+
+That switch reads `SHOWTRACKER_STORE_DOMAINS`, declared under `env` on the `production`
+profile in [`eas.json`](./apps/mobile/eas.json). It used to read `EAS_BUILD_PROFILE`, and
+that broke every production build with `Runtime version mismatch` in the
+`CONFIGURE_EXPO_UPDATES` phase. `EAS_BUILD_PROFILE` is set inside the build worker but not
+where the CLI evaluates the app config to compute the runtime fingerprint, so the two
+sides hashed different configs — one with the suffix, one without — and the build refused
+to continue. A variable declared under a profile's `env` is applied in both places, so the
+fingerprints agree.
+
+The suffix is iOS-only; the builds it broke were Android. The fingerprint hashes the whole
+resolved config rather than the part relevant to the platform being built, so any field
+that evaluates differently in the two places fails the same way. If you add another
+conditional here, drive it from `eas.json` `env` or an EAS secret, never from a variable
+the worker happens to set.
+
 #### Native dev client vs. Metro-only, especially when using git worktrees
 
 This app uses native modules (`react-native-passkey`, `expo-notifications`), so it needs a compiled **dev client** on the simulator/device — Expo Go alone won't work (a `TurboModuleRegistry.getEnforcing(...)` failure naming one of those modules means you're on Expo Go or a stale dev client).
