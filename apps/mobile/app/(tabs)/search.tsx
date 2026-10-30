@@ -165,27 +165,18 @@ function SearchResultRow({
           >
             <Menu.Item
               onPress={() => {
-                onAdd(show.id, "want_to_watch")
-                setMenuVisible(false)
-              }}
-              title="Want to Watch"
-            />
-            <Menu.Item
-              onPress={() => {
                 onAdd(show.id, "watching")
                 setMenuVisible(false)
               }}
               title="Watching"
             />
-            {isEnded && (
-              <Menu.Item
-                onPress={() => {
-                  onAdd(show.id, "completed")
-                  setMenuVisible(false)
-                }}
-                title="Mark as Completed"
-              />
-            )}
+            <Menu.Item
+              onPress={() => {
+                onAdd(show.id, "want_to_watch")
+                setMenuVisible(false)
+              }}
+              title="Want to Watch"
+            />
             {isReturning && (
               <Menu.Item
                 onPress={() => {
@@ -193,6 +184,15 @@ function SearchResultRow({
                   setMenuVisible(false)
                 }}
                 title="Mark as Caught Up"
+              />
+            )}
+            {isEnded && (
+              <Menu.Item
+                onPress={() => {
+                  onAdd(show.id, "completed")
+                  setMenuVisible(false)
+                }}
+                title="Mark as Completed"
               />
             )}
           </Menu>
@@ -256,7 +256,7 @@ export default function SearchScreen() {
     }) => {
       await apiRequest("POST", "/api/user/shows", {
         showId,
-        status: status ?? "want_to_watch",
+        initialStatus: status ?? "want_to_watch",
       })
     },
     onSuccess: () => {

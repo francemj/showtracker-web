@@ -132,18 +132,6 @@ export function AddToCollectionButton({
               Loading…
             </DropdownMenuItem>
           )}
-          {showMarkCompleted && (
-            <DropdownMenuItem
-              onClick={() => onAdd(showId, "completed")}
-              data-testid={
-                menuTestIdSuffix !== undefined
-                  ? `menu-item-mark-completed${menuTestIdSuffix}`
-                  : undefined
-              }
-            >
-              Mark as Completed
-            </DropdownMenuItem>
-          )}
           {showMarkCaughtUp && (
             <DropdownMenuItem
               onClick={() => onAdd(showId, "caught_up")}
@@ -154,6 +142,18 @@ export function AddToCollectionButton({
               }
             >
               Mark as Caught Up
+            </DropdownMenuItem>
+          )}
+          {showMarkCompleted && (
+            <DropdownMenuItem
+              onClick={() => onAdd(showId, "completed")}
+              data-testid={
+                menuTestIdSuffix !== undefined
+                  ? `menu-item-mark-completed${menuTestIdSuffix}`
+                  : undefined
+              }
+            >
+              Mark as Completed
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

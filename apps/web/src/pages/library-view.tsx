@@ -2,7 +2,8 @@ import { useState } from "react"
 import { ShowWithProgress } from "@shared/schema"
 import { ShowGrid } from "@/components/show-grid"
 import { Skeleton } from "@/components/ui/skeleton"
-import { statusPalette, type StatusKey } from "@/lib/status"
+import { statusPalette, STATUS_LABEL, type StatusKey } from "@/lib/status"
+import { STATUS_ORDER, STATUS_SLUG } from "@shared/status"
 import { useTheme } from "@/components/theme-provider"
 import { Link } from "wouter"
 import { LayoutGrid, List, Star } from "lucide-react"
@@ -13,13 +14,11 @@ interface TabConfig {
   href: string
 }
 
-const TABS: TabConfig[] = [
-  { id: "watching", label: "Watching", href: "/watching" },
-  { id: "want_to_watch", label: "Want to Watch", href: "/want-to-watch" },
-  { id: "caught_up", label: "Caught Up", href: "/caught-up" },
-  { id: "completed", label: "Completed", href: "/completed" },
-  { id: "stopped", label: "Stopped", href: "/stopped" },
-]
+const TABS: TabConfig[] = STATUS_ORDER.map((id) => ({
+  id,
+  label: STATUS_LABEL[id],
+  href: `/${STATUS_SLUG[id]}`,
+}))
 
 interface LibraryViewProps {
   activeTab: StatusKey
