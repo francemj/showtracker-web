@@ -112,7 +112,7 @@ Builds go through [EAS](https://expo.dev/eas); the profiles live in [`apps/mobil
 | --- | --- | --- |
 | `development` | Debug build with `expo-dev-client` | By hand, when native deps change |
 | `preview` | Release-mode APK, internal distribution | Automatically on every push to `main` |
-| `production` | Signed release APK, auto-incremented `versionCode` | Automatically on a `v*` or `mobile/v*` release tag |
+| `production` | Signed release APK, auto-incremented `versionCode` | Automatically on a published `mobile/v*` release |
 
 `development` is the only one you run yourself, and rarely:
 
@@ -137,9 +137,13 @@ Building on every merge would not fit the free plan: `main` takes roughly 16 com
 month against an allowance of 15 Android builds. Routing JS-only changes through EAS
 Update keeps binary builds down to the few that genuinely need one.
 
-Release tags build `production` and attach the APK to the GitHub release. That attachment
-matters: EAS deletes build artifacts on the free plan after about a month, so the GitHub
-release is the durable copy — an Expo build link from two months ago returns a 404.
+Publishing a `mobile/v*` release builds `production` and attaches the APK to that GitHub
+release; `web/v*` deploys the web app and nothing else, and a bare `v*` tag matches neither
+job. See the tag conventions in [`release.yml`](./.github/workflows/release.yml).
+
+The APK attachment matters: EAS deletes build artifacts on the free plan after about a
+month, so the GitHub release is the durable copy — an Expo build link from two months ago
+returns a 404.
 
 Signing keys are managed by EAS (`eas credentials -p android`) rather than stored in this
 repo or in GitHub secrets, and `appVersionSource: remote` means EAS owns the `versionCode`.
