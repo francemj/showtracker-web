@@ -176,7 +176,8 @@ export default function ShowDetail() {
 
   const removeShowMutation = useMutation({
     mutationFn: async () => apiRequest("DELETE", `/api/user/shows/${id}`),
-    onSuccess: () => {
+    onSuccess: async (res) => {
+      const { removed } = (await res.json()) as { removed: boolean }
       setRemoveShowDialogOpen(false)
       queryClient.invalidateQueries({ queryKey: ["/api/user/shows"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows", id] })
@@ -189,12 +190,14 @@ export default function ShowDetail() {
       queryClient.invalidateQueries({ queryKey: ["/api/shows/completed"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/want-to-watch"] })
       queryClient.invalidateQueries({ queryKey: ["/api/shows/stopped"] })
-      toast({ title: "Marked as stopped" })
+      toast({
+        title: removed ? "Removed from collection" : "Marked as stopped",
+      })
     },
     onError: () =>
       toast({
         title: "Error",
-        description: "Failed to mark show as stopped.",
+        description: "Failed to remove this show.",
         variant: "destructive",
       }),
   })
@@ -458,6 +461,9 @@ export default function ShowDetail() {
     ? statusPalette(userStatus, theme)
     : statusPalette("watching", theme)
   const progress = show.progress || 0
+  // Nothing watched means there is no progress worth keeping, so leaving the
+  // collection is a real removal rather than a move to Stopped.
+  const removesOutright = (show.watchedEpisodes ?? 0) === 0
   const realSeasons = seasons?.filter((s) => s.season_number > 0) ?? []
   const effectiveActiveSeason =
     activeSeason ?? realSeasons[0]?.season_number ?? 1
@@ -574,9 +580,13 @@ export default function ShowDetail() {
                 className="text-muted-foreground hover:text-destructive"
                 disabled={removeShowMutation.isPending}
                 onClick={() => setRemoveShowDialogOpen(true)}
-                data-testid="button-mark-as-stopped"
+                data-testid={
+                  removesOutright
+                    ? "button-remove-from-collection"
+                    : "button-mark-as-stopped"
+                }
               >
-                Mark as Stopped
+                {removesOutright ? "Remove from Collection" : "Mark as Stopped"}
               </Button>
             )}
             {show.userShow?.status === "stopped" && (
@@ -891,10 +901,13 @@ export default function ShowDetail() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark as stopped?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {removesOutright ? "Remove from collection?" : "Mark as stopped?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This moves the show to your Stopped list. Your watch progress is
-              kept; mark an episode as watched to start tracking again.
+              {removesOutright
+                ? "This takes the show out of your library. You haven't watched anything, so there is no progress to keep — you can add it back any time."
+                : "This moves the show to your Stopped list. Your watch progress is kept; mark an episode as watched to start tracking again."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -903,9 +916,13 @@ export default function ShowDetail() {
               onClick={() => removeShowMutation.mutate()}
               disabled={removeShowMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-mark-as-stopped"
+              data-testid={
+                removesOutright
+                  ? "button-confirm-remove-from-collection"
+                  : "button-confirm-mark-as-stopped"
+              }
             >
-              Mark as Stopped
+              {removesOutright ? "Remove" : "Mark as Stopped"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -186,12 +186,7 @@ export type InsertWatchProgress = z.infer<typeof insertWatchProgressSchema>
 export type DeviceToken = typeof deviceTokens.$inferSelect
 
 // Additional types for frontend
-export type StatusKey =
-  | "watching"
-  | "want_to_watch"
-  | "caught_up"
-  | "completed"
-  | "stopped"
+export type { StatusKey } from "./status"
 
 export type PaginatedShowsResponse = {
   shows: ShowWithProgress[]

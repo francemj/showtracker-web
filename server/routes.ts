@@ -1017,7 +1017,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   )
 
-  // Remove show from user collection (soft delete: set status to "stopped")
+  // Take a show out of the collection. With watch progress there is something
+  // to keep, so this soft-deletes to "stopped"; with nothing watched there is
+  // nothing to resume, and "stopped" would be a lie — so the row goes.
   app.delete(
     "/api/user/shows/:showId",
     authMiddleware,
@@ -1028,6 +1030,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid show ID" })
         }
 
+        const [watched] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(watchProgress)
+          .where(
+            and(
+              eq(watchProgress.userId, req.userId!),
+              eq(watchProgress.showId, showId),
+              eq(watchProgress.watched, true)
+            )
+          )
+
+        if ((watched?.count ?? 0) === 0) {
+          await db
+            .delete(watchProgress)
+            .where(
+              and(
+                eq(watchProgress.userId, req.userId!),
+                eq(watchProgress.showId, showId)
+              )
+            )
+          await db
+            .delete(userShows)
+            .where(
+              and(
+                eq(userShows.userId, req.userId!),
+                eq(userShows.showId, showId)
+              )
+            )
+
+          return res.json({ removed: true })
+        }
+
         await db
           .update(userShows)
           .set({ status: "stopped", updatedAt: new Date() })
@@ -1035,7 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             and(eq(userShows.userId, req.userId!), eq(userShows.showId, showId))
           )
 
-        res.status(204).send()
+        res.json({ removed: false, status: "stopped" })
       } catch (error) {
         console.error("Remove show error:", error)
         res.status(500).json({ message: "Failed to remove show" })

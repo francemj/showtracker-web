@@ -13,48 +13,29 @@ import {
   SANS_700,
   MONO,
 } from "../../../lib/theme"
+import {
+  STATUS_ORDER,
+  STATUS_SLUG,
+  type StatusKey,
+} from "@showtracker/shared/status"
 
 type ShowsResponse = { shows: unknown[]; total: number }
 
-const TABS = [
-  {
-    id: "watching",
-    label: "Watching",
-    href: "/(tabs)/library/watching",
-    segment: "watching",
-    apiKey: "/api/shows/watching?page=1&limit=1",
-  },
-  {
-    id: "want_to_watch",
-    label: "Want to Watch",
-    href: "/(tabs)/library/want-to-watch",
-    segment: "want-to-watch",
-    apiKey: "/api/shows/want-to-watch?page=1&limit=1",
-  },
-  {
-    id: "caught_up",
-    label: "Caught Up",
-    href: "/(tabs)/library/caught-up",
-    segment: "caught-up",
-    apiKey: "/api/shows/caught-up?page=1&limit=1",
-  },
-  {
-    id: "completed",
-    label: "Completed",
-    href: "/(tabs)/library/completed",
-    segment: "completed",
-    apiKey: "/api/shows/completed?page=1&limit=1",
-  },
-  {
-    id: "stopped",
-    label: "Stopped",
-    href: "/(tabs)/library/stopped",
-    segment: "stopped",
-    apiKey: "/api/shows/stopped?page=1&limit=1",
-  },
-] as const
+// Full-length labels; the short ones in theme.ts are for poster badges.
+const TAB_LABELS: Record<StatusKey, string> = {
+  watching: "Watching",
+  want_to_watch: "Want to Watch",
+  caught_up: "Caught Up",
+  completed: "Completed",
+  stopped: "Stopped",
+}
 
-type TabId = (typeof TABS)[number]["id"]
+const TABS = STATUS_ORDER.map((id) => ({
+  id,
+  label: TAB_LABELS[id],
+  href: `/(tabs)/library/${STATUS_SLUG[id]}`,
+  segment: STATUS_SLUG[id],
+}))
 
 function StatusDot({ color, size = 6 }: { color: string; size?: number }) {
   return (
@@ -92,7 +73,7 @@ export default function LibraryLayout() {
     queryKey: ["/api/shows/stopped?page=1&limit=1"],
   })
 
-  const totals: Record<TabId, number | undefined> = {
+  const totals: Record<StatusKey, number | undefined> = {
     watching: watchingData?.total,
     want_to_watch: wtwData?.total,
     caught_up: cuData?.total,

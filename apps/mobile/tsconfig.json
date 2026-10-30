@@ -4,6 +4,7 @@
     "strict": true,
     "paths": {
       "@showtracker/shared": ["../../packages/shared/schema.ts"],
+      "@showtracker/shared/status": ["../../packages/shared/status.ts"],
       "@showtracker/api-client": ["../../packages/api-client/src/index.ts"]
     }
   }

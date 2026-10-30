@@ -307,7 +307,10 @@ export default function ShowDetailScreen() {
 
   const addShow = useMutation({
     mutationFn: (status: string) =>
-      apiRequest("POST", "/api/user/shows", { showId: Number(id), status }),
+      apiRequest("POST", "/api/user/shows", {
+        showId: Number(id),
+        initialStatus: status,
+      }),
     onSuccess: () => {
       invalidateShow()
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
@@ -316,9 +319,10 @@ export default function ShowDetailScreen() {
       Alert.alert("Couldn't add this show", error.message),
   })
 
-  // Stopping is the only manual status change in the product. It soft-deletes
-  // to `stopped` and keeps every watched episode, so the menu says what it
-  // does rather than "Remove from collection".
+  // Leaving the collection is the only manual status change in the product.
+  // With episodes watched it soft-deletes to `stopped` and keeps them, so the
+  // menu says "Stop tracking"; with nothing watched the show is dropped
+  // outright and the menu says so.
   const stopTracking = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/user/shows/${id}`),
     onSuccess: () => {
@@ -326,7 +330,7 @@ export default function ShowDetailScreen() {
       qc.invalidateQueries({ queryKey: ["/api/user/shows"] })
     },
     onError: (error: Error) =>
-      Alert.alert("Couldn't stop tracking", error.message),
+      Alert.alert("Couldn't remove this show", error.message),
   })
 
   // The server recomputes where a resumed show belongs; naming a destination
@@ -343,14 +347,16 @@ export default function ShowDetailScreen() {
       Alert.alert("Couldn't resume tracking", error.message),
   })
 
-  function confirmStopTracking() {
+  function confirmStopTracking(removesOutright: boolean) {
     Alert.alert(
-      "Stop tracking?",
-      "This moves the show to your Stopped list. Your watch progress is kept, and you can resume any time.",
+      removesOutright ? "Remove from collection?" : "Stop tracking?",
+      removesOutright
+        ? "This takes the show out of your library. You haven't watched anything, so there is no progress to keep — you can add it back any time."
+        : "This moves the show to your Stopped list. Your watch progress is kept, and you can resume any time.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Stop Tracking",
+          text: removesOutright ? "Remove" : "Stop Tracking",
           style: "destructive",
           onPress: () => stopTracking.mutate(),
         },
@@ -392,6 +398,9 @@ export default function ShowDetailScreen() {
 
   const isInCollection = !!show.userShow
   const currentStatus = show.userShow?.status as StatusKey | undefined
+  // Nothing watched means there is no progress worth keeping, so leaving the
+  // collection is a real removal rather than a move to Stopped.
+  const removesOutright = (show.watchedEpisodes ?? 0) === 0
   const sp = currentStatus
     ? STATUS_COLORS[currentStatus]
     : STATUS_COLORS.want_to_watch
@@ -466,9 +475,10 @@ export default function ShowDetailScreen() {
                 insets={insets}
                 isInCollection={isInCollection}
                 isStopped={currentStatus === "stopped"}
+                removesOutright={removesOutright}
                 onStop={() => {
                   setMoreMenuVisible(false)
-                  confirmStopTracking()
+                  confirmStopTracking(removesOutright)
                 }}
                 onResume={() => {
                   setMoreMenuVisible(false)
@@ -486,9 +496,10 @@ export default function ShowDetailScreen() {
                 insets={insets}
                 isInCollection={isInCollection}
                 isStopped={currentStatus === "stopped"}
+                removesOutright={removesOutright}
                 onStop={() => {
                   setMoreMenuVisible(false)
-                  confirmStopTracking()
+                  confirmStopTracking(removesOutright)
                 }}
                 onResume={() => {
                   setMoreMenuVisible(false)
@@ -652,9 +663,10 @@ export default function ShowDetailScreen() {
                 >
                   <CollectionMenuItems
                     isStopped={currentStatus === "stopped"}
+                    removesOutright={removesOutright}
                     onStop={() => {
                       setStatusMenuVisible(false)
-                      confirmStopTracking()
+                      confirmStopTracking(removesOutright)
                     }}
                     onResume={() => {
                       setStatusMenuVisible(false)
@@ -858,10 +870,12 @@ export default function ShowDetailScreen() {
 
 function CollectionMenuItems({
   isStopped,
+  removesOutright,
   onStop,
   onResume,
 }: {
   isStopped: boolean
+  removesOutright: boolean
   onStop: () => void
   onResume: () => void
 }) {
@@ -870,7 +884,7 @@ function CollectionMenuItems({
   }
   return (
     <Menu.Item
-      title="Stop tracking"
+      title={removesOutright ? "Remove from collection" : "Stop tracking"}
       titleStyle={{ color: "#c03030" }}
       onPress={onStop}
     />
@@ -885,6 +899,7 @@ function BackdropChrome({
   insets,
   isInCollection,
   isStopped,
+  removesOutright,
   onStop,
   onResume,
 }: {
@@ -895,6 +910,7 @@ function BackdropChrome({
   insets: { top: number }
   isInCollection: boolean
   isStopped: boolean
+  removesOutright: boolean
   onStop: () => void
   onResume: () => void
 }) {
@@ -927,6 +943,7 @@ function BackdropChrome({
         {isInCollection && (
           <CollectionMenuItems
             isStopped={isStopped}
+            removesOutright={removesOutright}
             onStop={onStop}
             onResume={onResume}
           />

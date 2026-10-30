@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "commonjs",
   "exports": {
-    ".": "./schema.ts"
+    ".": "./schema.ts",
+    "./status": "./status.ts"
   },
   "peerDependencies": {
     "drizzle-orm": "*",
