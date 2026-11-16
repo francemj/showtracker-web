@@ -2,9 +2,7 @@ import { waitUntil } from "@vercel/functions"
 
 type BackgroundTask = () => Promise<void>
 type SchedulerMode =
-  | "vercel_waitUntil"
-  | "local_setImmediate"
-  | "fallback_microtask"
+  "vercel_waitUntil" | "local_setImmediate" | "fallback_microtask"
 
 interface ScheduleOptions {
   taskName: string

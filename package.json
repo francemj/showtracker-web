@@ -110,7 +110,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "7.0.1",
     "eslint-plugin-unused-imports": "^4.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
@@ -129,7 +129,11 @@
     "source-map-js": "^1.2.2",
     "body-parser": "^1.20.9",
     "eslint-plugin-react-hooks": {
-      "zod": "^4.6.7"
-    }
+      "zod-validation-error": "^4.0.2"
+    },
+    "node-forge": "^1.4.3",
+    "decode-uri-component": "^0.5.1",
+    "@expo/cli": "^57.0.34",
+    "query-string": "^9.5.1"
   }
 }
