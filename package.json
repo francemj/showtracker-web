@@ -133,6 +133,7 @@
     },
     "node-forge": "^1.4.3",
     "decode-uri-component": "^0.5.1",
-    "@expo/cli": "^57.0.34"
+    "@expo/cli": "^57.0.34",
+    "query-string": "^9.5.1"
   }
 }
